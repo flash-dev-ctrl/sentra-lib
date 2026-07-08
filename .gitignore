@@ -1,0 +1,9 @@
+target/
+dist/
+trash/
+*.log
+.env
+.env.*
+codex/
+cpp_example
+test-results
