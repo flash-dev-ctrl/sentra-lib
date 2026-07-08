@@ -1,0 +1,65 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Meta",
+    "description": "智能体元数据结构。",
+    "type": "object",
+    "required": [
+        "name"
+    ],
+    "additionalProperties": true,
+    "properties": {
+        "id": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "智能体唯一标识，允许为空。"
+        },
+        "name": {
+            "type": "string",
+            "description": "智能体名称。"
+        },
+        "description": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "智能体说明，允许为空。"
+        },
+        "version": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "智能体版本，允许为空。"
+        },
+        "author": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "智能体作者或维护者，允许为空。"
+        },
+        "home": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "智能体主目录路径，允许为空。"
+        },
+        "createdAt": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "智能体创建时间，允许为空。"
+        },
+        "updatedAt": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "智能体更新时间，允许为空。"
+        }
+    }
+}

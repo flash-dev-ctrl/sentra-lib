@@ -1,0 +1,74 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "MCP",
+    "description": "模型上下文协议服务资产结构。",
+    "type": "object",
+    "required": [
+        "name"
+    ],
+    "additionalProperties": true,
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "模型上下文协议服务名称。"
+        },
+        "type": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "模型上下文协议传输类型，允许为空。",
+            "enum": [
+                "stdio",
+                "sse",
+                "http",
+                null
+            ]
+        },
+        "command": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "标准输入输出类型服务的启动命令，允许为空。"
+        },
+        "args": {
+            "type": "array",
+            "description": "启动命令参数列表。",
+            "items": {
+                "type": "string"
+            }
+        },
+        "url": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "远程模型上下文协议服务地址，允许为空。"
+        },
+        "env": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "description": "服务进程环境变量，允许为空。",
+            "additionalProperties": {
+                "type": "string"
+            }
+        },
+        "enabled": {
+            "type": [
+                "boolean",
+                "null"
+            ],
+            "description": "模型上下文协议服务是否启用，允许为空。"
+        },
+        "project": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "模型上下文协议服务关联的项目路径，允许为空。"
+        }
+    }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "File Category",
+  "description": "规则和扫描输入共用的 Sentra 文件分类取值。",
+  "type": "string",
+  "enum": [
+    "prompt",
+    "script",
+    "exe",
+    "binary",
+    "mcp",
+    "unknown"
+  ],
+  "x-enumNamesZh": {
+    "prompt": "提示词",
+    "script": "脚本",
+    "exe": "可执行文件",
+    "binary": "二进制文件",
+    "mcp": "MCP",
+    "unknown": "未知"
+  }
+}

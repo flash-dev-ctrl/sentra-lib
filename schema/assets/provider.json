@@ -1,0 +1,83 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Provider",
+    "description": "模型供应商资产结构。",
+    "type": "object",
+    "required": [
+        "name",
+        "enabled"
+    ],
+    "additionalProperties": true,
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "模型供应商名称。"
+        },
+        "baseUrl": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "模型服务基础地址，允许为空。"
+        },
+        "apiKey": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "模型服务访问密钥，允许为空。"
+        },
+        "enabled": {
+            "type": "boolean",
+            "description": "模型供应商是否启用。"
+        },
+        "models": {
+            "type": "array",
+            "description": "模型列表。",
+            "items": {
+                "$ref": "#/definitions/ProviderModel"
+            }
+        },
+        "protocol": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "模型请求协议，允许为空。",
+            "enum": [
+                "responses",
+                "chat_completions",
+                "anthropic_messages",
+                null
+            ]
+        }
+    },
+    "definitions": {
+        "ProviderModel": {
+            "type": "object",
+            "description": "模型供应商中的单个模型配置。",
+            "required": [
+                "id",
+                "enabled"
+            ],
+            "additionalProperties": true,
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "模型标识。"
+                },
+                "name": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "模型显示名称，允许为空。"
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "description": "模型是否启用。"
+                }
+            }
+        }
+    }
+}

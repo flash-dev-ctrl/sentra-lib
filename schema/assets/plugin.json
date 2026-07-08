@@ -1,0 +1,59 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Plugin",
+    "description": "插件定义结构。",
+    "type": "object",
+    "required": [
+        "name"
+    ],
+    "additionalProperties": true,
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "插件唯一标识。"
+        },
+        "name": {
+            "type": "string",
+            "description": "插件名称。",
+            "minLength": 1,
+            "maxLength": 100
+        },
+        "description": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "插件功能说明。"
+        },
+        "version": {
+            "type": "string",
+            "description": "插件语义化版本。"
+        },
+        "author": {
+            "type": "string",
+            "description": "插件作者或维护者。"
+        },
+        "enabled": {
+            "type": "boolean",
+            "description": "插件当前是否启用。",
+            "default": true
+        },
+        "createdAt": {
+            "type": "string",
+            "description": "插件创建时间，使用标准时间格式。",
+            "format": "date-time"
+        },
+        "updatedAt": {
+            "type": "string",
+            "description": "插件最后更新时间，使用标准时间格式。",
+            "format": "date-time"
+        },
+        "origin": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "插件安装来源，例如市场、本地或代码仓库。"
+        }
+    }
+}

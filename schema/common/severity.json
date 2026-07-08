@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Risk Severity",
+  "description": "Sentra 共用风险等级取值，按严重程度从高到低为 CRITICAL、HIGH、MEDIUM、LOW、INFO。",
+  "type": "string",
+  "enum": [
+    "CRITICAL",
+    "HIGH",
+    "MEDIUM",
+    "LOW",
+    "INFO"
+  ],
+  "x-enumNamesZh": {
+    "CRITICAL": "严重",
+    "HIGH": "高危",
+    "MEDIUM": "中危",
+    "LOW": "低危",
+    "INFO": "信息"
+  }
+}

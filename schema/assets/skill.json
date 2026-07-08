@@ -1,0 +1,146 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Skill",
+    "description": "技能资产结构。",
+    "type": "object",
+    "required": [
+        "name"
+    ],
+    "additionalProperties": true,
+    "properties": {
+        "id": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "技能唯一标识，允许为空。"
+        },
+        "name": {
+            "type": "string",
+            "description": "技能名称。"
+        },
+        "description": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "技能说明，允许为空。"
+        },
+        "simhash": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "用于相似度去重的相似哈希值，允许为空。"
+        },
+        "enabled": {
+            "type": [
+                "boolean",
+                "null"
+            ],
+            "description": "技能是否启用，允许为空。"
+        },
+        "createdAt": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "技能创建时间，允许为空。"
+        },
+        "updatedAt": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "技能更新时间，允许为空。"
+        },
+        "version": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "技能版本，允许为空。"
+        },
+        "author": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "技能作者或维护者，允许为空。"
+        },
+        "tags": {
+            "type": "array",
+            "description": "技能标签列表。",
+            "items": {
+                "type": "string"
+            }
+        },
+        "home": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "技能所在目录路径，允许为空。"
+        },
+        "files": {
+            "type": "array",
+            "description": "技能关联文件列表。",
+            "items": {
+                "$ref": "#/definitions/SkillFile"
+            }
+        },
+        "source": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "技能来源，允许为空。"
+        }
+    },
+    "definitions": {
+        "SkillFile": {
+            "type": "object",
+            "description": "技能或自动化任务关联文件的元数据。",
+            "required": [
+                "path",
+                "size",
+                "type",
+                "mtime"
+            ],
+            "additionalProperties": true,
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "相对于资产目录的文件路径。"
+                },
+                "size": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "文件大小，单位为字节。"
+                },
+                "type": {
+                    "type": "string",
+                    "description": "文件类型。",
+                    "enum": [
+                        "config",
+                        "script",
+                        "prompt",
+                        "data",
+                        "documentation"
+                    ]
+                },
+                "sha256": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "文件哈希摘要，允许为空。"
+                },
+                "mtime": {
+                    "type": "number",
+                    "description": "文件最后修改时间。"
+                }
+            }
+        }
+    }
+}
