@@ -546,7 +546,7 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     .unwrap();
     fs::write(
         claude_cli_home.join("settings.json"),
-        r#"{"env":{"ANTHROPIC_BASE_URL":"https://anthropic.example.com","ANTHROPIC_API_KEY":"sk-cli","ANTHROPIC_MODEL":"claude-sonnet-4"}}"#,
+        r#"{"env":{"ANTHROPIC_BASE_URL":"https://anthropic.example.com","ANTHROPIC_AUTH_TOKEN":"sk-cli","ANTHROPIC_MODEL":"claude-sonnet-4"}}"#,
     )
     .unwrap();
     fs::write(
