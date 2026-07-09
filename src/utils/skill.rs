@@ -202,7 +202,7 @@ fn collect_skills_recursive(
         .flatten()
         .filter_map(Result::ok)
     {
-        if entry.file_name().to_string_lossy().starts_with('.') {
+        if !should_descend_skill_dir(&entry.file_name()) {
             continue;
         }
         let path = entry.path();
@@ -211,6 +211,11 @@ fn collect_skills_recursive(
         }
     }
     Ok(())
+}
+
+fn should_descend_skill_dir(name: &std::ffi::OsStr) -> bool {
+    let name = name.to_string_lossy();
+    !name.starts_with('.') || name == ".system"
 }
 
 pub fn set_skill_data(skills_dir: &Path, skill_path: &Path) -> SentraResult<AssetMutationResult> {
@@ -312,5 +317,39 @@ mod tests {
         assert!(!full[0].files.is_empty());
         assert!(manifest[0].files.is_empty());
         assert_eq!(manifest[0].name, "demo");
+    }
+
+    #[test]
+    fn collection_includes_codex_system_skills() {
+        let dir = tempfile::tempdir().unwrap();
+        let skill_dir = dir
+            .path()
+            .join("skills")
+            .join(".system")
+            .join("openai-docs");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: openai-docs\ndescription: Docs\n---\nbody",
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.path().join("skills").join(".cache")).unwrap();
+        std::fs::write(
+            dir.path()
+                .join("skills")
+                .join(".cache")
+                .join("SKILL.md"),
+            "---\nname: hidden-cache\n---\nbody",
+        )
+        .unwrap();
+
+        let skills = collect_skills_from_dir(dir.path().join("skills")).unwrap();
+
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].name, "openai-docs");
+        assert_eq!(
+            skills[0].home.as_deref(),
+            Some(skill_dir.as_path()),
+        );
     }
 }
