@@ -42,6 +42,7 @@ fn rust_agents_mirror_typescript_agent_object_files() {
             ],
         );
     }
+    assert_agent_files(&src, "pi", &["mod.rs", "skill.rs", "provider.rs"]);
     assert_agent_files(&src, "general", &["mod.rs", "skill.rs"]);
     assert_agent_files(&src, "sentra", &["mod.rs", "skill.rs", "provider.rs"]);
 }
@@ -59,6 +60,7 @@ fn each_agent_module_owns_discovery() {
         "general",
         "hermes",
         "openclaw",
+        "pi",
         "sentra",
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
@@ -85,6 +87,7 @@ fn agent_asset_modules_are_not_public() {
         "general",
         "hermes",
         "openclaw",
+        "pi",
         "sentra",
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
@@ -145,6 +148,7 @@ fn agent_module_wrappers_do_not_expose_asset_mutator_shortcuts() {
         "general",
         "hermes",
         "openclaw",
+        "pi",
         "sentra",
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
@@ -228,6 +232,7 @@ fn agent_entries_are_defined_in_shared_entries_file() {
         "GENERAL_AGENT_ENTRIES",
         "HERMES_AGENT_ENTRY",
         "OPENCLAW_AGENT_ENTRY",
+        "PI_AGENT_ENTRY",
         "SENTRA_AGENT_ENTRY",
     ] {
         assert!(
@@ -265,6 +270,7 @@ fn agent_modules_reference_entry_registry_directly() {
         ("codex", "CODEX_AGENT_ENTRY"),
         ("hermes", "HERMES_AGENT_ENTRY"),
         ("openclaw", "OPENCLAW_AGENT_ENTRY"),
+        ("pi", "PI_AGENT_ENTRY"),
         ("sentra", "SENTRA_AGENT_ENTRY"),
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
@@ -330,6 +336,11 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
             "fn set_provider_data",
             "fn delete_provider_data",
         ],
+        &["provider.rs"],
+    );
+    assert_asset_logic_is_colocated(
+        &root.join("src").join("agents").join("pi"),
+        &["fn provider_data"],
         &["provider.rs"],
     );
     for agent in ["claude_app", "claude_cli", "hermes", "openclaw"] {

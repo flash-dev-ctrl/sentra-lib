@@ -405,6 +405,113 @@ fn general_exposes_only_ts_supported_skill_asset() {
 }
 
 #[test]
+fn pi_agent_is_discovered_and_reads_llm_provider_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".pi").join("agent");
+    let skill_dir = home.join("skills").join("pi-skill");
+    fs::create_dir_all(&skill_dir).unwrap();
+    fs::write(skill_dir.join("SKILL.md"), "---\nname: pi-skill\n---\nbody").unwrap();
+    fs::write(
+        home.join("settings.json"),
+        r#"{"defaultProvider":"svip","defaultModel":"svip/gpt-5.5"}"#,
+    )
+    .unwrap();
+    fs::write(
+        home.join("models.json"),
+        r#"{"providers":{"svip":{"name":"SVIP Gateway","api":"openai-responses","baseURL":"https://svip.example.com/v1","apiKey":"$SENTRA_PI_TEST_KEY","models":[{"id":"svip/gpt-5.5","name":"SVIP GPT 5.5"}]}}}"#,
+    )
+    .unwrap();
+    unsafe {
+        std::env::set_var("SENTRA_PI_TEST_KEY", "sk-pi");
+    }
+
+    let agents = discover_agents(dir.path());
+    let pi = agents.iter().find(|agent| agent.name() == "pi").unwrap();
+
+    assert_eq!(pi.title(), "Pi");
+    assert_eq!(pi.get_assets(AssetType::Skill).unwrap().len(), 1);
+
+    let skills = asset_data(pi, AssetType::Skill);
+    assert_eq!(skills[0].data[0]["name"], "pi-skill");
+
+    let providers = asset_data(pi, AssetType::Provider);
+    let provider = &providers[0].data[0];
+    assert_eq!(provider["name"], "SVIP Gateway");
+    assert_eq!(provider["baseUrl"], "https://svip.example.com/v1");
+    assert_eq!(provider["apiKey"], "sk-pi");
+    assert_eq!(provider["enabled"], true);
+    assert_eq!(provider["protocol"], "responses");
+    assert_eq!(provider["models"][0]["id"], "svip/gpt-5.5");
+}
+
+#[test]
+fn pi_provider_reads_auth_without_executing_command_keys() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".pi").join("agent");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("settings.json"),
+        r#"{"defaultProvider":"cmd","defaultModel":"cmd-model"}"#,
+    )
+    .unwrap();
+    fs::write(
+        home.join("models.json"),
+        r#"{"providers":{"cmd":{"api":"openai-completions","baseURL":"https://cmd.example.com/v1","models":["cmd-model"]}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        home.join("auth.json"),
+        r#"{"providers":{"cmd":{"key":"!printf should-not-run"}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let pi = agents.iter().find(|agent| agent.name() == "pi").unwrap();
+    let providers = asset_data(pi, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert_eq!(provider["baseUrl"], "https://cmd.example.com/v1");
+    assert!(provider["apiKey"].is_null());
+    assert_eq!(provider["protocol"], "chat_completions");
+}
+
+#[test]
+fn pi_provider_probe_declares_supported_protocols() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".pi").join("agent");
+    fs::create_dir_all(&home).unwrap();
+
+    let agents = discover_agents(dir.path());
+    let pi = agents.iter().find(|agent| agent.name() == "pi").unwrap();
+    let provider = pi
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let requests = provider.provider_requests("svip/gpt-5.5");
+
+    assert_eq!(requests.len(), 3);
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.protocol == WireProtocol::Responses)
+    );
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.protocol == WireProtocol::ChatCompletions)
+    );
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.protocol == WireProtocol::AnthropicMessages)
+    );
+    assert!(requests.iter().all(|request| request.body.is_none()));
+    assert!(requests.iter().all(|request| request.prompt.is_some()));
+}
+
+#[test]
 fn sentra_agent_is_discovered_and_exposes_skill_and_provider_assets() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".sentra");

@@ -10,6 +10,7 @@ mod codex;
 mod general;
 mod hermes;
 mod openclaw;
+mod pi;
 mod sentra;
 
 pub use base::Agent;

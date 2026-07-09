@@ -40,6 +40,7 @@ pub fn discover_agents(user_home: impl AsRef<Path>) -> Vec<Agent> {
     results.extend(crate::agents::claude_app::discover_agents(user_home));
     results.extend(crate::agents::hermes::discover_agents(user_home));
     results.extend(crate::agents::openclaw::discover_agents(user_home));
+    results.extend(crate::agents::pi::discover_agents(user_home));
     results.extend(crate::agents::sentra::discover_agents(user_home));
     results.extend(crate::agents::general::discover_agents(user_home));
     results
