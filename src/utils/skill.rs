@@ -335,10 +335,7 @@ mod tests {
         .unwrap();
         std::fs::create_dir_all(dir.path().join("skills").join(".cache")).unwrap();
         std::fs::write(
-            dir.path()
-                .join("skills")
-                .join(".cache")
-                .join("SKILL.md"),
+            dir.path().join("skills").join(".cache").join("SKILL.md"),
             "---\nname: hidden-cache\n---\nbody",
         )
         .unwrap();
@@ -347,9 +344,6 @@ mod tests {
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "openai-docs");
-        assert_eq!(
-            skills[0].home.as_deref(),
-            Some(skill_dir.as_path()),
-        );
+        assert_eq!(skills[0].home.as_deref(), Some(skill_dir.as_path()),);
     }
 }
