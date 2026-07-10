@@ -476,6 +476,331 @@ fn pi_provider_reads_auth_without_executing_command_keys() {
 }
 
 #[test]
+fn pi_provider_uses_builtin_opencode_go_defaults_without_models_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".pi").join("agent");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("settings.json"),
+        r#"{"defaultProvider":"opencode-go","defaultModel":"deepseek-v4-flash"}"#,
+    )
+    .unwrap();
+    fs::write(
+        home.join("auth.json"),
+        r#"{"opencode-go":{"type":"api_key","key":"sk-opencode"}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let pi = agents.iter().find(|agent| agent.name() == "pi").unwrap();
+    let providers = asset_data(pi, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert_eq!(provider["name"], "opencode-go");
+    assert_eq!(provider["baseUrl"], "https://opencode.ai/zen/go/v1");
+    assert_eq!(provider["apiKey"], "sk-opencode");
+    assert_eq!(provider["enabled"], true);
+    assert_eq!(provider["providerId"], "opencode");
+    assert_eq!(provider["rawProviderId"], "opencode-go");
+    assert_eq!(provider["endpointVariant"], "go");
+    assert_eq!(provider["baseUrlSource"], "catalog");
+    assert_eq!(provider["activationStatus"], "active");
+    assert_eq!(provider["resolutionStatus"], "known");
+    assert_eq!(provider["protocol"], "chat_completions");
+    assert_eq!(provider["models"][0]["id"], "deepseek-v4-flash");
+}
+
+#[test]
+fn pi_provider_lists_inactive_auth_providers_without_models_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".pi").join("agent");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("settings.json"),
+        r#"{"defaultProvider":"deepseek","defaultModel":"deepseek-v4-flash"}"#,
+    )
+    .unwrap();
+    fs::write(
+        home.join("auth.json"),
+        r#"{"opencode-go":{"type":"api_key","key":"sk-opencode"},"deepseek":{"type":"api_key","key":"sk-deepseek"},"minimax-cn":{"type":"api_key","key":"sk-minimax-cn"}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let pi = agents.iter().find(|agent| agent.name() == "pi").unwrap();
+    let providers = asset_data(pi, AssetType::Provider);
+    let provider_items = providers[0].data.as_array().unwrap();
+
+    assert_eq!(provider_items.len(), 3);
+    let deepseek = provider_items
+        .iter()
+        .find(|provider| provider["name"] == "deepseek")
+        .unwrap();
+    let opencode_go = provider_items
+        .iter()
+        .find(|provider| provider["name"] == "opencode-go")
+        .unwrap();
+    let minimax_cn = provider_items
+        .iter()
+        .find(|provider| provider["name"] == "minimax-cn")
+        .unwrap();
+
+    assert_eq!(deepseek["enabled"], true);
+    assert_eq!(deepseek["baseUrl"], "https://api.deepseek.com");
+    assert_eq!(deepseek["apiKey"], "sk-deepseek");
+    assert_eq!(deepseek["models"][0]["id"], "deepseek-v4-flash");
+    assert_eq!(opencode_go["enabled"], false);
+    assert_eq!(opencode_go["baseUrl"], "https://opencode.ai/zen/go/v1");
+    assert_eq!(opencode_go["apiKey"], "sk-opencode");
+    assert_eq!(minimax_cn["enabled"], false);
+    assert_eq!(minimax_cn["baseUrl"], "https://api.minimaxi.com/anthropic");
+    assert_eq!(minimax_cn["apiKey"], "sk-minimax-cn");
+    assert_eq!(minimax_cn["providerId"], "minimax");
+    assert_eq!(minimax_cn["rawProviderId"], "minimax-cn");
+    assert_eq!(minimax_cn["endpointVariant"], "cn-anthropic");
+    assert_eq!(minimax_cn["resolutionStatus"], "known");
+    assert_eq!(minimax_cn["protocol"], "anthropic_messages");
+}
+
+#[test]
+fn pi_provider_marks_activation_unknown_without_default_provider() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".pi").join("agent");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("auth.json"),
+        r#"{"deepseek":{"type":"api_key","key":"sk-deepseek"}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let pi = agents.iter().find(|agent| agent.name() == "pi").unwrap();
+    let providers = asset_data(pi, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert_eq!(provider["rawProviderId"], "deepseek");
+    assert_eq!(provider["activationStatus"], "unknown");
+    assert_eq!(provider["resolutionStatus"], "known");
+}
+
+#[test]
+fn openclaw_provider_uses_catalog_and_marks_unresolved_entries() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".openclaw");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("openclaw.json"),
+        r#"{"providers":{"deepseek":{"apiKey":"sk-deepseek"},"future-provider":{"apiKey":"sk-future"},"corp-gateway":{"baseUrl":"https://llm.example.test/v1"}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let openclaw = agents
+        .iter()
+        .find(|agent| agent.name() == "openclaw")
+        .unwrap();
+    let providers = asset_data(openclaw, AssetType::Provider);
+    let items = providers[0].data.as_array().unwrap();
+    let deepseek = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "deepseek")
+        .unwrap();
+    let future = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "future-provider")
+        .unwrap();
+    let custom = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "corp-gateway")
+        .unwrap();
+
+    assert_eq!(deepseek["providerId"], "deepseek");
+    assert_eq!(deepseek["baseUrl"], "https://api.deepseek.com");
+    assert_eq!(deepseek["baseUrlSource"], "catalog");
+    assert_eq!(deepseek["resolutionStatus"], "known");
+    assert_eq!(deepseek["activationStatus"], "unknown");
+    assert_eq!(future["resolutionStatus"], "unknown");
+    assert!(future["baseUrl"].is_null());
+    assert_eq!(custom["resolutionStatus"], "custom");
+    assert_eq!(custom["baseUrlSource"], "configured");
+}
+
+#[test]
+fn openclaw_provider_is_inferred_from_default_model_without_provider_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".openclaw");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("openclaw.json"),
+        r#"{
+          "agents": {
+            "defaults": {
+              "model": {
+                "primary": "opencode-go/kimi-k2.6",
+                "fallbacks": ["minimax-cn/MiniMax-M2.7"]
+              },
+              "models": {
+                "opencode-go/kimi-k2.6": {"alias": "Kimi"},
+                "minimax-cn/MiniMax-M2.7": {}
+              }
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let openclaw = agents
+        .iter()
+        .find(|agent| agent.name() == "openclaw")
+        .unwrap();
+    let providers = asset_data(openclaw, AssetType::Provider);
+    let items = providers[0].data.as_array().unwrap();
+    let opencode_go = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "opencode-go")
+        .unwrap();
+    let minimax_cn = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "minimax-cn")
+        .unwrap();
+
+    assert_eq!(opencode_go["providerId"], "opencode");
+    assert_eq!(opencode_go["baseUrl"], "https://opencode.ai/zen/go/v1");
+    assert_eq!(opencode_go["endpointVariant"], "go");
+    assert_eq!(opencode_go["protocol"], "chat_completions");
+    assert_eq!(opencode_go["protocolSource"], "inferred");
+    assert_eq!(opencode_go["activationStatus"], "active");
+    assert_eq!(opencode_go["models"][0]["id"], "kimi-k2.6");
+    assert_eq!(minimax_cn["providerId"], "minimax");
+    assert_eq!(minimax_cn["baseUrl"], "https://api.minimaxi.com/anthropic");
+    assert_eq!(minimax_cn["activationStatus"], "inactive");
+}
+
+#[test]
+fn openclaw_opencode_go_uses_anthropic_endpoint_for_minimax_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".openclaw");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("openclaw.json"),
+        r#"{"agents":{"defaults":{"model":"opencode-go/minimax-m2.7"}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let openclaw = agents
+        .iter()
+        .find(|agent| agent.name() == "openclaw")
+        .unwrap();
+    let providers = asset_data(openclaw, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert_eq!(provider["baseUrl"], "https://opencode.ai/zen/go");
+    assert_eq!(provider["endpointVariant"], "go-anthropic");
+    assert_eq!(provider["protocol"], "anthropic_messages");
+    assert_eq!(provider["activationStatus"], "active");
+}
+
+#[test]
+fn hermes_provider_reads_modern_model_and_auth_configuration() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".hermes");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("config.yaml"),
+        "model:\n  provider: minimax-cn\n  default: MiniMax-M2.7\n",
+    )
+    .unwrap();
+    fs::write(
+        home.join("auth.json"),
+        r#"{"active_provider":"minimax-cn","providers":{"minimax-cn":{"access_token":"secret-minimax-key"}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let hermes = agents
+        .iter()
+        .find(|agent| agent.name() == "hermes")
+        .unwrap();
+    let providers = asset_data(hermes, AssetType::Provider);
+    let items = providers[0].data.as_array().unwrap();
+    let provider = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "minimax-cn")
+        .unwrap();
+
+    assert_eq!(provider["providerId"], "minimax");
+    assert_eq!(provider["baseUrl"], "https://api.minimaxi.com/anthropic");
+    assert_eq!(provider["protocol"], "anthropic_messages");
+    assert_eq!(provider["activationStatus"], "active");
+    assert_eq!(provider["models"][0]["id"], "MiniMax-M2.7");
+    assert!(provider["apiKey"].as_str().is_some());
+    assert_ne!(provider["apiKey"], "secret-minimax-key");
+}
+
+#[test]
+fn hermes_provider_can_be_discovered_from_auth_without_config_yaml() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".hermes");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("auth.json"),
+        r#"{"active_provider":"deepseek","credential_pool":{"deepseek":{"api_key":"secret-deepseek-key"},"opencode-go":{"api_key":"secret-opencode-key"}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let hermes = agents
+        .iter()
+        .find(|agent| agent.name() == "hermes")
+        .unwrap();
+    let providers = asset_data(hermes, AssetType::Provider);
+    let items = providers[0].data.as_array().unwrap();
+    let deepseek = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "deepseek")
+        .unwrap();
+    let opencode_go = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "opencode-go")
+        .unwrap();
+
+    assert_eq!(deepseek["baseUrl"], "https://api.deepseek.com/v1");
+    assert_eq!(deepseek["activationStatus"], "active");
+    assert_eq!(opencode_go["baseUrl"], "https://opencode.ai/zen/go/v1");
+    assert_eq!(opencode_go["activationStatus"], "inactive");
+}
+
+#[test]
+fn codex_provider_without_base_url_is_enriched_from_catalog() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".codex");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("config.toml"),
+        r#"model = "deepseek-chat"
+model_provider = "deepseek"
+
+[model_providers.deepseek]
+name = "DeepSeek"
+"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+    let providers = asset_data(codex, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert_eq!(provider["providerId"], "deepseek");
+    assert_eq!(provider["baseUrl"], "https://api.deepseek.com");
+    assert_eq!(provider["baseUrlSource"], "catalog");
+    assert_eq!(provider["activationStatus"], "active");
+    assert_eq!(provider["resolutionStatus"], "known");
+}
+
+#[test]
 fn pi_provider_probe_declares_supported_protocols() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".pi").join("agent");
@@ -767,6 +1092,9 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
         cli_provider[0].data[0]["models"][0]["id"],
         "claude-sonnet-4"
     );
+    assert_eq!(cli_provider[0].data[0]["resolutionStatus"], "custom");
+    assert_eq!(cli_provider[0].data[0]["activationStatus"], "active");
+    assert_eq!(cli_provider[0].data[0]["protocol"], "anthropic_messages");
     let cli_cron = asset_data(claude_cli, AssetType::Cron);
     assert_eq!(cli_cron[0].data[0]["schedule"], "0 9 * * *");
 
@@ -780,6 +1108,8 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
         "https://gateway.example.com"
     );
     assert_eq!(app_provider[0].data[0]["models"][0]["name"], "Opus");
+    assert_eq!(app_provider[0].data[0]["resolutionStatus"], "custom");
+    assert_eq!(app_provider[0].data[0]["activationStatus"], "active");
     let app_cron = asset_data(claude_app, AssetType::Cron);
     assert_eq!(app_cron[0].data[0]["name"], "scheduled skill");
     assert_eq!(app_cron[0].data[0]["prompt"], "Run from Claude App");
@@ -794,6 +1124,8 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     let hermes_provider = asset_data(hermes, AssetType::Provider);
     assert_eq!(hermes_provider[0].data[0]["models"][0]["id"], "hermes-4");
     assert_eq!(hermes_provider[0].data[0]["apiKey"], "sk****12");
+    assert_eq!(hermes_provider[0].data[0]["resolutionStatus"], "custom");
+    assert_eq!(hermes_provider[0].data[0]["activationStatus"], "unknown");
     let hermes_cron = asset_data(hermes, AssetType::Cron);
     assert_eq!(hermes_cron[0].data[0]["type"], "every");
     assert_eq!(hermes_cron[0].data[0]["schedule"], "15m");
@@ -805,6 +1137,8 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     let openclaw_provider = asset_data(openclaw, AssetType::Provider);
     assert_eq!(openclaw_provider[0].data[0]["models"][0]["id"], "oc-1");
     assert_eq!(openclaw_provider[0].data[0]["apiKey"], "sk****12");
+    assert_eq!(openclaw_provider[0].data[0]["resolutionStatus"], "custom");
+    assert_eq!(openclaw_provider[0].data[0]["activationStatus"], "unknown");
     let openclaw_cron = asset_data(openclaw, AssetType::Cron);
     assert_eq!(openclaw_cron[0].data[0]["cwds"][0], "/workspace");
 }
