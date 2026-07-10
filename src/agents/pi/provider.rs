@@ -6,6 +6,10 @@ use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderData, ProviderModel,
     ProviderProbeRequest,
 };
+use crate::providers::{
+    ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
+    protocol_for_api,
+};
 use crate::utils::protocol::{WireProtocol, default_model_probe_prompt};
 use crate::utils::read_json_file;
 
@@ -77,74 +81,101 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
     let default_model = string_at(&settings, &["defaultModel"]);
     let auth_providers = auth_providers(&auth);
     let mut providers = Vec::new();
+    let mut provider_ids = Vec::new();
 
     if let Some(raw_providers) = models_config
         .get("providers")
         .or_else(|| models_config.get("modelProviders"))
         .and_then(Value::as_object)
     {
-        let configured_provider_ids = raw_providers.keys().cloned().collect::<Vec<_>>();
         for (id, raw) in raw_providers {
             let raw = raw.as_object();
             let provider_id = id.as_str();
-            let api = raw
-                .and_then(|raw| raw.get("api").and_then(Value::as_str))
-                .or_else(|| builtin_api(provider_id));
-            let enabled = default_provider.as_deref() == Some(provider_id);
+            let api = raw.and_then(|raw| raw.get("api").and_then(Value::as_str));
+            let activation = provider_activation(default_provider.as_deref(), provider_id);
             let mut models = provider_models(raw.and_then(|raw| raw.get("models")));
-            if enabled && let Some(model) = default_model.as_deref() {
+            if activation == ProviderActivationStatus::Active
+                && let Some(model) = default_model.as_deref()
+            {
                 ensure_model(&mut models, model, true);
             }
 
-            providers.push(ProviderData {
-                name: raw
-                    .and_then(|raw| {
-                        raw.get("name")
-                            .or_else(|| raw.get("displayName"))
-                            .and_then(Value::as_str)
-                    })
-                    .unwrap_or(provider_id)
-                    .to_string(),
-                base_url: raw
-                    .and_then(|raw| base_url(raw))
-                    .or_else(|| builtin_base_url(provider_id)),
-                api_key: raw
-                    .and_then(|raw| {
-                        raw.get("apiKey")
-                            .or_else(|| raw.get("api_key"))
-                            .and_then(Value::as_str)
-                            .and_then(|value| resolve_config_string(value, None))
-                    })
-                    .or_else(|| auth_key(auth_providers, provider_id))
-                    .or_else(|| env_api_key(provider_id)),
-                enabled,
-                models,
-                protocol: api.and_then(protocol_for_api),
-            });
+            let mut candidate = ProviderCandidate::new("pi");
+            candidate.agent_provider_id = Some(provider_id.to_string());
+            candidate.display_name = Some(
+                raw.and_then(|raw| {
+                    raw.get("name")
+                        .or_else(|| raw.get("displayName"))
+                        .and_then(Value::as_str)
+                })
+                .unwrap_or(provider_id)
+                .to_string(),
+            );
+            candidate.configured_base_url = raw.and_then(base_url);
+            candidate.protocol_hint = api.and_then(protocol_for_api);
+            candidate.protocol_source = candidate
+                .protocol_hint
+                .map(|_| ProviderFieldSource::Configured);
+            candidate.api_key = raw
+                .and_then(|raw| {
+                    raw.get("apiKey")
+                        .or_else(|| raw.get("api_key"))
+                        .and_then(Value::as_str)
+                        .and_then(|value| resolve_config_string(value, None))
+                })
+                .or_else(|| auth_key(auth_providers, provider_id))
+                .or_else(|| env_api_key(provider_id));
+            candidate.activation = activation;
+            candidate.models = models;
+            providers.push(ProviderRegistry::builtin().resolve(candidate));
+            provider_ids.push(provider_id.to_string());
         }
 
         if let Some(provider_id) = default_provider.as_deref()
-            && !configured_provider_ids.iter().any(|id| id == provider_id)
+            && !contains_provider_id(&provider_ids, provider_id)
         {
             providers.push(fallback_provider(
                 provider_id,
                 default_model.as_deref(),
                 auth_providers,
+                ProviderActivationStatus::Active,
             ));
+            provider_ids.push(provider_id.to_string());
         }
     }
 
-    if providers.is_empty()
-        && let Some(provider_id) = default_provider.as_deref()
+    if let Some(provider_id) = default_provider.as_deref()
+        && !contains_provider_id(&provider_ids, provider_id)
     {
         providers.push(fallback_provider(
             provider_id,
             default_model.as_deref(),
             auth_providers,
+            ProviderActivationStatus::Active,
         ));
+        provider_ids.push(provider_id.to_string());
+    }
+
+    if let Some(auth_providers) = auth_providers {
+        for provider_id in auth_providers.keys() {
+            if contains_provider_id(&provider_ids, provider_id) {
+                continue;
+            }
+            providers.push(fallback_provider(
+                provider_id,
+                None,
+                Some(auth_providers),
+                provider_activation(default_provider.as_deref(), provider_id),
+            ));
+            provider_ids.push(provider_id.to_string());
+        }
     }
 
     Ok(providers)
+}
+
+fn contains_provider_id(provider_ids: &[String], provider_id: &str) -> bool {
+    provider_ids.iter().any(|id| id == provider_id)
 }
 
 fn provider_models(raw: Option<&Value>) -> Vec<ProviderModel> {
@@ -206,16 +237,29 @@ fn fallback_provider(
     provider_id: &str,
     default_model: Option<&str>,
     auth_providers: Option<&serde_json::Map<String, Value>>,
+    activation: ProviderActivationStatus,
 ) -> ProviderData {
-    ProviderData {
-        name: provider_id.to_string(),
-        base_url: builtin_base_url(provider_id),
-        api_key: auth_key(auth_providers, provider_id).or_else(|| env_api_key(provider_id)),
-        enabled: true,
-        models: default_model
-            .map(|id| vec![model(id, Some(id), true)])
-            .unwrap_or_default(),
-        protocol: builtin_api(provider_id).and_then(protocol_for_api),
+    let mut candidate = ProviderCandidate::new("pi");
+    candidate.agent_provider_id = Some(provider_id.to_string());
+    candidate.display_name = Some(provider_id.to_string());
+    candidate.api_key = auth_key(auth_providers, provider_id).or_else(|| env_api_key(provider_id));
+    candidate.activation = activation;
+    candidate.models = default_model
+        .map(|id| vec![model(id, Some(id), true)])
+        .unwrap_or_default();
+    ProviderRegistry::builtin().resolve(candidate)
+}
+
+fn provider_activation(
+    default_provider: Option<&str>,
+    provider_id: &str,
+) -> ProviderActivationStatus {
+    match default_provider {
+        Some(default_provider) if default_provider == provider_id => {
+            ProviderActivationStatus::Active
+        }
+        Some(_) => ProviderActivationStatus::Inactive,
+        None => ProviderActivationStatus::Unknown,
     }
 }
 
@@ -326,31 +370,8 @@ fn is_env_part(ch: char) -> bool {
     ch == '_' || ch.is_ascii_alphanumeric()
 }
 
-fn builtin_api(provider_id: &str) -> Option<&'static str> {
-    match provider_id {
-        "anthropic" => Some("anthropic-messages"),
-        "azure-openai-responses" => Some("azure-openai-responses"),
-        "openai" => Some("openai-responses"),
-        "openrouter" | "deepseek" | "groq" | "mistral" | "xai" => Some("openai-completions"),
-        _ => None,
-    }
-}
-
-fn builtin_base_url(provider_id: &str) -> Option<String> {
-    match provider_id {
-        "anthropic" => Some("https://api.anthropic.com".to_string()),
-        "openai" => Some("https://api.openai.com/v1".to_string()),
-        "openrouter" => Some("https://openrouter.ai/api/v1".to_string()),
-        "deepseek" => Some("https://api.deepseek.com".to_string()),
-        "groq" => Some("https://api.groq.com/openai/v1".to_string()),
-        "mistral" => Some("https://api.mistral.ai/v1".to_string()),
-        "xai" => Some("https://api.x.ai/v1".to_string()),
-        _ => None,
-    }
-}
-
 fn env_api_key(provider_id: &str) -> Option<String> {
-    for key in env_api_key_names(provider_id) {
+    for key in ProviderRegistry::builtin().environment_keys("pi", provider_id) {
         if let Ok(value) = std::env::var(key)
             && !value.is_empty()
         {
@@ -358,38 +379,4 @@ fn env_api_key(provider_id: &str) -> Option<String> {
         }
     }
     None
-}
-
-fn env_api_key_names(provider_id: &str) -> &'static [&'static str] {
-    match provider_id {
-        "ant-ling" => &["ANT_LING_API_KEY"],
-        "anthropic" => &["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
-        "azure-openai-responses" => &["AZURE_OPENAI_API_KEY"],
-        "cerebras" => &["CEREBRAS_API_KEY"],
-        "cloudflare-ai-gateway" | "cloudflare-workers-ai" => &["CLOUDFLARE_API_KEY"],
-        "deepseek" => &["DEEPSEEK_API_KEY"],
-        "google" | "gemini" => &["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"],
-        "groq" => &["GROQ_API_KEY"],
-        "mistral" => &["MISTRAL_API_KEY"],
-        "nvidia" => &["NVIDIA_API_KEY"],
-        "opencode" => &["OPENCODE_API_KEY"],
-        "openai" => &["OPENAI_API_KEY"],
-        "openrouter" => &["OPENROUTER_API_KEY"],
-        "vercel-ai-gateway" => &["AI_GATEWAY_API_KEY"],
-        "xai" => &["XAI_API_KEY"],
-        "zai" => &["ZAI_API_KEY"],
-        "zai-coding-cn" => &["ZAI_CODING_CN_API_KEY"],
-        _ => &[],
-    }
-}
-
-fn protocol_for_api(api: &str) -> Option<WireProtocol> {
-    match api {
-        "openai-responses" | "openai-codex-responses" | "azure-openai-responses" => {
-            Some(WireProtocol::Responses)
-        }
-        "openai-completions" | "openai-chat-completions" => Some(WireProtocol::ChatCompletions),
-        "anthropic" | "anthropic-messages" => Some(WireProtocol::AnthropicMessages),
-        _ => None,
-    }
 }

@@ -5,6 +5,7 @@ pub mod config;
 mod error;
 mod i18n;
 pub mod interfaces;
+pub mod providers;
 pub mod risks;
 mod utils;
 
