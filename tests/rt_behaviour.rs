@@ -501,6 +501,7 @@ fn pi_provider_uses_builtin_opencode_go_defaults_without_models_config() {
     assert_eq!(provider["apiKey"], "sk-opencode");
     assert_eq!(provider["enabled"], true);
     assert_eq!(provider["providerId"], "opencode");
+    assert_eq!(provider["providerDisplayName"], "OpenCode");
     assert_eq!(provider["rawProviderId"], "opencode-go");
     assert_eq!(provider["endpointVariant"], "go");
     assert_eq!(provider["baseUrlSource"], "catalog");

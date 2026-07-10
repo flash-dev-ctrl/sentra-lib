@@ -420,6 +420,11 @@ pub struct ProviderData {
     pub name: String,
     #[serde(rename = "providerId", skip_serializing_if = "Option::is_none")]
     pub provider_id: Option<String>,
+    #[serde(
+        rename = "providerDisplayName",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub provider_display_name: Option<String>,
     #[serde(rename = "rawProviderId", skip_serializing_if = "Option::is_none")]
     pub raw_provider_id: Option<String>,
     #[serde(rename = "baseUrl")]

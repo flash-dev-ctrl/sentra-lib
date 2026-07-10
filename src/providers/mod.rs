@@ -409,6 +409,8 @@ impl ProviderRegistry {
                 .or_else(|| raw_provider_id.clone())
                 .unwrap_or_else(|| "Unknown Provider".to_string()),
             provider_id: provider_match.map(|matched| matched.provider.id.clone()),
+            provider_display_name: provider_match
+                .map(|matched| matched.provider.display_name.clone()),
             raw_provider_id,
             base_url,
             base_url_source,
@@ -510,6 +512,7 @@ mod tests {
         let provider = ProviderRegistry::builtin().resolve(candidate);
 
         assert_eq!(provider.provider_id.as_deref(), Some("opencode"));
+        assert_eq!(provider.provider_display_name.as_deref(), Some("OpenCode"));
         assert_eq!(provider.endpoint_variant.as_deref(), Some("go-anthropic"));
         assert_eq!(
             provider.base_url.as_deref(),
