@@ -66,6 +66,7 @@ fn agents_module_exports_only_public_discovery_surface() {
         "pub mod general",
         "pub mod hermes",
         "pub mod openclaw",
+        "pub mod opencode",
         "pub mod sentra",
         "pub use discovery::{discover_agents, get_agent_title}",
         "pub use entries::{",

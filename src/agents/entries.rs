@@ -58,6 +58,13 @@ pub(crate) const OPENCLAW_AGENT_ENTRY: AgentEntry = AgentEntry {
     asset_for_type: crate::agents::openclaw::asset_for_type,
 };
 
+pub(crate) const OPENCODE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "opencode",
+    title: Some("OpenCode"),
+    homes: &[&[".config", "opencode"]],
+    asset_for_type: crate::agents::opencode::asset_for_type,
+};
+
 pub(crate) const PI_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "pi",
     title: Some("Pi"),
@@ -150,6 +157,7 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         CLAUDE_APP_AGENT_ENTRY.clone(),
         HERMES_AGENT_ENTRY.clone(),
         OPENCLAW_AGENT_ENTRY.clone(),
+        OPENCODE_AGENT_ENTRY.clone(),
         PI_AGENT_ENTRY.clone(),
         HERMES_SYSTEM_AGENT_ENTRY.clone(),
     ];
