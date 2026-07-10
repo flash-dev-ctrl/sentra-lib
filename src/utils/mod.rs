@@ -19,6 +19,7 @@ pub use mcp::parse_mcp_servers;
 pub use memory::collect_memory_paths;
 pub use skill::{
     collect_skill_files, collect_skill_manifests_from_dir, collect_skill_manifests_from_dir_async,
-    collect_skills_from_dir, collect_skills_from_dir_async, del_skill_data, set_skill_data,
+    collect_skills_from_dir, collect_skills_from_dir_async, del_skill_data,
+    parse_skill_frontmatter, set_skill_data,
 };
 pub use source::stage_skill_source;

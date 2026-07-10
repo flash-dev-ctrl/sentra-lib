@@ -124,6 +124,7 @@
       ],
       "agentAliases": [
         { "agent": "pi", "alias": "opencode-go", "endpoint": "go" },
+        { "agent": "opencode", "alias": "opencode-go", "endpoint": "go", "environmentKeys": ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY"] },
         { "agent": "openclaw", "alias": "opencode", "endpoint": "zen", "environmentKeys": ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY"] },
         { "agent": "openclaw", "alias": "opencode-zen", "endpoint": "zen", "environmentKeys": ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY"] },
         { "agent": "openclaw", "alias": "opencode-go", "endpoint": "go", "environmentKeys": ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY"] },

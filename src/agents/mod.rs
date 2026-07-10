@@ -10,6 +10,7 @@ mod codex;
 mod general;
 mod hermes;
 mod openclaw;
+mod opencode;
 mod pi;
 mod sentra;
 
