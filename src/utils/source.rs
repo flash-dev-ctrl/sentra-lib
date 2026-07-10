@@ -8,6 +8,13 @@ use crate::{
     utils::{download_url_to_file, extract_zip_to_dir, url_file_name},
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GithubTreeSource {
+    repo_url: String,
+    ref_name: String,
+    path: PathBuf,
+}
+
 pub struct StagedSkillSource {
     path: PathBuf,
     _temp_dir: Option<TempDir>,
@@ -20,6 +27,9 @@ impl StagedSkillSource {
 }
 
 pub fn stage_skill_source(source: &str) -> SentraResult<StagedSkillSource> {
+    if let Some(tree) = parse_github_tree_source(source) {
+        return stage_github_tree_source(&tree);
+    }
     if is_git_source(source) {
         return stage_git_source(source);
     }
@@ -68,6 +78,23 @@ fn stage_local_path(path: &Path) -> SentraResult<StagedSkillSource> {
     stage_single_skill_file(path)
 }
 
+fn stage_github_tree_source(tree: &GithubTreeSource) -> SentraResult<StagedSkillSource> {
+    let temp_dir = tempfile::tempdir().map_err(|err| SentraError::io(None, err))?;
+    let checkout_dir = temp_dir.path().join("repo");
+    clone_git_source(&tree.repo_url, Some(&tree.ref_name), &checkout_dir)?;
+    let source_dir = checkout_dir.join(&tree.path);
+    if !source_dir.is_dir() {
+        return Err(SentraError::Message(format!(
+            "GitHub tree path does not exist or is not a directory: {}",
+            tree.path.display()
+        )));
+    }
+    Ok(StagedSkillSource {
+        path: source_dir,
+        _temp_dir: Some(temp_dir),
+    })
+}
+
 fn stage_remote_source(url: &str) -> SentraResult<StagedSkillSource> {
     let temp_dir = tempfile::tempdir().map_err(|err| SentraError::io(None, err))?;
     let file_name = url_file_name(url);
@@ -101,10 +128,24 @@ fn stage_git_source(source: &str) -> SentraResult<StagedSkillSource> {
     let url = source.strip_prefix("git+").unwrap_or(source);
     let temp_dir = tempfile::tempdir().map_err(|err| SentraError::io(None, err))?;
     let checkout_dir = temp_dir.path().join("repo");
-    let status = Command::new("git")
+    clone_git_source(url, None, &checkout_dir)?;
+    Ok(StagedSkillSource {
+        path: checkout_dir,
+        _temp_dir: Some(temp_dir),
+    })
+}
+
+fn clone_git_source(url: &str, ref_name: Option<&str>, checkout_dir: &Path) -> SentraResult<()> {
+    let mut command = Command::new("git");
+    command
         .env("GIT_TERMINAL_PROMPT", "0")
-        .args(["clone", "--depth", "1", "--progress", url])
-        .arg(&checkout_dir)
+        .args(["clone", "--depth", "1", "--progress"]);
+    if let Some(ref_name) = ref_name {
+        command.args(["--branch", ref_name]);
+    }
+    let status = command
+        .arg(url)
+        .arg(checkout_dir)
         .status()
         .map_err(|err| SentraError::Message(format!("failed to run git clone: {err}")))?;
     if !status.success() {
@@ -112,10 +153,7 @@ fn stage_git_source(source: &str) -> SentraResult<StagedSkillSource> {
             "failed to clone git source {url}: git exited with {status}"
         )));
     }
-    Ok(StagedSkillSource {
-        path: checkout_dir,
-        _temp_dir: Some(temp_dir),
-    })
+    Ok(())
 }
 
 fn stage_single_skill_file(path: &Path) -> SentraResult<StagedSkillSource> {
@@ -177,12 +215,125 @@ fn is_github_repository_url(source: &str) -> bool {
         && !repo.ends_with(".tar.gz")
 }
 
+fn parse_github_tree_source(source: &str) -> Option<GithubTreeSource> {
+    let Some(rest) = source
+        .strip_prefix("https://github.com/")
+        .or_else(|| source.strip_prefix("http://github.com/"))
+    else {
+        return None;
+    };
+    let path = rest
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(rest)
+        .trim_matches('/');
+    let segments = path.split('/').collect::<Vec<_>>();
+    if segments.len() < 4 || segments[2] != "tree" {
+        return None;
+    }
+    let owner = segments[0];
+    let repo = segments[1];
+    let ref_name = segments[3];
+    if owner.is_empty() || repo.is_empty() || ref_name.is_empty() {
+        return None;
+    }
+    let repo_url = format!("https://github.com/{owner}/{repo}.git");
+    let path = segments
+        .iter()
+        .skip(4)
+        .fold(PathBuf::new(), |mut path, segment| {
+            path.push(segment);
+            path
+        });
+    Some(GithubTreeSource {
+        repo_url,
+        ref_name: ref_name.to_string(),
+        path,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::is_git_source;
+    use std::{fs, path::Path, process::Command};
+
+    use super::{
+        GithubTreeSource, is_git_source, parse_github_tree_source, stage_github_tree_source,
+    };
+    use crate::utils::collect_skill_manifests_from_dir;
 
     #[test]
     fn github_repository_url_without_dot_git_is_a_git_source() {
         assert!(is_git_source("https://github.com/obra/superpowers"));
+    }
+
+    #[test]
+    fn github_tree_urls_are_parsed_as_repo_ref_and_subdir() {
+        let cases = [
+            (
+                "https://github.com/obra/superpowers/tree/main/skills",
+                ["skills"].as_slice(),
+            ),
+            (
+                "https://github.com/obra/superpowers/tree/main/skills/test-driven-development",
+                ["skills", "test-driven-development"].as_slice(),
+            ),
+        ];
+
+        for (url, path) in cases {
+            let source = parse_github_tree_source(url).expect("parse GitHub tree source");
+
+            assert_eq!(
+                source,
+                GithubTreeSource {
+                    repo_url: "https://github.com/obra/superpowers.git".to_string(),
+                    ref_name: "main".to_string(),
+                    path: path.iter().collect(),
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn github_tree_source_stages_requested_subdirectory_from_git_checkout() {
+        if Command::new("git").arg("--version").output().is_err() {
+            return;
+        }
+
+        let repo = tempfile::tempdir().unwrap();
+        run_git(repo.path(), &["init"]).unwrap();
+        run_git(repo.path(), &["checkout", "-b", "main"]).unwrap();
+        run_git(repo.path(), &["config", "user.email", "test@example.com"]).unwrap();
+        run_git(repo.path(), &["config", "user.name", "Test User"]).unwrap();
+        let skill_dir = repo.path().join("skills").join("test-driven-development");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: test-driven-development\n---\nbody",
+        )
+        .unwrap();
+        fs::write(repo.path().join("README.md"), "repo root").unwrap();
+        run_git(repo.path(), &["add", "."]).unwrap();
+        run_git(repo.path(), &["commit", "-m", "add skill fixture"]).unwrap();
+
+        let staged = stage_github_tree_source(&GithubTreeSource {
+            repo_url: repo.path().to_string_lossy().to_string(),
+            ref_name: "main".to_string(),
+            path: ["skills", "test-driven-development"].iter().collect(),
+        })
+        .unwrap();
+        let skills = collect_skill_manifests_from_dir(staged.path()).unwrap();
+
+        assert_eq!(
+            staged.path().file_name().unwrap(),
+            "test-driven-development"
+        );
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].name, "test-driven-development");
+    }
+
+    fn run_git(cwd: &Path, args: &[&str]) -> std::io::Result<()> {
+        let status = Command::new("git").current_dir(cwd).args(args).status()?;
+        assert!(status.success(), "git {args:?} failed with {status}");
+        Ok(())
     }
 }
