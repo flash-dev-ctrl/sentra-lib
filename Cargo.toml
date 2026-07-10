@@ -15,6 +15,7 @@ default = []
 c-binding = ["dep:cbindgen"]
 
 [dependencies]
+base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 home = "0.5"
 md-5 = "0.10"

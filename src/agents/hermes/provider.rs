@@ -109,7 +109,7 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                     api_key: mask_secret(raw.get("api_key").and_then(|value| value.as_str())),
                     enabled: true,
                     models: model_list(raw.get("models")),
-                    protocol: None,
+                    ..ProviderData::default()
                 },
             );
         }
@@ -131,7 +131,7 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                         enabled: true,
                     })
                     .collect(),
-                protocol: None,
+                ..ProviderData::default()
             },
         );
     }
@@ -162,7 +162,7 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                         }]
                     })
                     .unwrap_or_default(),
-                protocol: None,
+                ..ProviderData::default()
             },
         );
     }

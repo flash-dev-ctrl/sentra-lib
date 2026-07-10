@@ -415,9 +415,65 @@ pub struct ProviderModel {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderType {
+    #[default]
+    Gateway,
+    CodexAccount,
+    ClaudeAccount,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ProviderAccount {
+    #[serde(rename = "accountId")]
+    pub account_id: Option<String>,
+    pub email: Option<String>,
+    #[serde(rename = "displayName")]
+    pub display_name: Option<String>,
+    #[serde(rename = "authMode")]
+    pub auth_mode: Option<String>,
+    pub source: Option<String>,
+    #[serde(rename = "organizationId")]
+    pub organization_id: Option<String>,
+    #[serde(rename = "organizationName")]
+    pub organization_name: Option<String>,
+    #[serde(rename = "organizationRole")]
+    pub organization_role: Option<String>,
+    #[serde(rename = "organizationType")]
+    pub organization_type: Option<String>,
+    #[serde(rename = "billingType")]
+    pub billing_type: Option<String>,
+    pub plan: Option<String>,
+    #[serde(rename = "hasExtraUsageEnabled")]
+    pub has_extra_usage_enabled: Option<bool>,
+    #[serde(rename = "accountCreatedAt")]
+    pub account_created_at: Option<String>,
+    #[serde(rename = "subscriptionCreatedAt")]
+    pub subscription_created_at: Option<String>,
+    #[serde(rename = "trialEndsAt")]
+    pub trial_ends_at: Option<String>,
+    #[serde(rename = "lastRefresh")]
+    pub last_refresh: Option<String>,
+    #[serde(rename = "profileFetchedAt")]
+    pub profile_fetched_at: Option<serde_json::Value>,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<String>,
+    #[serde(rename = "hasIdToken")]
+    pub has_id_token: Option<bool>,
+    #[serde(rename = "hasAccessToken")]
+    pub has_access_token: Option<bool>,
+    #[serde(rename = "hasRefreshToken")]
+    pub has_refresh_token: Option<bool>,
+    #[serde(default)]
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ProviderData {
     pub name: String,
+    #[serde(rename = "providerType", default)]
+    pub provider_type: ProviderType,
     #[serde(rename = "baseUrl")]
     pub base_url: Option<String>,
     #[serde(rename = "apiKey")]
@@ -426,6 +482,8 @@ pub struct ProviderData {
     #[serde(default)]
     pub models: Vec<ProviderModel>,
     pub protocol: Option<crate::utils::protocol::WireProtocol>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<ProviderAccount>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

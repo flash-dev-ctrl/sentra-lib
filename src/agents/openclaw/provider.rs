@@ -102,7 +102,7 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                     .and_then(|value| value.as_bool())
                     .unwrap_or(true),
                 models: provider_models(raw.and_then(|raw| raw.get("models"))),
-                protocol: None,
+                ..ProviderData::default()
             }
         })
         .collect())

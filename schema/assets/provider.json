@@ -13,6 +13,16 @@
             "type": "string",
             "description": "模型供应商名称。"
         },
+        "providerType": {
+            "type": "string",
+            "description": "供应商采集类型，用于区分模型网关与登录账号。",
+            "enum": [
+                "gateway",
+                "codex_account",
+                "claude_account"
+            ],
+            "default": "gateway"
+        },
         "baseUrl": {
             "type": [
                 "string",
@@ -50,9 +60,180 @@
                 "anthropic_messages",
                 null
             ]
+        },
+        "account": {
+            "description": "账号型 provider 的登录账号元数据，不包含 token 原文。",
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/ProviderAccount"
+                },
+                {
+                    "type": "null"
+                }
+            ]
         }
     },
     "definitions": {
+        "ProviderAccount": {
+            "type": "object",
+            "description": "Codex/Claude Code 登录账号元数据。",
+            "additionalProperties": true,
+            "properties": {
+                "accountId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "账号标识。"
+                },
+                "email": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "账号邮箱。"
+                },
+                "displayName": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "账号显示名称。"
+                },
+                "authMode": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "认证模式。"
+                },
+                "source": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "账号信息来源。"
+                },
+                "organizationId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "组织标识。"
+                },
+                "organizationName": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "组织名称。"
+                },
+                "organizationRole": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "账号在组织中的角色。"
+                },
+                "organizationType": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "组织类型。"
+                },
+                "billingType": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "账单或订阅类型。"
+                },
+                "plan": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "套餐或计划。"
+                },
+                "hasExtraUsageEnabled": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ],
+                    "description": "是否启用额外用量。"
+                },
+                "accountCreatedAt": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "账号创建时间。"
+                },
+                "subscriptionCreatedAt": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "订阅创建时间。"
+                },
+                "trialEndsAt": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "试用结束时间。"
+                },
+                "lastRefresh": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "本地凭据最后刷新时间。"
+                },
+                "profileFetchedAt": {
+                    "type": [
+                        "number",
+                        "string",
+                        "null"
+                    ],
+                    "description": "账号资料获取时间。"
+                },
+                "expiresAt": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "凭据或 token 到期时间。"
+                },
+                "hasIdToken": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ],
+                    "description": "是否存在 ID token。"
+                },
+                "hasAccessToken": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ],
+                    "description": "是否存在 access token。"
+                },
+                "hasRefreshToken": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ],
+                    "description": "是否存在 refresh token。"
+                },
+                "metadata": {
+                    "type": "object",
+                    "description": "provider 专属扩展元数据。",
+                    "additionalProperties": true
+                }
+            }
+        },
         "ProviderModel": {
             "type": "object",
             "description": "模型供应商中的单个模型配置。",
