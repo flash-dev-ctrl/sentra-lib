@@ -164,7 +164,7 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
             .map(str::to_string),
         enabled: true,
         models,
-        protocol: None,
+        ..ProviderData::default()
     }])
 }
 

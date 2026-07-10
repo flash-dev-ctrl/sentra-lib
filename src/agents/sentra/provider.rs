@@ -74,6 +74,7 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
                 name: Some(model.to_string()),
                 enabled: true,
             }],
+            ..ProviderData::default()
         }])
     }
 
