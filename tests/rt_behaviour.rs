@@ -704,6 +704,334 @@ fn openclaw_opencode_go_uses_anthropic_endpoint_for_minimax_models() {
 }
 
 #[test]
+fn opencode_discovery_uses_config_home() {
+    let config_only = tempfile::tempdir().unwrap();
+    let config_home = config_only.path().join(".config").join("opencode");
+    fs::create_dir_all(&config_home).unwrap();
+    let agents = discover_agents(config_only.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    assert_eq!(opencode.title(), "OpenCode");
+    assert_eq!(opencode.home(), config_home);
+
+    let data_only = tempfile::tempdir().unwrap();
+    fs::create_dir_all(
+        data_only
+            .path()
+            .join(".local")
+            .join("share")
+            .join("opencode"),
+    )
+    .unwrap();
+    let agents = discover_agents(data_only.path());
+    assert_eq!(
+        agents
+            .iter()
+            .filter(|agent| agent.name() == "opencode")
+            .count(),
+        0
+    );
+
+    let legacy_only = tempfile::tempdir().unwrap();
+    let legacy_home = legacy_only.path().join(".opencode");
+    fs::create_dir_all(&legacy_home).unwrap();
+    fs::write(legacy_home.join("opencode.json"), "{}").unwrap();
+    let agents = discover_agents(legacy_only.path());
+    assert_eq!(
+        agents
+            .iter()
+            .filter(|agent| agent.name() == "opencode")
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn opencode_provider_reads_chaitin_gateway_and_masks_api_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("opencode.json"),
+        r#"{
+          "$schema": "https://opencode.ai/config.json",
+          "model": "chaitin/dev/gpt-5.4",
+          "provider": {
+            "chaitin": {
+              "npm": "@ai-sdk/openai-compatible",
+              "name": "Baizhi Gateway",
+              "options": {
+                "baseURL": "https://ai-api-gateway.app.baizhi.cloud/api/openai",
+                "apiKey": "sk-chaitin-secret"
+              },
+              "models": {
+                "dev/gpt-5.4": {
+                  "name": "Dev GPT-5.4"
+                }
+              }
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let providers = asset_data(opencode, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert_eq!(provider["rawProviderId"], "chaitin");
+    assert_eq!(provider["name"], "Baizhi Gateway");
+    assert_eq!(
+        provider["baseUrl"],
+        "https://ai-api-gateway.app.baizhi.cloud/api/openai"
+    );
+    assert_eq!(provider["baseUrlSource"], "configured");
+    assert_eq!(provider["models"][0]["id"], "dev/gpt-5.4");
+    assert_eq!(provider["models"][0]["name"], "Dev GPT-5.4");
+    assert_eq!(provider["activationStatus"], "active");
+    assert_eq!(provider["protocol"], "chat_completions");
+    assert_eq!(provider["protocolSource"], "inferred");
+    assert_eq!(provider["resolutionStatus"], "custom");
+    assert!(provider["apiKey"].as_str().unwrap().contains("****"));
+    assert_ne!(provider["apiKey"], "sk-chaitin-secret");
+}
+
+#[test]
+fn opencode_provider_reads_legacy_dot_opencode_config() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".config").join("opencode")).unwrap();
+    let home = dir.path().join(".opencode");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("opencode.json"),
+        r#"{
+          "model": "chaitin/dev/gpt-5.4",
+          "provider": {
+            "chaitin": {
+              "npm": "@ai-sdk/openai-compatible",
+              "name": "Baizhi Gateway",
+              "options": {
+                "baseURL": "https://ai-api-gateway.app.baizhi.cloud/api/openai",
+                "apiKey": "sk-legacy-secret"
+              },
+              "models": {"dev/gpt-5.4": {"name": "Dev GPT-5.4"}}
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let providers = asset_data(opencode, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert_eq!(opencode.home(), dir.path().join(".config").join("opencode"));
+    assert_eq!(provider["rawProviderId"], "chaitin");
+    assert_eq!(
+        provider["baseUrl"],
+        "https://ai-api-gateway.app.baizhi.cloud/api/openai"
+    );
+    assert_eq!(provider["models"][0]["id"], "dev/gpt-5.4");
+    assert_eq!(provider["activationStatus"], "active");
+    assert_eq!(provider["protocol"], "chat_completions");
+    assert!(provider["apiKey"].as_str().unwrap().contains("****"));
+    assert_ne!(provider["apiKey"], "sk-legacy-secret");
+}
+
+#[test]
+fn opencode_provider_can_read_masked_api_key_from_auth_json() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    let data_home = dir.path().join(".local").join("share").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+    fs::create_dir_all(&data_home).unwrap();
+    fs::write(
+        home.join("opencode.json"),
+        r#"{"provider":{"chaitin":{"name":"Baizhi Gateway","options":{"baseURL":"https://gateway.example.test/v1"},"models":{"dev/gpt-5.4":{"name":"Dev GPT-5.4"}}}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        data_home.join("auth.json"),
+        r#"{"providers":{"chaitin":{"apiKey":"sk-auth-secret"}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let providers = asset_data(opencode, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert!(provider["apiKey"].as_str().unwrap().contains("****"));
+    assert_ne!(provider["apiKey"], "sk-auth-secret");
+    assert_eq!(provider["activationStatus"], "unknown");
+}
+
+#[test]
+fn opencode_mcp_maps_local_and_remote_servers() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("opencode.json"),
+        r#"{
+          "mcp": {
+            "local": {
+              "type": "local",
+              "command": "node",
+              "args": ["server.js"],
+              "env": {"TOKEN": "test"}
+            },
+            "remote": {
+              "type": "remote",
+              "url": "https://mcp.example.test/mcp",
+              "enabled": false
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let mcps = asset_data(opencode, AssetType::Mcp);
+    let items = mcps[0].data.as_array().unwrap();
+    let local = items.iter().find(|item| item["name"] == "local").unwrap();
+    let remote = items.iter().find(|item| item["name"] == "remote").unwrap();
+
+    assert_eq!(local["type"], "stdio");
+    assert_eq!(local["command"], "node");
+    assert_eq!(local["args"][0], "server.js");
+    assert_eq!(local["env"]["TOKEN"], "test");
+    assert_eq!(remote["type"], "http");
+    assert_eq!(remote["url"], "https://mcp.example.test/mcp");
+    assert_eq!(remote["enabled"], false);
+}
+
+#[test]
+fn opencode_skill_reads_single_file_and_directory_skills() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(home.join("skill")).unwrap();
+    fs::create_dir_all(home.join("skills").join("demo")).unwrap();
+    fs::write(
+        home.join("skill").join("review.md"),
+        "---\nname: review\ndescription: Review code\n---\nbody",
+    )
+    .unwrap();
+    fs::write(
+        home.join("skills").join("demo").join("SKILL.md"),
+        "---\nname: demo\ndescription: Demo skill\n---\nbody",
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let skills = asset_data(opencode, AssetType::Skill);
+    let items = skills[0].data.as_array().unwrap();
+    let review = items.iter().find(|item| item["name"] == "review").unwrap();
+    let demo = items.iter().find(|item| item["name"] == "demo").unwrap();
+
+    assert!(review["home"].as_str().unwrap().ends_with("review.md"));
+    assert_eq!(review["files"][0]["path"], "review.md");
+    assert_eq!(review["tags"][0], "opencode");
+    assert!(
+        demo["home"]
+            .as_str()
+            .unwrap()
+            .replace('\\', "/")
+            .ends_with("skills/demo")
+    );
+    assert_eq!(demo["description"], "Demo skill");
+}
+
+#[test]
+fn opencode_memory_collects_config_database_logs_and_local_artifacts_without_secret_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    let data_home = dir.path().join(".local").join("share").join("opencode");
+    fs::create_dir_all(home.join("agent")).unwrap();
+    fs::create_dir_all(home.join("command")).unwrap();
+    fs::create_dir_all(home.join("plugin")).unwrap();
+    fs::create_dir_all(home.join("rule")).unwrap();
+    fs::create_dir_all(data_home.join("log")).unwrap();
+    fs::create_dir_all(data_home.join("tool-output")).unwrap();
+    fs::create_dir_all(data_home.join("snapshot").join("repo")).unwrap();
+    fs::create_dir_all(data_home.join("repos").join("project")).unwrap();
+    fs::write(home.join("opencode.json"), r#"{"model":"chaitin/dev"}"#).unwrap();
+    fs::write(home.join("agent").join("review.md"), "agent prompt").unwrap();
+    fs::write(home.join("command").join("build.md"), "command prompt").unwrap();
+    fs::write(home.join("plugin").join("plugin.json"), "{}").unwrap();
+    fs::write(home.join("rule").join("rules.json"), "{}").unwrap();
+    fs::write(
+        data_home.join("auth.json"),
+        r#"{"providers":{"chaitin":{"apiKey":"sk-memory-secret"}}}"#,
+    )
+    .unwrap();
+    fs::write(data_home.join("opencode.db"), "sqlite").unwrap();
+    fs::write(data_home.join("opencode.db-wal"), "wal").unwrap();
+    fs::write(data_home.join("opencode.db-shm"), "shm").unwrap();
+    fs::write(data_home.join("log").join("opencode.log"), "log").unwrap();
+    fs::write(data_home.join("tool-output").join("tool-1"), "output").unwrap();
+    fs::write(
+        data_home.join("snapshot").join("repo").join("config"),
+        "snapshot",
+    )
+    .unwrap();
+    fs::write(
+        data_home.join("repos").join("project").join("state"),
+        "repo",
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let memories = asset_data(opencode, AssetType::Memory);
+    let items = memories[0].data.as_array().unwrap();
+    let names = items
+        .iter()
+        .filter_map(|item| item["name"].as_str())
+        .collect::<Vec<_>>();
+
+    assert!(names.contains(&"opencode.json"));
+    assert!(names.contains(&"auth.json"));
+    assert!(names.contains(&"opencode.db"));
+    assert!(names.contains(&"opencode.db-wal"));
+    assert!(names.contains(&"opencode.log"));
+    assert!(names.contains(&"tool-1"));
+    assert!(names.contains(&"config"));
+    assert!(names.contains(&"state"));
+    assert!(names.contains(&"review.md"));
+    assert!(names.contains(&"build.md"));
+    assert!(
+        !serde_json::to_string(&items)
+            .unwrap()
+            .contains("sk-memory-secret")
+    );
+}
+
+#[test]
 fn hermes_provider_reads_modern_model_and_auth_configuration() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".hermes");
