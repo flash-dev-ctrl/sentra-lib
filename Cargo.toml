@@ -1,6 +1,6 @@
 [package]
 name = "sentra-lib"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 description = "Rust runtime library for Sentra agent discovery, assets, skills, and risk scanning"
 license = "MIT"
