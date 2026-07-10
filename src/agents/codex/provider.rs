@@ -8,6 +8,9 @@ use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderAccount, ProviderData,
     ProviderModel, ProviderProbeRequest, ProviderType,
 };
+use crate::providers::{
+    ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
+};
 use crate::utils::protocol::{WireProtocol, default_model_probe_prompt};
 use crate::utils::{backup_file, read_json_file, read_text_file, write_json_file, write_text_file};
 
@@ -123,51 +126,38 @@ fn config_providers(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderDa
         .and_then(|value| value.as_table())
     {
         for (id, raw) in table {
-            let Some(base_url) = raw.get("base_url").and_then(|value| value.as_str()) else {
-                continue;
-            };
+            let base_url = raw
+                .get("base_url")
+                .and_then(|value| value.as_str())
+                .map(str::to_string);
             let enabled = active_id == Some(id.as_str());
             let model_name = current_model.filter(|_| enabled);
-            providers.push(ProviderData {
-                name: raw
-                    .get("name")
+            let mut candidate = ProviderCandidate::new("codex");
+            candidate.agent_provider_id = Some(id.clone());
+            candidate.display_name = Some(
+                raw.get("name")
                     .and_then(|value| value.as_str())
                     .unwrap_or(id)
                     .to_string(),
-                base_url: Some(base_url.to_string()),
-                api_key: raw
-                    .get("experimental_bearer_token")
-                    .and_then(|value| value.as_str())
-                    .map(str::to_string)
-                    .or_else(|| {
-                        raw.get("env_key")
-                            .and_then(|value| value.as_str())
-                            .and_then(|key| std::env::var(key).ok())
-                    }),
-                enabled,
-                models: model_name
-                    .map(|id| {
-                        vec![ProviderModel {
-                            id: id.to_string(),
-                            name: Some(id.to_string()),
-                            enabled: true,
-                        }]
-                    })
-                    .unwrap_or_default(),
-                protocol: None,
-                ..ProviderData::default()
-            });
-        }
-    }
-    if providers.is_empty()
-        && let Some(api_base) = cfg.get("api_base").and_then(|value| value.as_str())
-    {
-        providers.push(ProviderData {
-            name: "OpenAI".to_string(),
-            base_url: Some(api_base.to_string()),
-            api_key: None,
-            enabled: true,
-            models: current_model
+            );
+            candidate.configured_base_url = base_url.clone();
+            candidate.protocol_hint = Some(crate::utils::protocol::WireProtocol::Responses);
+            candidate.protocol_source = Some(ProviderFieldSource::Inferred);
+            candidate.api_key = raw
+                .get("experimental_bearer_token")
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+                .or_else(|| {
+                    raw.get("env_key")
+                        .and_then(|value| value.as_str())
+                        .and_then(|key| std::env::var(key).ok())
+                });
+            candidate.activation = if enabled {
+                ProviderActivationStatus::Active
+            } else {
+                ProviderActivationStatus::Inactive
+            };
+            candidate.models = model_name
                 .map(|id| {
                     vec![ProviderModel {
                         id: id.to_string(),
@@ -175,10 +165,29 @@ fn config_providers(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderDa
                         enabled: true,
                     }]
                 })
-                .unwrap_or_default(),
-            protocol: None,
-            ..ProviderData::default()
-        });
+                .unwrap_or_default();
+            providers.push(ProviderRegistry::builtin().resolve(candidate));
+        }
+    }
+    if providers.is_empty()
+        && let Some(api_base) = cfg.get("api_base").and_then(|value| value.as_str())
+    {
+        let mut candidate = ProviderCandidate::new("codex");
+        candidate.display_name = Some("OpenAI".to_string());
+        candidate.configured_base_url = Some(api_base.to_string());
+        candidate.protocol_hint = Some(crate::utils::protocol::WireProtocol::Responses);
+        candidate.protocol_source = Some(ProviderFieldSource::Inferred);
+        candidate.activation = ProviderActivationStatus::Active;
+        candidate.models = current_model
+            .map(|id| {
+                vec![ProviderModel {
+                    id: id.to_string(),
+                    name: Some(id.to_string()),
+                    enabled: true,
+                }]
+            })
+            .unwrap_or_default();
+        providers.push(ProviderRegistry::builtin().resolve(candidate));
     }
     Ok(providers)
 }
@@ -326,6 +335,7 @@ fn account_provider(agent_home: &std::path::Path) -> SentraResult<Option<Provide
         models: Vec::new(),
         protocol: None,
         account: Some(account),
+        ..ProviderData::default()
     }))
 }
 
