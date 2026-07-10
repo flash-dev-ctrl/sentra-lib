@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
-use crate::interfaces::{ProviderData, ProviderModel};
+use crate::interfaces::{ProviderData, ProviderModel, ProviderType};
 use crate::utils::protocol::WireProtocol;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -408,6 +408,7 @@ impl ProviderRegistry {
                 .or_else(|| provider_match.map(|matched| matched.provider.display_name.clone()))
                 .or_else(|| raw_provider_id.clone())
                 .unwrap_or_else(|| "Unknown Provider".to_string()),
+            provider_type: ProviderType::Gateway,
             provider_id: provider_match.map(|matched| matched.provider.id.clone()),
             provider_display_name: provider_match
                 .map(|matched| matched.provider.display_name.clone()),
@@ -423,6 +424,7 @@ impl ProviderRegistry {
             endpoint_variant: endpoint.map(|endpoint| endpoint.id.clone()),
             resolution_status,
             resolution_reason,
+            account: None,
         }
     }
 

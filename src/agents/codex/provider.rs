@@ -1,11 +1,12 @@
-use serde_json::json;
+use base64::Engine as _;
+use serde_json::{Value, json};
 
 use crate::SentraError;
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{
-    Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderData, ProviderModel,
-    ProviderProbeRequest,
+    Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderAccount, ProviderData,
+    ProviderModel, ProviderProbeRequest, ProviderType,
 };
 use crate::providers::{
     ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
@@ -77,75 +78,86 @@ impl_erased_asset!(
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        let Some(content) = read_text_file(self.core.agent_home().join("config.toml"))? else {
-            return Ok(Vec::new());
-        };
-        let Ok(cfg) = toml::from_str::<toml::Value>(&content) else {
-            return Ok(Vec::new());
-        };
-        let current_model = cfg.get("model").and_then(|value| value.as_str());
-        let active_id = cfg.get("model_provider").and_then(|value| value.as_str());
-        let mut providers = Vec::new();
-        if let Some(table) = cfg
-            .get("model_providers")
-            .and_then(|value| value.as_table())
-        {
-            for (id, raw) in table {
-                let activation = match active_id {
-                    Some(active_id) if active_id == id => ProviderActivationStatus::Active,
-                    Some(_) => ProviderActivationStatus::Inactive,
-                    None => ProviderActivationStatus::Unknown,
-                };
-                let model_name =
-                    current_model.filter(|_| activation == ProviderActivationStatus::Active);
-                let mut candidate = ProviderCandidate::new("codex");
-                candidate.agent_provider_id = Some(id.clone());
-                candidate.display_name = Some(
-                    raw.get("name")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or(id)
-                        .to_string(),
-                );
-                candidate.configured_base_url = raw
-                    .get("base_url")
-                    .and_then(|value| value.as_str())
-                    .map(str::to_string);
-                candidate.protocol_hint = Some(WireProtocol::Responses);
-                candidate.protocol_source = Some(ProviderFieldSource::Inferred);
-                candidate.api_key = raw
-                    .get("experimental_bearer_token")
-                    .and_then(|value| value.as_str())
-                    .map(str::to_string)
-                    .or_else(|| {
-                        raw.get("env_key")
-                            .and_then(|value| value.as_str())
-                            .and_then(|key| std::env::var(key).ok())
-                    });
-                candidate.activation = activation;
-                candidate.models = model_name
-                    .map(|id| {
-                        vec![ProviderModel {
-                            id: id.to_string(),
-                            name: Some(id.to_string()),
-                            enabled: true,
-                        }]
-                    })
-                    .unwrap_or_default();
-                let mut provider = ProviderRegistry::builtin().resolve(candidate);
-                provider.enabled = activation == ProviderActivationStatus::Active;
-                providers.push(provider);
-            }
+        let mut providers = config_providers(self.core.agent_home())?;
+        if let Some(account) = account_provider(self.core.agent_home())? {
+            providers.push(account);
         }
-        if providers.is_empty()
-            && let Some(api_base) = cfg.get("api_base").and_then(|value| value.as_str())
-        {
+        Ok(providers)
+    }
+
+    fn set_data(&self, value: ProviderData) -> SentraResult<AssetMutationResult> {
+        if value.provider_type != ProviderType::Gateway {
+            return Ok(AssetMutationResult::unchanged(
+                AssetMutationErrorCode::Unsupported,
+                "Codex account provider mutation is not supported",
+            ));
+        }
+        let values = vec![value];
+        let cfg = merge_codex_config(load_config(self.core.agent_home())?, &values);
+        save_config(self.core.agent_home(), &cfg)?;
+        ensure_catalog_entries(self.core.agent_home(), &values)?;
+        save_auth_key(self.core.agent_home(), &values)?;
+        Ok(AssetMutationResult::changed())
+    }
+
+    fn del_data(&self, item: &ProviderData) -> SentraResult<AssetMutationResult> {
+        if item.provider_type != ProviderType::Gateway {
+            return Ok(AssetMutationResult::unchanged(
+                AssetMutationErrorCode::Unsupported,
+                "Codex account provider mutation is not supported",
+            ));
+        }
+        delete_provider_config(self.core.agent_home(), item)
+    }
+}
+
+fn config_providers(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>> {
+    let Some(content) = read_text_file(agent_home.join("config.toml"))? else {
+        return Ok(Vec::new());
+    };
+    let Ok(cfg) = toml::from_str::<toml::Value>(&content) else {
+        return Ok(Vec::new());
+    };
+    let current_model = cfg.get("model").and_then(|value| value.as_str());
+    let active_id = cfg.get("model_provider").and_then(|value| value.as_str());
+    let mut providers = Vec::new();
+    if let Some(table) = cfg
+        .get("model_providers")
+        .and_then(|value| value.as_table())
+    {
+        for (id, raw) in table {
+            let base_url = raw
+                .get("base_url")
+                .and_then(|value| value.as_str())
+                .map(str::to_string);
+            let enabled = active_id == Some(id.as_str());
+            let model_name = current_model.filter(|_| enabled);
             let mut candidate = ProviderCandidate::new("codex");
-            candidate.display_name = Some("OpenAI".to_string());
-            candidate.configured_base_url = Some(api_base.to_string());
-            candidate.protocol_hint = Some(WireProtocol::Responses);
+            candidate.agent_provider_id = Some(id.clone());
+            candidate.display_name = Some(
+                raw.get("name")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or(id)
+                    .to_string(),
+            );
+            candidate.configured_base_url = base_url.clone();
+            candidate.protocol_hint = Some(crate::utils::protocol::WireProtocol::Responses);
             candidate.protocol_source = Some(ProviderFieldSource::Inferred);
-            candidate.activation = ProviderActivationStatus::Active;
-            candidate.models = current_model
+            candidate.api_key = raw
+                .get("experimental_bearer_token")
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+                .or_else(|| {
+                    raw.get("env_key")
+                        .and_then(|value| value.as_str())
+                        .and_then(|key| std::env::var(key).ok())
+                });
+            candidate.activation = if enabled {
+                ProviderActivationStatus::Active
+            } else {
+                ProviderActivationStatus::Inactive
+            };
+            candidate.models = model_name
                 .map(|id| {
                     vec![ProviderModel {
                         id: id.to_string(),
@@ -156,21 +168,228 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
                 .unwrap_or_default();
             providers.push(ProviderRegistry::builtin().resolve(candidate));
         }
-        Ok(providers)
+    }
+    if providers.is_empty()
+        && let Some(api_base) = cfg.get("api_base").and_then(|value| value.as_str())
+    {
+        let mut candidate = ProviderCandidate::new("codex");
+        candidate.display_name = Some("OpenAI".to_string());
+        candidate.configured_base_url = Some(api_base.to_string());
+        candidate.protocol_hint = Some(crate::utils::protocol::WireProtocol::Responses);
+        candidate.protocol_source = Some(ProviderFieldSource::Inferred);
+        candidate.activation = ProviderActivationStatus::Active;
+        candidate.models = current_model
+            .map(|id| {
+                vec![ProviderModel {
+                    id: id.to_string(),
+                    name: Some(id.to_string()),
+                    enabled: true,
+                }]
+            })
+            .unwrap_or_default();
+        providers.push(ProviderRegistry::builtin().resolve(candidate));
+    }
+    Ok(providers)
+}
+
+fn account_provider(agent_home: &std::path::Path) -> SentraResult<Option<ProviderData>> {
+    let Some(auth) = read_json_file(agent_home.join("auth.json"))? else {
+        return Ok(None);
+    };
+    let tokens = auth.get("tokens").and_then(|value| value.as_object());
+    let auth_mode = json_string(&auth, "auth_mode");
+    let id_token = tokens
+        .and_then(|tokens| tokens.get("id_token"))
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty());
+    let access_token = tokens
+        .and_then(|tokens| tokens.get("access_token"))
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty());
+    let refresh_token = tokens
+        .and_then(|tokens| tokens.get("refresh_token"))
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty());
+    let token_account_id = tokens
+        .and_then(|tokens| tokens.get("account_id"))
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+    let has_account_state = token_account_id.is_some()
+        || id_token.is_some()
+        || access_token.is_some()
+        || refresh_token.is_some();
+    if auth_mode.as_deref() != Some("chatgpt") && !has_account_state {
+        return Ok(None);
     }
 
-    fn set_data(&self, value: ProviderData) -> SentraResult<AssetMutationResult> {
-        let values = vec![value];
-        let cfg = merge_codex_config(load_config(self.core.agent_home())?, &values);
-        save_config(self.core.agent_home(), &cfg)?;
-        ensure_catalog_entries(self.core.agent_home(), &values)?;
-        save_auth_key(self.core.agent_home(), &values)?;
-        Ok(AssetMutationResult::changed())
+    let id_claims = id_token.and_then(decode_jwt_payload);
+    let access_claims = access_token.and_then(decode_jwt_payload);
+    let openai_auth = access_claims
+        .as_ref()
+        .and_then(openai_auth_claims)
+        .or_else(|| id_claims.as_ref().and_then(openai_auth_claims));
+    let profile = access_claims
+        .as_ref()
+        .and_then(|claims| claims.get("https://api.openai.com/profile"));
+    let organization = openai_auth.and_then(default_codex_organization);
+
+    let account_id = token_account_id.or_else(|| {
+        openai_auth
+            .and_then(|claims| json_string(claims, "chatgpt_account_id"))
+            .or_else(|| openai_auth.and_then(|claims| json_string(claims, "user_id")))
+    });
+    let email = profile
+        .and_then(|claims| json_string(claims, "email"))
+        .or_else(|| {
+            id_claims
+                .as_ref()
+                .and_then(|claims| json_string(claims, "email"))
+        });
+    let display_name = id_claims
+        .as_ref()
+        .and_then(|claims| json_string(claims, "name"));
+    let plan = openai_auth.and_then(|claims| json_string(claims, "chatgpt_plan_type"));
+    let mut metadata = serde_json::Map::new();
+    insert_metadata(profile, "email_verified", "emailVerified", &mut metadata);
+    insert_metadata(
+        id_claims.as_ref(),
+        "auth_provider",
+        "authProvider",
+        &mut metadata,
+    );
+    insert_metadata(
+        openai_auth,
+        "chatgpt_user_id",
+        "chatgptUserId",
+        &mut metadata,
+    );
+    insert_metadata(
+        openai_auth,
+        "chatgpt_account_user_id",
+        "chatgptAccountUserId",
+        &mut metadata,
+    );
+    insert_metadata(
+        openai_auth,
+        "chatgpt_subscription_active_until",
+        "subscriptionActiveUntil",
+        &mut metadata,
+    );
+    if let Some(organization) = organization {
+        insert_metadata(
+            Some(organization),
+            "is_default",
+            "organizationDefault",
+            &mut metadata,
+        );
     }
 
-    fn del_data(&self, item: &ProviderData) -> SentraResult<AssetMutationResult> {
-        delete_provider_config(self.core.agent_home(), item)
-    }
+    let account = ProviderAccount {
+        account_id,
+        email: email.clone(),
+        display_name: display_name.clone(),
+        auth_mode,
+        source: Some("auth.json".to_string()),
+        organization_id: organization
+            .and_then(|org| json_string(org, "id"))
+            .or_else(|| {
+                openai_auth
+                    .and_then(|claims| json_string(claims, "poid"))
+                    .filter(|value| !value.is_empty())
+            }),
+        organization_name: organization.and_then(|org| json_string(org, "title")),
+        organization_role: organization.and_then(|org| json_string(org, "role")),
+        organization_type: None,
+        billing_type: None,
+        plan,
+        has_extra_usage_enabled: None,
+        account_created_at: None,
+        subscription_created_at: openai_auth
+            .and_then(|claims| json_string(claims, "chatgpt_subscription_active_start")),
+        trial_ends_at: None,
+        last_refresh: json_string(&auth, "last_refresh"),
+        profile_fetched_at: None,
+        expires_at: access_claims
+            .as_ref()
+            .and_then(|claims| timestamp_claim(claims, "exp"))
+            .or_else(|| {
+                id_claims
+                    .as_ref()
+                    .and_then(|claims| timestamp_claim(claims, "exp"))
+            }),
+        has_id_token: Some(id_token.is_some()),
+        has_access_token: Some(access_token.is_some()),
+        has_refresh_token: Some(refresh_token.is_some()),
+        metadata,
+    };
+    let name = display_name
+        .or(email)
+        .or_else(|| account.account_id.clone())
+        .unwrap_or_else(|| "Codex Account".to_string());
+    Ok(Some(ProviderData {
+        name,
+        provider_type: ProviderType::CodexAccount,
+        base_url: None,
+        api_key: None,
+        enabled: true,
+        models: Vec::new(),
+        protocol: None,
+        account: Some(account),
+        ..ProviderData::default()
+    }))
+}
+
+fn decode_jwt_payload(token: &str) -> Option<Value> {
+    let payload = token.split('.').nth(1)?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .or_else(|_| base64::engine::general_purpose::URL_SAFE.decode(payload))
+        .ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+fn openai_auth_claims(claims: &Value) -> Option<&Value> {
+    claims.get("https://api.openai.com/auth")
+}
+
+fn default_codex_organization(openai_auth: &Value) -> Option<&Value> {
+    let organizations = openai_auth.get("organizations")?.as_array()?;
+    organizations
+        .iter()
+        .find(|org| org.get("is_default").and_then(|value| value.as_bool()) == Some(true))
+        .or_else(|| organizations.first())
+}
+
+fn json_string(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+}
+
+fn timestamp_claim(value: &Value, key: &str) -> Option<String> {
+    let seconds = value.get(key).and_then(|value| {
+        value
+            .as_i64()
+            .or_else(|| value.as_u64().map(|value| value as i64))
+    })?;
+    chrono::DateTime::<chrono::Utc>::from_timestamp(seconds, 0).map(|value| value.to_rfc3339())
+}
+
+fn insert_metadata(
+    source: Option<&Value>,
+    source_key: &str,
+    target_key: &str,
+    metadata: &mut serde_json::Map<String, Value>,
+) {
+    let Some(value) = source
+        .and_then(|source| source.get(source_key))
+        .filter(|value| !value.is_null())
+    else {
+        return;
+    };
+    metadata.insert(target_key.to_string(), value.clone());
 }
 
 fn load_config(agent_home: &std::path::Path) -> SentraResult<toml::Table> {
