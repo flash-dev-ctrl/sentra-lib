@@ -83,8 +83,8 @@ fn execute_agent_command(
     mut progress: Option<&mut dyn FnMut(AgentInstallProgress)>,
 ) -> SentraResult<AgentInstallResult> {
     let mut errors = Vec::new();
+    let total = plans.len() + 1;
     for (index, plan) in plans.into_iter().enumerate() {
-        let total = index + 2;
         if let Some(reporter) = progress.as_deref_mut() {
             reporter(AgentInstallProgress {
                 agent: agent.name().to_string(),
@@ -145,26 +145,46 @@ fn install_plans_for_platform(
     platform: Platform,
     action: AgentInstallAction,
 ) -> Vec<InstallCommandPlan> {
-    let primary = install_plan_for_platform(agent, platform);
-    if agent == InstallableAgent::OpenCode {
-        return opencode_install_plans_for_platform(platform, action);
+    match agent {
+        InstallableAgent::Codex => codex_install_plans_for_platform(platform, action),
+        InstallableAgent::ClaudeCli => claude_install_plans_for_platform(platform, action),
+        InstallableAgent::OpenCode => opencode_install_plans_for_platform(platform, action),
     }
-    if agent == InstallableAgent::Codex && platform == Platform::Windows {
-        return vec![
-            primary,
-            winget_codex_plan(action),
+}
+
+fn codex_install_plans_for_platform(
+    platform: Platform,
+    action: AgentInstallAction,
+) -> Vec<InstallCommandPlan> {
+    match platform {
+        Platform::Unix => vec![
+            npm_plan(npm_codex_package(action)),
+            install_plan_for_platform(InstallableAgent::Codex, platform),
+        ],
+        Platform::Windows => vec![
             windows_npm_plan(npm_codex_package(action)),
-        ];
+            winget_codex_plan(action),
+            install_plan_for_platform(InstallableAgent::Codex, platform),
+        ],
     }
-    if agent == InstallableAgent::ClaudeCli && platform == Platform::Windows {
-        return vec![
-            primary,
-            claude_cmd_install_plan(),
-            winget_claude_plan(action),
+}
+
+fn claude_install_plans_for_platform(
+    platform: Platform,
+    action: AgentInstallAction,
+) -> Vec<InstallCommandPlan> {
+    match platform {
+        Platform::Unix => vec![
+            npm_plan(npm_claude_package(action)),
+            install_plan_for_platform(InstallableAgent::ClaudeCli, platform),
+        ],
+        Platform::Windows => vec![
             windows_npm_plan(npm_claude_package(action)),
-        ];
+            winget_claude_plan(action),
+            install_plan_for_platform(InstallableAgent::ClaudeCli, platform),
+            claude_cmd_install_plan(),
+        ],
     }
-    vec![primary]
 }
 
 fn install_plan_for_platform(agent: InstallableAgent, platform: Platform) -> InstallCommandPlan {
@@ -316,10 +336,10 @@ fn opencode_install_plans_for_platform(
 ) -> Vec<InstallCommandPlan> {
     match platform {
         Platform::Unix => vec![
-            install_plan_for_platform(InstallableAgent::OpenCode, platform),
             npm_plan(opencode_npm_package(action)),
             bun_plan(opencode_bun_package(action)),
             brew_opencode_plan(action),
+            install_plan_for_platform(InstallableAgent::OpenCode, platform),
         ],
         Platform::Windows => vec![
             windows_npm_plan(opencode_npm_package(action)),
@@ -455,19 +475,48 @@ mod tests {
     }
 
     #[test]
-    fn windows_codex_install_and_update_have_npm_fallback() {
+    fn codex_install_and_update_prefer_npm_then_fallbacks() {
+        let unix_install_plans = install_plans_for_platform(
+            InstallableAgent::Codex,
+            Platform::Unix,
+            AgentInstallAction::Install,
+        );
+        assert_eq!(
+            unix_install_plans[0].command_line(),
+            "npm install -g @openai/codex"
+        );
+        assert_eq!(
+            unix_install_plans[1].command_line(),
+            "sh -c curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+        );
+
+        let unix_update_plans = install_plans_for_platform(
+            InstallableAgent::Codex,
+            Platform::Unix,
+            AgentInstallAction::Update,
+        );
+        assert_eq!(
+            unix_update_plans[0].command_line(),
+            "npm install -g @openai/codex@latest"
+        );
+
         let install_plans = install_plans_for_platform(
             InstallableAgent::Codex,
             Platform::Windows,
             AgentInstallAction::Install,
         );
         assert_eq!(
+            install_plans[0].command_line(),
+            "cmd /C npm install -g @openai/codex"
+        );
+        assert_eq!(
             install_plans[1].command_line(),
             "winget install -e --id OpenAI.Codex --accept-package-agreements --accept-source-agreements"
         );
-        assert_eq!(
-            install_plans[2].command_line(),
-            "cmd /C npm install -g @openai/codex"
+        assert!(
+            install_plans[2]
+                .command_line()
+                .contains("https://chatgpt.com/codex/install.ps1")
         );
 
         let update_plans = install_plans_for_platform(
@@ -476,12 +525,17 @@ mod tests {
             AgentInstallAction::Update,
         );
         assert_eq!(
+            update_plans[0].command_line(),
+            "cmd /C npm install -g @openai/codex@latest"
+        );
+        assert_eq!(
             update_plans[1].command_line(),
             "winget upgrade -e --id OpenAI.Codex --accept-package-agreements --accept-source-agreements"
         );
-        assert_eq!(
-            update_plans[2].command_line(),
-            "cmd /C npm install -g @openai/codex@latest"
+        assert!(
+            update_plans[2]
+                .command_line()
+                .contains("https://chatgpt.com/codex/install.ps1")
         );
     }
 
@@ -495,6 +549,31 @@ mod tests {
                     program: "sentra-missing-installer-command",
                     args: Vec::new(),
                     method: "missing test installer",
+                },
+                InstallCommandPlan {
+                    program: "rustc",
+                    args: vec!["--version"],
+                    method: "rustc test installer",
+                },
+            ],
+            "install",
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(result.command, "rustc --version");
+    }
+
+    #[test]
+    fn command_runner_continues_after_command_failure() {
+        let result = execute_agent_command(
+            InstallableAgent::Codex,
+            AgentInstallAction::Install,
+            vec![
+                InstallCommandPlan {
+                    program: "rustc",
+                    args: vec!["--sentra-missing-test-flag"],
+                    method: "failing test installer",
                 },
                 InstallCommandPlan {
                     program: "rustc",
@@ -536,7 +615,7 @@ mod tests {
         assert_eq!(result.command, "rustc --version");
         assert_eq!(progress.len(), 3);
         assert_eq!(progress[0].current, 1);
-        assert_eq!(progress[0].total, 2);
+        assert_eq!(progress[0].total, 3);
         assert_eq!(progress[0].method, "missing test installer");
         assert_eq!(progress[0].stage, AgentInstallProgressStage::Trying);
         assert_eq!(progress[1].current, 2);
@@ -584,15 +663,15 @@ mod tests {
             Platform::Unix,
             AgentInstallAction::Install,
         );
+        assert_eq!(unix[0].command_line(), "npm install -g opencode-ai");
+        assert_eq!(unix[1].command_line(), "bun add -g opencode-ai");
         assert_eq!(
-            unix[0].command_line(),
-            "sh -c curl -fsSL https://opencode.ai/install | bash"
+            unix[2].command_line(),
+            "brew install anomalyco/tap/opencode"
         );
-        assert_eq!(unix[1].command_line(), "npm install -g opencode-ai");
-        assert_eq!(unix[2].command_line(), "bun add -g opencode-ai");
         assert_eq!(
             unix[3].command_line(),
-            "brew install anomalyco/tap/opencode"
+            "sh -c curl -fsSL https://opencode.ai/install | bash"
         );
 
         let windows = install_plans_for_platform(
@@ -630,7 +709,7 @@ mod tests {
     }
 
     #[test]
-    fn windows_claude_install_has_winget_fallback() {
+    fn windows_claude_install_prefers_package_managers_then_installer_fallbacks() {
         let plans = install_plans_for_platform(
             InstallableAgent::ClaudeCli,
             Platform::Windows,
@@ -638,19 +717,23 @@ mod tests {
         );
 
         assert_eq!(plans.len(), 4);
+        assert_eq!(
+            plans[0].command_line(),
+            "cmd /C npm install -g @anthropic-ai/claude-code"
+        );
+        assert_eq!(
+            plans[1].command_line(),
+            "winget install Anthropic.ClaudeCode --accept-package-agreements --accept-source-agreements"
+        );
         assert!(
-            plans[0]
+            plans[2]
                 .command_line()
                 .contains("https://claude.ai/install.ps1")
         );
         assert!(
-            plans[1]
+            plans[3]
                 .command_line()
                 .contains("https://claude.ai/install.cmd")
-        );
-        assert_eq!(
-            plans[2].command_line(),
-            "winget install Anthropic.ClaudeCode --accept-package-agreements --accept-source-agreements"
         );
     }
 
@@ -663,20 +746,44 @@ mod tests {
         );
 
         assert_eq!(
-            plans[2].command_line(),
+            plans[1].command_line(),
             "winget upgrade Anthropic.ClaudeCode --accept-package-agreements --accept-source-agreements"
         );
     }
 
     #[test]
-    fn windows_claude_install_and_update_have_npm_fallback() {
+    fn claude_install_and_update_prefer_npm_then_fallbacks() {
+        let unix_install_plans = install_plans_for_platform(
+            InstallableAgent::ClaudeCli,
+            Platform::Unix,
+            AgentInstallAction::Install,
+        );
+        assert_eq!(
+            unix_install_plans[0].command_line(),
+            "npm install -g @anthropic-ai/claude-code"
+        );
+        assert_eq!(
+            unix_install_plans[1].command_line(),
+            "sh -c curl -fsSL https://claude.ai/install.sh | bash"
+        );
+
+        let unix_update_plans = install_plans_for_platform(
+            InstallableAgent::ClaudeCli,
+            Platform::Unix,
+            AgentInstallAction::Update,
+        );
+        assert_eq!(
+            unix_update_plans[0].command_line(),
+            "npm install -g @anthropic-ai/claude-code@latest"
+        );
+
         let install_plans = install_plans_for_platform(
             InstallableAgent::ClaudeCli,
             Platform::Windows,
             AgentInstallAction::Install,
         );
         assert_eq!(
-            install_plans[3].command_line(),
+            install_plans[0].command_line(),
             "cmd /C npm install -g @anthropic-ai/claude-code"
         );
 
@@ -686,7 +793,7 @@ mod tests {
             AgentInstallAction::Update,
         );
         assert_eq!(
-            update_plans[3].command_line(),
+            update_plans[0].command_line(),
             "cmd /C npm install -g @anthropic-ai/claude-code@latest"
         );
     }
