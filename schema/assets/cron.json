@@ -1,0 +1,87 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "CronAutomation",
+    "description": "定时自动化任务资产结构。",
+    "type": "object",
+    "required": [
+        "id",
+        "name",
+        "prompt",
+        "enabled"
+    ],
+    "additionalProperties": true,
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "自动化任务唯一标识。"
+        },
+        "name": {
+            "type": "string",
+            "description": "自动化任务名称。"
+        },
+        "prompt": {
+            "type": "string",
+            "description": "自动化任务使用的提示词或载荷。"
+        },
+        "enabled": {
+            "type": "boolean",
+            "description": "自动化任务是否启用。"
+        },
+        "home": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "自动化任务定义所在目录，允许为空。"
+        },
+        "type": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "调度类型，允许为空。",
+            "enum": [
+                "at",
+                "every",
+                "cron",
+                "rrule",
+                null
+            ]
+        },
+        "schedule": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "调度表达式或调度值，允许为空。"
+        },
+        "cwds": {
+            "type": "array",
+            "description": "自动化任务工作目录列表。",
+            "items": {
+                "type": "string"
+            }
+        },
+        "createdAt": {
+            "type": [
+                "number",
+                "null"
+            ],
+            "description": "自动化任务创建时间，允许为空。"
+        },
+        "updatedAt": {
+            "type": [
+                "number",
+                "null"
+            ],
+            "description": "自动化任务更新时间，允许为空。"
+        },
+        "files": {
+            "type": "array",
+            "description": "自动化任务关联文件列表。",
+            "items": {
+                "$ref": "../assets/skill.json#/definitions/SkillFile"
+            }
+        }
+    }
+}

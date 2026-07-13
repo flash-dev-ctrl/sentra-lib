@@ -1,0 +1,60 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Memory",
+    "description": "记忆文件资产结构。",
+    "type": "object",
+    "required": [
+        "name",
+        "size",
+        "path"
+    ],
+    "additionalProperties": true,
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "记忆文件名称。"
+        },
+        "size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "记忆文件大小，单位为字节。"
+        },
+        "path": {
+            "type": "string",
+            "description": "记忆文件路径。"
+        },
+        "summary": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "记忆内容摘要，允许为空。"
+        },
+        "format": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "记忆文件格式，允许为空。",
+            "enum": [
+                "json",
+                "yaml",
+                "toml",
+                "xml",
+                "csv",
+                "txt",
+                "markdown",
+                "sqlite",
+                "unknown",
+                null
+            ]
+        },
+        "tags": {
+            "type": "array",
+            "description": "记忆标签列表。",
+            "items": {
+                "type": "string"
+            }
+        }
+    }
+}

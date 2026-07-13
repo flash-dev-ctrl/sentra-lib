@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Risk Category",
+  "description": "规则和扫描发现共用的 Sentra 风险分类取值。",
+  "type": "string",
+  "enum": [
+    "PROMPT_INJECTION",
+    "DATA_EXFILTRATION",
+    "PRIVILEGE_ESCALATION",
+    "NETWORK_ACCESS",
+    "FILE_SYSTEM",
+    "CREDENTIAL_EXPOSURE",
+    "SUPPLY_CHAIN",
+    "MISCONFIGURATION",
+    "POLYGLOT",
+    "MALICIOUS_EXECUTION",
+    "CRYPTO_MINING",
+    "WEB_SHELL",
+    "HACK_TOOL",
+    "EXPLOIT"
+  ],
+  "x-enumNamesZh": {
+    "PROMPT_INJECTION": "提示词注入",
+    "DATA_EXFILTRATION": "数据外泄",
+    "PRIVILEGE_ESCALATION": "权限提升",
+    "NETWORK_ACCESS": "网络访问",
+    "FILE_SYSTEM": "文件系统",
+    "CREDENTIAL_EXPOSURE": "凭据暴露",
+    "SUPPLY_CHAIN": "供应链风险",
+    "MISCONFIGURATION": "配置错误",
+    "POLYGLOT": "多语言混淆",
+    "MALICIOUS_EXECUTION": "恶意执行",
+    "CRYPTO_MINING": "加密货币挖矿",
+    "WEB_SHELL": "WebShell",
+    "HACK_TOOL": "攻击工具",
+    "EXPLOIT": "漏洞利用"
+  }
+}

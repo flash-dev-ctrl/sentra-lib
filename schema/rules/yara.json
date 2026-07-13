@@ -1,0 +1,168 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "YARA Rule",
+  "description": "单条 YARA 规则定义。",
+  "type": "object",
+  "required": [
+    "name",
+    "meta"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "规则名称。",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "tags": {
+      "type": "array",
+      "description": "规则标签列表。",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      }
+    },
+    "meta": {
+      "$ref": "#/definitions/YaraRuleMeta",
+      "description": "规则元数据。"
+    }
+  },
+  "definitions": {
+    "YaraRuleMeta": {
+      "type": "object",
+      "description": "YARA 规则 meta 字段。",
+      "required": [
+        "author",
+        "title",
+        "description",
+        "classification",
+        "severity",
+        "category"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "author": {
+          "type": "string",
+          "description": "规则作者。"
+        },
+        "title": {
+          "type": "string",
+          "description": "规则标题。"
+        },
+        "title_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "规则中文标题，允许为空。"
+        },
+        "description": {
+          "type": "string",
+          "description": "规则说明。"
+        },
+        "description_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "规则中文说明，允许为空。"
+        },
+        "remediation": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "处置建议，允许为空。"
+        },
+        "remediation_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "中文处置建议，允许为空。"
+        },
+        "classification": {
+          "type": "string",
+          "description": "规则判定分类。",
+          "enum": [
+            "benign",
+            "suspicious",
+            "harmful",
+            "malicious"
+          ]
+        },
+        "threat_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "威胁类型，允许为空。"
+        },
+        "aitech": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "AI 威胁技术标识，允许为空。"
+        },
+        "aisubtech": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "AI 威胁子技术标识，允许为空。"
+        },
+        "confidence": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "规则置信度，允许为空。"
+        },
+        "reference": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "外部参考链接或标识，允许为空。"
+        },
+        "severity": {
+          "$ref": "../common/severity.json",
+          "description": "风险等级。"
+        },
+        "severity_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "风险等级中文文本，允许为空。"
+        },
+        "category": {
+          "$ref": "../common/category.json",
+          "description": "风险分类。"
+        },
+        "category_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "风险分类中文文本，允许为空。"
+        },
+        "file_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "文件扩展类型过滤，允许为空。"
+        },
+        "file_categories": {
+          "type": "array",
+          "description": "文件分类过滤列表。",
+          "items": {
+            "$ref": "../common/file-category.json"
+          }
+        }
+      }
+    }
+  }
+}

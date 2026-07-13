@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ScanReport",
+  "description": "风险扫描报告结构。",
+  "type": "object",
+  "required": [
+    "metadata",
+    "summary",
+    "findings",
+    "errors"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "metadata": {
+      "$ref": "#/definitions/ScanMetadata",
+      "description": "扫描元数据。"
+    },
+    "summary": {
+      "$ref": "#/definitions/ScanSummary",
+      "description": "按风险等级汇总的扫描结果。"
+    },
+    "findings": {
+      "type": "array",
+      "description": "扫描发现列表。",
+      "items": {
+        "$ref": "#/definitions/Finding"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "description": "扫描过程中的检查器错误列表。",
+      "items": {
+        "$ref": "#/definitions/CheckError"
+      }
+    }
+  },
+  "definitions": {
+    "Location": {
+      "type": "object",
+      "description": "风险发现的位置。",
+      "required": [
+        "line"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "行号。"
+        },
+        "column": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "列号，允许为空。"
+        }
+      }
+    },
+    "Finding": {
+      "type": "object",
+      "description": "单个风险发现。",
+      "required": [
+        "id",
+        "checker",
+        "severity",
+        "category",
+        "file",
+        "location",
+        "title",
+        "description",
+        "remediation"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "风险发现唯一标识。"
+        },
+        "checker": {
+          "type": "string",
+          "description": "产生该发现的检查器标识。"
+        },
+        "severity": {
+          "$ref": "../common/severity.json",
+          "description": "风险等级。"
+        },
+        "severity_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "风险等级中文展示文本，允许为空。"
+        },
+        "category": {
+          "$ref": "../common/category.json",
+          "description": "风险分类。"
+        },
+        "category_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "风险分类中文展示文本，允许为空。"
+        },
+        "file": {
+          "type": "string",
+          "description": "风险来源文件、服务名或资源标识。"
+        },
+        "location": {
+          "$ref": "#/definitions/Location",
+          "description": "风险发现位置。"
+        },
+        "title": {
+          "type": "string",
+          "description": "风险标题。"
+        },
+        "title_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "风险中文标题，允许为空。"
+        },
+        "description": {
+          "type": "string",
+          "description": "风险详细说明。"
+        },
+        "description_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "风险中文详细说明，允许为空。"
+        },
+        "evidence": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "触发风险的证据文本，允许为空。"
+        },
+        "context": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "风险证据的上下文内容，允许为空。"
+        },
+        "remediation": {
+          "type": "string",
+          "description": "修复或处置建议。"
+        },
+        "remediation_zh": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "中文修复或处置建议，允许为空。"
+        }
+      }
+    },
+    "CheckError": {
+      "type": "object",
+      "description": "检查器执行错误。",
+      "required": [
+        "checker",
+        "source",
+        "reason"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "checker": {
+          "type": "string",
+          "description": "发生错误的检查器标识。"
+        },
+        "source": {
+          "type": "string",
+          "description": "发生错误时正在检查的来源。"
+        },
+        "reason": {
+          "type": "string",
+          "description": "错误原因。"
+        }
+      }
+    },
+    "ScanMetadata": {
+      "type": "object",
+      "description": "扫描元数据。",
+      "required": [
+        "scanner",
+        "scan_time",
+        "scan_duration_ms"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "scanner": {
+          "type": "string",
+          "description": "扫描器标识。"
+        },
+        "scan_time": {
+          "type": "string",
+          "description": "扫描开始时间。"
+        },
+        "scan_duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "扫描耗时，单位为毫秒。"
+        }
+      }
+    },
+    "ScanSummary": {
+      "type": "object",
+      "description": "按风险等级统计的扫描结果。",
+      "required": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "critical": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "严重风险数量。"
+        },
+        "high": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "高危风险数量。"
+        },
+        "medium": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "中危风险数量。"
+        },
+        "low": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "低危风险数量。"
+        },
+        "info": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "信息级风险数量。"
+        }
+      }
+    }
+  }
+}
