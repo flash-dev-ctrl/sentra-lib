@@ -59,6 +59,27 @@ macro_rules! impl_erased_asset {
                     .map_err(|err| crate::SentraError::Message(err.to_string()))
                 })
             }
+
+            fn runtime_data(&self) -> crate::SentraResult<serde_json::Value> {
+                serde_json::to_value(<$ty as crate::interfaces::Asset<$data>>::get_runtime_data(
+                    self,
+                )?)
+                .map_err(|err| crate::SentraError::Message(err.to_string()))
+            }
+
+            fn runtime_data_async<'a>(
+                &'a self,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = crate::SentraResult<serde_json::Value>> + 'a>,
+            > {
+                Box::pin(async move {
+                    serde_json::to_value(
+                        <$ty as crate::interfaces::Asset<$data>>::get_runtime_data_async(self)
+                            .await?,
+                    )
+                    .map_err(|err| crate::SentraError::Message(err.to_string()))
+                })
+            }
         }
     };
     ($ty:ty, $asset_type:expr, $data:ty, $item:ty) => {
@@ -95,6 +116,29 @@ macro_rules! impl_erased_asset {
                     serde_json::to_value(
                         <$ty as crate::interfaces::Asset<$data, $item>>::get_data_async(self)
                             .await?,
+                    )
+                    .map_err(|err| crate::SentraError::Message(err.to_string()))
+                })
+            }
+
+            fn runtime_data(&self) -> crate::SentraResult<serde_json::Value> {
+                serde_json::to_value(
+                    <$ty as crate::interfaces::Asset<$data, $item>>::get_runtime_data(self)?,
+                )
+                .map_err(|err| crate::SentraError::Message(err.to_string()))
+            }
+
+            fn runtime_data_async<'a>(
+                &'a self,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = crate::SentraResult<serde_json::Value>> + 'a>,
+            > {
+                Box::pin(async move {
+                    serde_json::to_value(
+                        <$ty as crate::interfaces::Asset<$data, $item>>::get_runtime_data_async(
+                            self,
+                        )
+                        .await?,
                     )
                     .map_err(|err| crate::SentraError::Message(err.to_string()))
                 })
@@ -149,6 +193,29 @@ macro_rules! impl_erased_asset {
                     serde_json::to_value(
                         <$ty as crate::interfaces::Asset<$data, $item>>::get_data_async(self)
                             .await?,
+                    )
+                    .map_err(|err| crate::SentraError::Message(err.to_string()))
+                })
+            }
+
+            fn runtime_data(&self) -> crate::SentraResult<serde_json::Value> {
+                serde_json::to_value(
+                    <$ty as crate::interfaces::Asset<$data, $item>>::get_runtime_data(self)?,
+                )
+                .map_err(|err| crate::SentraError::Message(err.to_string()))
+            }
+
+            fn runtime_data_async<'a>(
+                &'a self,
+            ) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = crate::SentraResult<serde_json::Value>> + 'a>,
+            > {
+                Box::pin(async move {
+                    serde_json::to_value(
+                        <$ty as crate::interfaces::Asset<$data, $item>>::get_runtime_data_async(
+                            self,
+                        )
+                        .await?,
                     )
                     .map_err(|err| crate::SentraError::Message(err.to_string()))
                 })

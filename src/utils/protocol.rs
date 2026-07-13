@@ -154,6 +154,12 @@ pub fn build_model_probe_request(protocol: WireProtocol, model: &str) -> ModelPr
 }
 
 pub fn validate_model_probe_response(protocol: WireProtocol, raw: &str) -> Result<String, String> {
+    let text = validate_model_text_response(protocol, raw)?;
+    validate_probe_json_text(&text)?;
+    Ok(text)
+}
+
+pub fn validate_model_text_response(protocol: WireProtocol, raw: &str) -> Result<String, String> {
     if raw.contains("event: error") || raw.contains("\"type\":\"error\"") {
         return Err(format!(
             "model probe returned provider error: {}",
@@ -161,9 +167,7 @@ pub fn validate_model_probe_response(protocol: WireProtocol, raw: &str) -> Resul
         ));
     }
 
-    let text = extract_probe_text(protocol, raw)?;
-    validate_probe_json_text(&text)?;
-    Ok(text)
+    extract_probe_text(protocol, raw)
 }
 
 fn validate_probe_json_text(text: &str) -> Result<(), String> {

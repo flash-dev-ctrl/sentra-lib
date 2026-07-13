@@ -2,7 +2,9 @@ use std::fs;
 
 use sentra_lib::agents::discover_agents;
 use sentra_lib::collect_skills_from_dir;
-use sentra_lib::interfaces::{AssetType, CronData, CronType, McpData, McpType, SkillData};
+use sentra_lib::interfaces::{
+    AssetType, CronData, CronType, McpData, McpType, ProviderData, ProviderModel, SkillData,
+};
 use sentra_lib::protocol::WireProtocol;
 
 #[test]
@@ -880,6 +882,241 @@ fn opencode_provider_can_read_masked_api_key_from_auth_json() {
 }
 
 #[test]
+fn opencode_provider_runtime_data_keeps_api_key_for_model_probe() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("opencode.json"),
+        r#"{"model":"chaitin/dev/gpt-5.4","provider":{"chaitin":{"npm":"@ai-sdk/openai-compatible","name":"Baizhi Gateway","options":{"baseURL":"https://gateway.example.test/v1","apiKey":"sk-chaitin-secret"},"models":{"dev/gpt-5.4":{"name":"Dev GPT-5.4"}}}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let provider_asset = opencode
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let masked: Vec<ProviderData> = serde_json::from_value(provider_asset.data().unwrap()).unwrap();
+    let runtime: Vec<ProviderData> =
+        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
+
+    assert_ne!(masked[0].api_key.as_deref(), Some("sk-chaitin-secret"));
+    assert_eq!(runtime[0].api_key.as_deref(), Some("sk-chaitin-secret"));
+}
+
+#[test]
+fn opencode_provider_set_data_writes_provider_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let provider_asset = opencode
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let result = provider_asset
+        .set_provider_data(ProviderData {
+            name: "Baizhi Gateway".to_string(),
+            raw_provider_id: Some("chaitin".to_string()),
+            base_url: Some("https://ai-api-gateway.app.baizhi.cloud/api/openai".to_string()),
+            api_key: Some("sk-chaitin-secret".to_string()),
+            enabled: true,
+            models: vec![ProviderModel {
+                id: "dev/gpt-5.4".to_string(),
+                name: Some("Dev GPT-5.4".to_string()),
+                enabled: true,
+            }],
+            protocol: Some(WireProtocol::ChatCompletions),
+            ..ProviderData::default()
+        })
+        .unwrap();
+
+    assert!(result.changed);
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(home.join("opencode.json")).unwrap()).unwrap();
+    assert_eq!(config["model"], "chaitin/dev/gpt-5.4");
+    assert_eq!(config["provider"]["chaitin"]["name"], "Baizhi Gateway");
+    assert_eq!(
+        config["provider"]["chaitin"]["npm"],
+        "@ai-sdk/openai-compatible"
+    );
+    assert_eq!(
+        config["provider"]["chaitin"]["api"],
+        "openai-chat-completions"
+    );
+    assert_eq!(
+        config["provider"]["chaitin"]["options"]["baseURL"],
+        "https://ai-api-gateway.app.baizhi.cloud/api/openai"
+    );
+    assert_eq!(
+        config["provider"]["chaitin"]["options"]["apiKey"],
+        "sk-chaitin-secret"
+    );
+    assert_eq!(
+        config["provider"]["chaitin"]["models"]["dev/gpt-5.4"]["name"],
+        "Dev GPT-5.4"
+    );
+
+    let providers = asset_data(opencode, AssetType::Provider);
+    let provider = &providers[0].data[0];
+    assert_eq!(provider["rawProviderId"], "chaitin");
+    assert_eq!(provider["activationStatus"], "active");
+    assert!(provider["apiKey"].as_str().unwrap().contains("****"));
+    assert_ne!(provider["apiKey"], "sk-chaitin-secret");
+}
+
+#[test]
+fn opencode_provider_set_data_writes_openai_npm_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let provider_asset = opencode
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    provider_asset
+        .set_provider_data(ProviderData {
+            name: "OpenAI".to_string(),
+            raw_provider_id: Some("openai".to_string()),
+            base_url: Some("https://api.openai.com/v1".to_string()),
+            api_key: Some("sk-openai-secret".to_string()),
+            enabled: true,
+            models: vec![ProviderModel {
+                id: "gpt-5".to_string(),
+                name: Some("GPT-5".to_string()),
+                enabled: true,
+            }],
+            protocol: Some(WireProtocol::Responses),
+            ..ProviderData::default()
+        })
+        .unwrap();
+
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(home.join("opencode.json")).unwrap()).unwrap();
+    assert_eq!(config["model"], "openai/gpt-5");
+    assert_eq!(config["provider"]["openai"]["npm"], "@ai-sdk/openai");
+    assert_eq!(config["provider"]["openai"]["api"], "openai-responses");
+}
+
+#[test]
+fn opencode_provider_set_data_writes_anthropic_npm_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let provider_asset = opencode
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    provider_asset
+        .set_provider_data(ProviderData {
+            name: "Anthropic Gateway".to_string(),
+            raw_provider_id: Some("anthropic".to_string()),
+            base_url: Some("https://api.anthropic.com".to_string()),
+            api_key: Some("sk-ant-secret".to_string()),
+            enabled: true,
+            models: vec![ProviderModel {
+                id: "claude-sonnet-4".to_string(),
+                name: Some("Claude Sonnet 4".to_string()),
+                enabled: true,
+            }],
+            protocol: Some(WireProtocol::AnthropicMessages),
+            ..ProviderData::default()
+        })
+        .unwrap();
+
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(home.join("opencode.json")).unwrap()).unwrap();
+    assert_eq!(config["model"], "anthropic/claude-sonnet-4");
+    assert_eq!(config["provider"]["anthropic"]["npm"], "@ai-sdk/anthropic");
+    assert_eq!(config["provider"]["anthropic"]["api"], "anthropic");
+}
+
+#[test]
+fn opencode_provider_probe_uses_agent_title_request_body() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let provider = opencode
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let requests = provider.provider_requests("dev/gpt-5.4");
+
+    assert_eq!(requests.len(), 3);
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.protocol == WireProtocol::Responses)
+    );
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.protocol == WireProtocol::AnthropicMessages)
+    );
+    let chat_request = requests
+        .iter()
+        .find(|request| request.protocol == WireProtocol::ChatCompletions)
+        .unwrap();
+    assert!(requests.iter().all(|request| request.prompt.is_none()));
+    let body: serde_json::Value =
+        serde_json::from_str(chat_request.body.as_deref().unwrap()).unwrap();
+    assert_eq!(body["model"], "dev/gpt-5.4");
+    assert_eq!(body["max_tokens"], 32000);
+    assert_eq!(body["stream"], true);
+    assert_eq!(body["stream_options"]["include_usage"], true);
+    assert_eq!(body["messages"][0]["role"], "system");
+    assert!(
+        body["messages"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("You are a title generator")
+    );
+    assert_eq!(
+        body["messages"][1]["content"],
+        "Generate a title for this conversation:\n"
+    );
+    assert_eq!(body["messages"][2]["content"], "hello");
+}
+
+#[test]
 fn opencode_mcp_maps_local_and_remote_servers() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".config").join("opencode");
@@ -890,9 +1127,8 @@ fn opencode_mcp_maps_local_and_remote_servers() {
           "mcp": {
             "local": {
               "type": "local",
-              "command": "node",
-              "args": ["server.js"],
-              "env": {"TOKEN": "test"}
+              "command": ["node", "server.js"],
+              "environment": {"TOKEN": "test"}
             },
             "remote": {
               "type": "remote",
@@ -921,6 +1157,7 @@ fn opencode_mcp_maps_local_and_remote_servers() {
     assert_eq!(remote["type"], "http");
     assert_eq!(remote["url"], "https://mcp.example.test/mcp");
     assert_eq!(remote["enabled"], false);
+    assert!(opencode.get_assets(AssetType::Cron).unwrap().is_empty());
 }
 
 #[test]
@@ -964,7 +1201,7 @@ fn opencode_skill_reads_single_file_and_directory_skills() {
 }
 
 #[test]
-fn opencode_memory_collects_config_database_logs_and_local_artifacts_without_secret_values() {
+fn opencode_does_not_expose_memory_assets() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".config").join("opencode");
     let data_home = dir.path().join(".local").join("share").join("opencode");
@@ -1007,28 +1244,7 @@ fn opencode_memory_collects_config_database_logs_and_local_artifacts_without_sec
         .iter()
         .find(|agent| agent.name() == "opencode")
         .unwrap();
-    let memories = asset_data(opencode, AssetType::Memory);
-    let items = memories[0].data.as_array().unwrap();
-    let names = items
-        .iter()
-        .filter_map(|item| item["name"].as_str())
-        .collect::<Vec<_>>();
-
-    assert!(names.contains(&"opencode.json"));
-    assert!(names.contains(&"auth.json"));
-    assert!(names.contains(&"opencode.db"));
-    assert!(names.contains(&"opencode.db-wal"));
-    assert!(names.contains(&"opencode.log"));
-    assert!(names.contains(&"tool-1"));
-    assert!(names.contains(&"config"));
-    assert!(names.contains(&"state"));
-    assert!(names.contains(&"review.md"));
-    assert!(names.contains(&"build.md"));
-    assert!(
-        !serde_json::to_string(&items)
-            .unwrap()
-            .contains("sk-memory-secret")
-    );
+    assert!(opencode.get_assets(AssetType::Memory).unwrap().is_empty());
 }
 
 #[test]

@@ -27,7 +27,7 @@ fn rust_agents_mirror_typescript_agent_object_files() {
             "provider.rs",
         ],
     );
-    for agent in ["claude_app", "claude_cli", "hermes", "openclaw", "opencode"] {
+    for agent in ["claude_app", "claude_cli", "hermes", "openclaw"] {
         assert_agent_files(
             &src,
             agent,
@@ -42,6 +42,11 @@ fn rust_agents_mirror_typescript_agent_object_files() {
             ],
         );
     }
+    assert_agent_files(
+        &src,
+        "opencode",
+        &["mod.rs", "meta.rs", "skill.rs", "mcp.rs", "provider.rs"],
+    );
     assert_agent_files(&src, "pi", &["mod.rs", "skill.rs", "provider.rs"]);
     assert_agent_files(&src, "general", &["mod.rs", "skill.rs"]);
     assert_agent_files(&src, "sentra", &["mod.rs", "skill.rs", "provider.rs"]);
@@ -349,7 +354,7 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
         &["fn provider_data"],
         &["provider.rs"],
     );
-    for agent in ["claude_app", "claude_cli", "hermes", "openclaw", "opencode"] {
+    for agent in ["claude_app", "claude_cli", "hermes", "openclaw"] {
         assert_asset_logic_is_colocated(
             &root.join("src").join("agents").join(agent),
             &[
@@ -362,6 +367,11 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
             &["meta.rs", "mcp.rs", "memory.rs", "cron.rs", "provider.rs"],
         );
     }
+    assert_asset_logic_is_colocated(
+        &root.join("src").join("agents").join("opencode"),
+        &["fn meta_data", "fn mcp_data", "fn provider_data"],
+        &["meta.rs", "mcp.rs", "provider.rs"],
+    );
 }
 
 #[test]

@@ -222,27 +222,27 @@ fn uninstall_plans(agent: InstallableAgent) -> Vec<InstallCommandPlan> {
 fn uninstall_plan_for_platform(agent: InstallableAgent, platform: Platform) -> InstallCommandPlan {
     match (agent, platform) {
         (InstallableAgent::Codex, Platform::Windows) => powershell_plan(
-            r#"$ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath "$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin","$env:USERPROFILE\.codex\packages\standalone" -Recurse -Force -ErrorAction SilentlyContinue; if (Get-Command npm -ErrorAction SilentlyContinue) { npm list -g @openai/codex *> $null; if ($LASTEXITCODE -eq 0) { npm uninstall -g @openai/codex; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; exit 0"#,
+            r#"$ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath "$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin","$env:USERPROFILE\.codex" -Recurse -Force -ErrorAction SilentlyContinue; if (Get-Command npm -ErrorAction SilentlyContinue) { npm list -g @openai/codex *> $null; if ($LASTEXITCODE -eq 0) { npm uninstall -g @openai/codex; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; exit 0"#,
             "PowerShell uninstall script",
         ),
         (InstallableAgent::Codex, Platform::Unix) => sh_plan(
-            r#"rm -f "$HOME/.local/bin/codex" "${CODEX_INSTALL_DIR:-$HOME/.local/bin}/codex"; rm -rf "${CODEX_HOME:-$HOME/.codex}/packages/standalone"; if command -v npm >/dev/null 2>&1 && npm list -g @openai/codex >/dev/null 2>&1; then npm uninstall -g @openai/codex; fi"#,
+            r#"rm -f "$HOME/.local/bin/codex" "${CODEX_INSTALL_DIR:-$HOME/.local/bin}/codex"; rm -rf "$HOME/.codex"; if command -v npm >/dev/null 2>&1 && npm list -g @openai/codex >/dev/null 2>&1; then npm uninstall -g @openai/codex; fi"#,
             "shell uninstall script",
         ),
         (InstallableAgent::ClaudeCli, Platform::Windows) => powershell_plan(
-            r#"$ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath "$env:USERPROFILE\.local\bin\claude.exe","$env:USERPROFILE\.local\share\claude" -Recurse -Force -ErrorAction SilentlyContinue; if (Get-Command winget -ErrorAction SilentlyContinue) { winget list --id Anthropic.ClaudeCode --exact *> $null; if ($LASTEXITCODE -eq 0) { winget uninstall Anthropic.ClaudeCode; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; if (Get-Command npm -ErrorAction SilentlyContinue) { npm list -g @anthropic-ai/claude-code *> $null; if ($LASTEXITCODE -eq 0) { npm uninstall -g @anthropic-ai/claude-code; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; exit 0"#,
+            r#"$ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath "$env:USERPROFILE\.local\bin\claude.exe","$env:USERPROFILE\.local\share\claude","$env:USERPROFILE\.claude","$env:USERPROFILE\.claude.json" -Recurse -Force -ErrorAction SilentlyContinue; if (Get-Command winget -ErrorAction SilentlyContinue) { winget list --id Anthropic.ClaudeCode --exact *> $null; if ($LASTEXITCODE -eq 0) { winget uninstall Anthropic.ClaudeCode; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; if (Get-Command npm -ErrorAction SilentlyContinue) { npm list -g @anthropic-ai/claude-code *> $null; if ($LASTEXITCODE -eq 0) { npm uninstall -g @anthropic-ai/claude-code; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; exit 0"#,
             "PowerShell uninstall script",
         ),
         (InstallableAgent::ClaudeCli, Platform::Unix) => sh_plan(
-            r#"rm -f "$HOME/.local/bin/claude"; rm -rf "$HOME/.local/share/claude"; if command -v brew >/dev/null 2>&1 && brew list --cask claude-code >/dev/null 2>&1; then brew uninstall --cask claude-code; fi; if command -v npm >/dev/null 2>&1 && npm list -g @anthropic-ai/claude-code >/dev/null 2>&1; then npm uninstall -g @anthropic-ai/claude-code; fi"#,
+            r#"rm -f "$HOME/.local/bin/claude" "$HOME/.claude.json"; rm -rf "$HOME/.local/share/claude" "$HOME/.claude"; if command -v brew >/dev/null 2>&1 && brew list --cask claude-code >/dev/null 2>&1; then brew uninstall --cask claude-code; fi; if command -v npm >/dev/null 2>&1 && npm list -g @anthropic-ai/claude-code >/dev/null 2>&1; then npm uninstall -g @anthropic-ai/claude-code; fi"#,
             "shell uninstall script",
         ),
         (InstallableAgent::OpenCode, Platform::Windows) => powershell_plan(
-            r#"$ErrorActionPreference = 'Continue'; if (Get-Command npm -ErrorAction SilentlyContinue) { npm list -g opencode-ai *> $null; if ($LASTEXITCODE -eq 0) { npm uninstall -g opencode-ai; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; if (Get-Command bun -ErrorAction SilentlyContinue) { bun pm ls -g opencode-ai *> $null; if ($LASTEXITCODE -eq 0) { bun remove -g opencode-ai; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; exit 0"#,
+            r#"$ErrorActionPreference = 'Continue'; Remove-Item -LiteralPath "$env:USERPROFILE\.opencode","$env:USERPROFILE\.config\opencode","$env:USERPROFILE\.local\share\opencode" -Recurse -Force -ErrorAction SilentlyContinue; if (Get-Command npm -ErrorAction SilentlyContinue) { npm list -g opencode-ai *> $null; if ($LASTEXITCODE -eq 0) { npm uninstall -g opencode-ai; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; if (Get-Command bun -ErrorAction SilentlyContinue) { bun pm ls -g opencode-ai *> $null; if ($LASTEXITCODE -eq 0) { bun remove -g opencode-ai; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; exit 0"#,
             "PowerShell uninstall script",
         ),
         (InstallableAgent::OpenCode, Platform::Unix) => sh_plan(
-            r#"if command -v npm >/dev/null 2>&1 && npm list -g opencode-ai >/dev/null 2>&1; then npm uninstall -g opencode-ai; fi; if command -v bun >/dev/null 2>&1; then bun remove -g opencode-ai >/dev/null 2>&1 || true; fi; if command -v brew >/dev/null 2>&1 && brew list anomalyco/tap/opencode >/dev/null 2>&1; then brew uninstall opencode; fi"#,
+            r#"rm -rf "$HOME/.opencode" "$HOME/.config/opencode" "$HOME/.local/share/opencode"; if command -v npm >/dev/null 2>&1 && npm list -g opencode-ai >/dev/null 2>&1; then npm uninstall -g opencode-ai; fi; if command -v bun >/dev/null 2>&1; then bun remove -g opencode-ai >/dev/null 2>&1 || true; fi; if command -v brew >/dev/null 2>&1 && brew list anomalyco/tap/opencode >/dev/null 2>&1; then brew uninstall opencode; fi"#,
             "shell uninstall script",
         ),
     }
@@ -687,7 +687,7 @@ mod tests {
     }
 
     #[test]
-    fn opencode_uninstall_plan_preserves_user_data() {
+    fn opencode_uninstall_plan_removes_user_data() {
         let unix = command_text(uninstall_plan_for_platform(
             InstallableAgent::OpenCode,
             Platform::Unix,
@@ -695,7 +695,9 @@ mod tests {
         assert!(unix.contains("npm uninstall -g opencode-ai"));
         assert!(unix.contains("bun remove -g opencode-ai"));
         assert!(unix.contains("brew uninstall opencode"));
-        assert!(!unix.contains(".opencode"));
+        assert!(unix.contains("rm -rf \"$HOME/.opencode\""));
+        assert!(unix.contains("\"$HOME/.config/opencode\""));
+        assert!(unix.contains("\"$HOME/.local/share/opencode\""));
 
         let windows = command_text(uninstall_plan_for_platform(
             InstallableAgent::OpenCode,
@@ -705,7 +707,9 @@ mod tests {
         assert!(windows.contains("bun remove -g opencode-ai"));
         assert!(windows.contains("$ErrorActionPreference = 'Continue'"));
         assert!(windows.ends_with("exit 0"));
-        assert!(!windows.contains(".opencode"));
+        assert!(windows.contains("$env:USERPROFILE\\.opencode"));
+        assert!(windows.contains("$env:USERPROFILE\\.config\\opencode"));
+        assert!(windows.contains("$env:USERPROFILE\\.local\\share\\opencode"));
     }
 
     #[test]
@@ -815,28 +819,26 @@ mod tests {
     }
 
     #[test]
-    fn codex_uninstall_plan_preserves_user_data() {
+    fn codex_uninstall_plan_removes_user_data() {
         let unix = command_text(uninstall_plan_for_platform(
             InstallableAgent::Codex,
             Platform::Unix,
         ));
         assert!(unix.contains(".local/bin/codex"));
-        assert!(unix.contains("packages/standalone"));
+        assert!(unix.contains("rm -rf \"$HOME/.codex\""));
         assert!(unix.contains("@openai/codex"));
-        assert!(!unix.contains("rm -rf \"$HOME/.codex\""));
 
         let windows = command_text(uninstall_plan_for_platform(
             InstallableAgent::Codex,
             Platform::Windows,
         ));
         assert!(windows.contains("LOCALAPPDATA"));
-        assert!(windows.contains(".codex\\packages\\standalone"));
+        assert!(windows.contains("$env:USERPROFILE\\.codex"));
         assert!(windows.contains("@openai/codex"));
-        assert!(!windows.contains("Remove-Item -Path \"$env:USERPROFILE\\.codex\""));
     }
 
     #[test]
-    fn claude_uninstall_plan_supports_official_methods_without_user_data() {
+    fn claude_uninstall_plan_removes_user_data() {
         let unix = command_text(uninstall_plan_for_platform(
             InstallableAgent::ClaudeCli,
             Platform::Unix,
@@ -845,7 +847,8 @@ mod tests {
         assert!(unix.contains(".local/share/claude"));
         assert!(unix.contains("brew uninstall --cask claude-code"));
         assert!(unix.contains("npm uninstall -g @anthropic-ai/claude-code"));
-        assert!(!unix.contains("rm -rf \"$HOME/.claude\""));
+        assert!(unix.contains("\"$HOME/.claude.json\""));
+        assert!(unix.contains("\"$HOME/.claude\""));
 
         let windows = command_text(uninstall_plan_for_platform(
             InstallableAgent::ClaudeCli,
@@ -856,6 +859,7 @@ mod tests {
         assert!(windows.contains("winget uninstall Anthropic.ClaudeCode"));
         assert!(windows.contains("npm uninstall -g @anthropic-ai/claude-code"));
         assert!(windows.ends_with("exit 0"));
-        assert!(!windows.contains("Remove-Item -Path \"$env:USERPROFILE\\.claude\""));
+        assert!(windows.contains("$env:USERPROFILE\\.claude"));
+        assert!(windows.contains("$env:USERPROFILE\\.claude.json"));
     }
 }
