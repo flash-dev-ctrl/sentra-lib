@@ -1,19 +1,19 @@
 use std::collections::BTreeMap;
 
-use serde_json::Value;
+use serde_json::{Map, Value, json};
 
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderData, ProviderModel,
-    ProviderProbeRequest,
+    ProviderProbeRequest, ProviderType,
 };
 use crate::providers::{
     ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
     protocol_for_api,
 };
-use crate::utils::protocol::{WireProtocol, default_model_probe_prompt};
-use crate::utils::{mask_secret, read_json_file};
+use crate::utils::protocol::WireProtocol;
+use crate::utils::{backup_file, mask_secret, read_json_file, write_json_file};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -30,19 +30,12 @@ impl ProviderAsset {
         }
     }
 
-    pub fn get_request(&self, _model: &str) -> Vec<ProviderProbeRequest> {
-        [
-            WireProtocol::Responses,
-            WireProtocol::ChatCompletions,
-            WireProtocol::AnthropicMessages,
-        ]
-        .into_iter()
-        .map(|protocol| ProviderProbeRequest {
-            protocol,
-            body: None,
-            prompt: Some(default_model_probe_prompt()),
-        })
-        .collect()
+    pub fn get_request(&self, model: &str) -> Vec<ProviderProbeRequest> {
+        vec![ProviderProbeRequest {
+            protocol: WireProtocol::ChatCompletions,
+            body: Some(opencode_probe_body(model).to_string()),
+            prompt: None,
+        }]
     }
 }
 
@@ -59,11 +52,8 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
         provider_data(self.core.agent_home())
     }
 
-    fn set_data(&self, _value: ProviderData) -> SentraResult<AssetMutationResult> {
-        Ok(AssetMutationResult::unchanged(
-            AssetMutationErrorCode::Unsupported,
-            "OpenCode provider mutation is not supported",
-        ))
+    fn set_data(&self, value: ProviderData) -> SentraResult<AssetMutationResult> {
+        set_provider_data(self.core.agent_home(), value)
     }
 
     fn del_data(&self, _item: &ProviderData) -> SentraResult<AssetMutationResult> {
@@ -72,6 +62,168 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
             "OpenCode provider mutation is not supported",
         ))
     }
+}
+
+fn opencode_probe_body(model: &str) -> Value {
+    json!({
+        "max_tokens": 32000,
+        "messages": [
+            {
+                "content": OPENCODE_TITLE_SYSTEM_PROMPT,
+                "role": "system"
+            },
+            {
+                "content": "Generate a title for this conversation:\n",
+                "role": "user"
+            },
+            {
+                "content": "hello",
+                "role": "user"
+            }
+        ],
+        "model": model,
+        "stream": true,
+        "stream_options": {
+            "include_usage": true
+        }
+    })
+}
+
+const OPENCODE_TITLE_SYSTEM_PROMPT: &str = r#"You are a title generator. You output ONLY a thread title. Nothing else.
+
+<task>
+Generate a brief title that would help the user find this conversation later.
+
+Follow all rules in <rules>
+Use the <examples> so you know what a good title looks like.
+Your output must be:
+- A single line
+- ≤50 characters
+- No explanations
+</task>
+
+<rules>
+- you MUST use the same language as the user message you are summarizing
+- Title must be grammatically correct and read naturally - no word salad
+- Never include tool names in the title (e.g. "read tool", "bash tool", "edit tool")
+- Focus on the main topic or question the user needs to retrieve
+- Vary your phrasing - avoid repetitive patterns like always starting with "Analyzing"
+- When a file is mentioned, focus on WHAT the user wants to do WITH the file, not just that they shared it
+- Keep exact: technical terms, numbers, filenames, HTTP codes
+- Remove: the, this, my, a, an
+- Never assume tech stack
+- Never use tools
+- NEVER respond to questions, just generate a title for the conversation
+- The title should NEVER include "summarizing" or "generating" when generating a title
+- DO NOT SAY YOU CANNOT GENERATE A TITLE OR COMPLAIN ABOUT THE INPUT
+- Always output something meaningful, even if the input is minimal.
+- If the user message is short or conversational (e.g. "hello", "lol", "what's up", "hey"):
+  → create a title that reflects the user's tone or intent (such as Greeting, Quick check-in, Light chat, Intro message, etc.)
+</rules>
+
+<examples>
+"debug 500 errors in production" → Debugging production 500 errors
+"refactor user service" → Refactoring user service
+"why is app.js failing" → app.js failure investigation
+"implement rate limiting" → Rate limiting implementation
+"how do I connect postgres to my API" → Postgres API connection
+"best practices for React hooks" → React hooks best practices
+"@src/auth.ts can you add refresh token support" → Auth refresh token support
+"@utils/parser.ts this is broken" → Parser bug fix
+"look at @config.json" → Config review
+"@App.tsx add dark mode toggle" → Dark mode toggle in App
+</examples>
+"#;
+
+fn set_provider_data(
+    agent_home: &std::path::Path,
+    provider: ProviderData,
+) -> SentraResult<AssetMutationResult> {
+    if provider.provider_type != ProviderType::Gateway {
+        return Ok(AssetMutationResult::unchanged(
+            AssetMutationErrorCode::Unsupported,
+            "OpenCode account provider mutation is not supported",
+        ));
+    }
+    let Some(model) = provider
+        .models
+        .iter()
+        .find(|item| item.enabled)
+        .or_else(|| provider.models.first())
+        .filter(|model| !model.id.trim().is_empty())
+    else {
+        return Ok(AssetMutationResult::unchanged(
+            AssetMutationErrorCode::MissingRequiredField,
+            "provider model is required",
+        ));
+    };
+    let Some(base_url) = provider
+        .base_url
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(AssetMutationResult::unchanged(
+            AssetMutationErrorCode::MissingRequiredField,
+            "provider baseUrl is required",
+        ));
+    };
+    let Some(api_key) = provider
+        .api_key
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(AssetMutationResult::unchanged(
+            AssetMutationErrorCode::MissingRequiredField,
+            "provider apiKey is required",
+        ));
+    };
+
+    let provider_id = provider_config_id(&provider);
+    let path = agent_home.join("opencode.json");
+    let mut config = read_json_file(&path)?.unwrap_or_else(|| json!({}));
+    if !config.is_object() {
+        config = json!({});
+    }
+    if config.get("$schema").is_none() {
+        config["$schema"] = json!("https://opencode.ai/config.json");
+    }
+    config["model"] = json!(model_ref(&provider_id, &model.id));
+
+    let providers = object_field(&mut config, "provider");
+    let entry = providers
+        .entry(provider_id.clone())
+        .or_insert_with(|| json!({}));
+    if !entry.is_object() {
+        *entry = json!({});
+    }
+    let entry = entry.as_object_mut().expect("provider entry is object");
+    entry.insert(
+        "name".to_string(),
+        json!(provider_display_name(&provider, &provider_id)),
+    );
+    entry.insert(
+        "npm".to_string(),
+        json!(npm_package_for_protocol(provider.protocol)),
+    );
+    entry.insert(
+        "api".to_string(),
+        json!(api_for_protocol(provider.protocol)),
+    );
+
+    let options = object_entry(entry, "options");
+    options.insert("baseURL".to_string(), json!(base_url));
+    options.insert("apiKey".to_string(), json!(api_key));
+
+    let models = object_entry(entry, "models");
+    let model_config = models.entry(model.id.clone()).or_insert_with(|| json!({}));
+    if !model_config.is_object() {
+        *model_config = json!({});
+    }
+    model_config["name"] = json!(model.name.as_deref().unwrap_or(&model.id));
+
+    backup_file(&path)?;
+    write_json_file(path, &config)?;
+    Ok(AssetMutationResult::changed())
 }
 
 fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>> {
@@ -175,6 +327,110 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
     }
 
     Ok(results)
+}
+
+fn object_field<'a>(value: &'a mut Value, key: &str) -> &'a mut Map<String, Value> {
+    if !value.get(key).is_some_and(Value::is_object) {
+        value[key] = json!({});
+    }
+    value[key].as_object_mut().expect("field is object")
+}
+
+fn object_entry<'a>(value: &'a mut Map<String, Value>, key: &str) -> &'a mut Map<String, Value> {
+    let entry = value.entry(key.to_string()).or_insert_with(|| json!({}));
+    if !entry.is_object() {
+        *entry = json!({});
+    }
+    entry.as_object_mut().expect("entry is object")
+}
+
+fn provider_config_id(provider: &ProviderData) -> String {
+    if let Some(value) = provider
+        .raw_provider_id
+        .as_deref()
+        .or(provider.provider_id.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return value.to_string();
+    }
+    if let Some(value) = (!provider.name.trim().is_empty())
+        .then_some(provider.name.as_str())
+        .map(slug)
+        .filter(|value| !value.is_empty())
+    {
+        return value;
+    }
+    provider
+        .base_url
+        .as_deref()
+        .and_then(host_from_url)
+        .map(|value| slug(&value))
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "custom".to_string())
+}
+
+fn provider_display_name(provider: &ProviderData, provider_id: &str) -> String {
+    provider
+        .provider_display_name
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| (!provider.name.trim().is_empty()).then(|| provider.name.clone()))
+        .unwrap_or_else(|| provider_id.to_string())
+}
+
+fn model_ref(provider_id: &str, model_id: &str) -> String {
+    let prefix = format!("{provider_id}/");
+    if model_id.starts_with(&prefix) {
+        model_id.to_string()
+    } else {
+        format!("{provider_id}/{model_id}")
+    }
+}
+
+fn npm_package_for_protocol(protocol: Option<WireProtocol>) -> &'static str {
+    match protocol {
+        Some(WireProtocol::AnthropicMessages) => "@ai-sdk/anthropic",
+        _ => "@ai-sdk/openai",
+    }
+}
+
+fn api_for_protocol(protocol: Option<WireProtocol>) -> &'static str {
+    match protocol {
+        Some(WireProtocol::AnthropicMessages) => "anthropic",
+        _ => "openai-chat-completions",
+    }
+}
+
+fn host_from_url(value: &str) -> Option<String> {
+    let rest = value.split_once("://")?.1;
+    let authority = rest
+        .split(['/', '?', '#'])
+        .next()
+        .filter(|authority| !authority.is_empty())?;
+    if let Some(ipv6) = authority.strip_prefix('[') {
+        return ipv6.split_once(']').map(|(host, _)| host.to_string());
+    }
+    authority
+        .split(':')
+        .next()
+        .filter(|host| !host.is_empty())
+        .map(str::to_string)
+}
+
+fn slug(value: &str) -> String {
+    let mut slug = String::new();
+    let mut previous_dash = false;
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+            previous_dash = false;
+        } else if !previous_dash {
+            slug.push('-');
+            previous_dash = true;
+        }
+    }
+    slug.trim_matches('-').to_string()
 }
 
 fn provider_models(raw: Option<&Value>) -> Vec<ProviderModel> {
