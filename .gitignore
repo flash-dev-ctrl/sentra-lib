@@ -1,0 +1,10 @@
+target/
+dist/
+trash/
+*.log
+.env
+.env.*
+codex/
+.cargo-home/
+cpp_example
+test-results
