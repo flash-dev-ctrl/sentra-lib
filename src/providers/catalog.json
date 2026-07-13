@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "revision": "2026-07-10",
+  "providers": [
+    {
+      "id": "anthropic",
+      "displayName": "Anthropic",
+      "aliases": [],
+      "environmentKeys": ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
+      "defaultEndpoint": "default",
+      "endpoints": [
+        { "id": "default", "baseUrl": "https://api.anthropic.com", "protocol": "anthropic_messages" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "openai",
+      "displayName": "OpenAI",
+      "aliases": [],
+      "environmentKeys": ["OPENAI_API_KEY"],
+      "defaultEndpoint": "responses",
+      "endpoints": [
+        { "id": "responses", "baseUrl": "https://api.openai.com/v1", "protocol": "responses" },
+        { "id": "chat-completions", "baseUrl": "https://api.openai.com/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": [
+        { "agent": "pi", "alias": "openai", "endpoint": "responses" },
+        { "agent": "codex", "alias": "openai", "endpoint": "responses" },
+        { "agent": "openclaw", "alias": "openai", "endpoint": "chat-completions" }
+      ]
+    },
+    {
+      "id": "azure-openai",
+      "displayName": "Azure OpenAI",
+      "aliases": ["azure-openai-responses"],
+      "environmentKeys": ["AZURE_OPENAI_API_KEY"],
+      "endpoints": [],
+      "agentAliases": []
+    },
+    {
+      "id": "openrouter",
+      "displayName": "OpenRouter",
+      "aliases": [],
+      "environmentKeys": ["OPENROUTER_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://openrouter.ai/api/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "deepseek",
+      "displayName": "DeepSeek",
+      "aliases": [],
+      "environmentKeys": ["DEEPSEEK_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.deepseek.com", "protocol": "chat_completions" },
+        { "id": "hermes-openai", "baseUrl": "https://api.deepseek.com/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": [
+        { "agent": "hermes", "alias": "deepseek", "endpoint": "hermes-openai" }
+      ]
+    },
+    {
+      "id": "groq",
+      "displayName": "Groq",
+      "aliases": [],
+      "environmentKeys": ["GROQ_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.groq.com/openai/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "minimax",
+      "displayName": "MiniMax",
+      "aliases": ["minimax-ai"],
+      "environmentKeys": ["MINIMAX_API_KEY"],
+      "defaultEndpoint": "global-anthropic",
+      "endpoints": [
+        { "id": "global-anthropic", "baseUrl": "https://api.minimax.io/anthropic", "protocol": "anthropic_messages" },
+        { "id": "cn-anthropic", "baseUrl": "https://api.minimaxi.com/anthropic", "protocol": "anthropic_messages", "environmentKeys": ["MINIMAX_CN_API_KEY"] }
+      ],
+      "agentAliases": [
+        { "agent": "pi", "alias": "minimax-cn", "endpoint": "cn-anthropic" },
+        { "agent": "openclaw", "alias": "minimax-cn", "endpoint": "cn-anthropic" },
+        { "agent": "hermes", "alias": "minimax-cn", "endpoint": "cn-anthropic" }
+      ]
+    },
+    {
+      "id": "mistral",
+      "displayName": "Mistral AI",
+      "aliases": [],
+      "environmentKeys": ["MISTRAL_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.mistral.ai/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "xai",
+      "displayName": "xAI",
+      "aliases": ["x-ai"],
+      "environmentKeys": ["XAI_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.x.ai/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "opencode",
+      "displayName": "OpenCode",
+      "aliases": [],
+      "environmentKeys": ["OPENCODE_API_KEY"],
+      "defaultEndpoint": "zen",
+      "endpoints": [
+        { "id": "zen", "baseUrl": "https://opencode.ai/zen/v1", "protocol": "chat_completions" },
+        { "id": "go", "baseUrl": "https://opencode.ai/zen/go/v1", "protocol": "chat_completions" },
+        { "id": "go-anthropic", "baseUrl": "https://opencode.ai/zen/go", "protocol": "anthropic_messages" }
+      ],
+      "agentAliases": [
+        { "agent": "pi", "alias": "opencode-go", "endpoint": "go" },
+        { "agent": "opencode", "alias": "opencode-go", "endpoint": "go", "environmentKeys": ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY"] },
+        { "agent": "openclaw", "alias": "opencode", "endpoint": "zen", "environmentKeys": ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY"] },
+        { "agent": "openclaw", "alias": "opencode-zen", "endpoint": "zen", "environmentKeys": ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY"] },
+        { "agent": "openclaw", "alias": "opencode-go", "endpoint": "go", "environmentKeys": ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY"] },
+        { "agent": "hermes", "alias": "opencode", "endpoint": "zen", "environmentKeys": ["OPENCODE_ZEN_API_KEY"] },
+        { "agent": "hermes", "alias": "opencode-zen", "endpoint": "zen", "environmentKeys": ["OPENCODE_ZEN_API_KEY"] },
+        { "agent": "hermes", "alias": "opencode-go", "endpoint": "go", "environmentKeys": ["OPENCODE_GO_API_KEY"] }
+      ]
+    },
+    {
+      "id": "google",
+      "displayName": "Google AI",
+      "aliases": ["gemini"],
+      "environmentKeys": ["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"],
+      "endpoints": [],
+      "agentAliases": []
+    },
+    {
+      "id": "cerebras",
+      "displayName": "Cerebras",
+      "aliases": [],
+      "environmentKeys": ["CEREBRAS_API_KEY"],
+      "endpoints": [],
+      "agentAliases": []
+    },
+    {
+      "id": "nvidia",
+      "displayName": "NVIDIA",
+      "aliases": [],
+      "environmentKeys": ["NVIDIA_API_KEY"],
+      "defaultEndpoint": "nim",
+      "endpoints": [
+        { "id": "nim", "baseUrl": "https://integrate.api.nvidia.com/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "cloudflare",
+      "displayName": "Cloudflare AI",
+      "aliases": ["cloudflare-ai-gateway", "cloudflare-workers-ai"],
+      "environmentKeys": ["CLOUDFLARE_API_KEY"],
+      "endpoints": [],
+      "agentAliases": []
+    },
+    {
+      "id": "vercel-ai-gateway",
+      "displayName": "Vercel AI Gateway",
+      "aliases": [],
+      "environmentKeys": ["AI_GATEWAY_API_KEY"],
+      "endpoints": [],
+      "agentAliases": []
+    },
+    {
+      "id": "zai",
+      "displayName": "Z.AI",
+      "aliases": [],
+      "environmentKeys": ["ZAI_API_KEY"],
+      "endpoints": [],
+      "agentAliases": [
+        { "agent": "pi", "alias": "zai-coding-cn", "environmentKeys": ["ZAI_CODING_CN_API_KEY"] }
+      ]
+    },
+    {
+      "id": "ant-ling",
+      "displayName": "Ant Ling",
+      "aliases": [],
+      "environmentKeys": ["ANT_LING_API_KEY"],
+      "endpoints": [],
+      "agentAliases": []
+    }
+  ]
+}
