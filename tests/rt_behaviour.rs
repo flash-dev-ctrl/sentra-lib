@@ -920,6 +920,7 @@ fn opencode_mcp_maps_local_and_remote_servers() {
     assert_eq!(remote["type"], "http");
     assert_eq!(remote["url"], "https://mcp.example.test/mcp");
     assert_eq!(remote["enabled"], false);
+    assert!(opencode.get_assets(AssetType::Cron).unwrap().is_empty());
 }
 
 #[test]
@@ -963,7 +964,7 @@ fn opencode_skill_reads_single_file_and_directory_skills() {
 }
 
 #[test]
-fn opencode_memory_collects_config_database_logs_and_local_artifacts_without_secret_values() {
+fn opencode_does_not_expose_memory_assets() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".config").join("opencode");
     let data_home = dir.path().join(".local").join("share").join("opencode");
@@ -1006,28 +1007,7 @@ fn opencode_memory_collects_config_database_logs_and_local_artifacts_without_sec
         .iter()
         .find(|agent| agent.name() == "opencode")
         .unwrap();
-    let memories = asset_data(opencode, AssetType::Memory);
-    let items = memories[0].data.as_array().unwrap();
-    let names = items
-        .iter()
-        .filter_map(|item| item["name"].as_str())
-        .collect::<Vec<_>>();
-
-    assert!(names.contains(&"opencode.json"));
-    assert!(names.contains(&"auth.json"));
-    assert!(names.contains(&"opencode.db"));
-    assert!(names.contains(&"opencode.db-wal"));
-    assert!(names.contains(&"opencode.log"));
-    assert!(names.contains(&"tool-1"));
-    assert!(names.contains(&"config"));
-    assert!(names.contains(&"state"));
-    assert!(names.contains(&"review.md"));
-    assert!(names.contains(&"build.md"));
-    assert!(
-        !serde_json::to_string(&items)
-            .unwrap()
-            .contains("sk-memory-secret")
-    );
+    assert!(opencode.get_assets(AssetType::Memory).unwrap().is_empty());
 }
 
 #[test]
