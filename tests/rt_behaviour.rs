@@ -890,9 +890,8 @@ fn opencode_mcp_maps_local_and_remote_servers() {
           "mcp": {
             "local": {
               "type": "local",
-              "command": "node",
-              "args": ["server.js"],
-              "env": {"TOKEN": "test"}
+              "command": ["node", "server.js"],
+              "environment": {"TOKEN": "test"}
             },
             "remote": {
               "type": "remote",

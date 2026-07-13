@@ -61,14 +61,22 @@ fn parse_opencode_mcp_servers(raw: &Value) -> Vec<McpData> {
     map.iter()
         .map(|(name, server)| {
             let value = server.as_object();
-            let command = value
+            let (command, command_args) = value
                 .and_then(|value| value.get("command"))
-                .and_then(Value::as_str)
-                .map(str::to_string);
+                .map_or((None, Vec::new()), command_parts);
             let url = value
                 .and_then(|value| value.get("url"))
                 .and_then(Value::as_str)
                 .map(str::to_string);
+            let mut args = command_args;
+            args.extend(
+                value
+                    .and_then(|value| value.get("args"))
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|item| item.as_str().map(str::to_string)),
+            );
             McpData {
                 name: name.clone(),
                 mcp_type: mcp_type(
@@ -77,19 +85,10 @@ fn parse_opencode_mcp_servers(raw: &Value) -> Vec<McpData> {
                     url.as_deref(),
                 ),
                 command,
-                args: value
-                    .and_then(|value| value.get("args"))
-                    .and_then(Value::as_array)
-                    .map(|items| {
-                        items
-                            .iter()
-                            .filter_map(|item| item.as_str().map(str::to_string))
-                            .collect()
-                    })
-                    .unwrap_or_default(),
+                args,
                 url,
                 env: value
-                    .and_then(|value| value.get("env"))
+                    .and_then(|value| value.get("environment").or_else(|| value.get("env")))
                     .and_then(Value::as_object)
                     .map(|env| {
                         env.iter()
@@ -103,6 +102,20 @@ fn parse_opencode_mcp_servers(raw: &Value) -> Vec<McpData> {
             }
         })
         .collect()
+}
+
+fn command_parts(raw: &Value) -> (Option<String>, Vec<String>) {
+    if let Some(command) = raw.as_str() {
+        return (Some(command.to_string()), Vec::new());
+    }
+    let Some(items) = raw.as_array() else {
+        return (None, Vec::new());
+    };
+    let mut parts = items
+        .iter()
+        .filter_map(|item| item.as_str().map(str::to_string));
+    let command = parts.next();
+    (command, parts.collect())
 }
 
 fn mcp_type(raw: Option<&Value>, has_command: bool, url: Option<&str>) -> Option<McpType> {
