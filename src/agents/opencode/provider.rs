@@ -12,7 +12,7 @@ use crate::providers::{
     ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
     protocol_for_api,
 };
-use crate::utils::protocol::WireProtocol;
+use crate::utils::protocol::{WireProtocol, build_model_probe_request};
 use crate::utils::{backup_file, mask_secret, read_json_file, write_json_file};
 
 #[derive(Debug, Clone)]
@@ -31,11 +31,18 @@ impl ProviderAsset {
     }
 
     pub fn get_request(&self, model: &str) -> Vec<ProviderProbeRequest> {
-        vec![ProviderProbeRequest {
-            protocol: WireProtocol::ChatCompletions,
-            body: Some(opencode_probe_body(model).to_string()),
+        [
+            WireProtocol::Responses,
+            WireProtocol::ChatCompletions,
+            WireProtocol::AnthropicMessages,
+        ]
+        .into_iter()
+        .map(|protocol| ProviderProbeRequest {
+            protocol,
+            body: Some(opencode_probe_body(protocol, model)),
             prompt: None,
-        }]
+        })
+        .collect()
     }
 }
 
@@ -49,7 +56,11 @@ impl_erased_asset!(
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        provider_data(self.core.agent_home())
+        provider_data(self.core.agent_home(), true)
+    }
+
+    fn get_runtime_data(&self) -> SentraResult<Vec<ProviderData>> {
+        provider_data(self.core.agent_home(), false)
     }
 
     fn set_data(&self, value: ProviderData) -> SentraResult<AssetMutationResult> {
@@ -64,7 +75,13 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     }
 }
 
-fn opencode_probe_body(model: &str) -> Value {
+fn opencode_probe_body(protocol: WireProtocol, model: &str) -> String {
+    if protocol != WireProtocol::ChatCompletions {
+        return build_model_probe_request(protocol, model)
+            .body
+            .unwrap_or_else(|| json!({ "model": model }).to_string());
+    }
+
     json!({
         "max_tokens": 32000,
         "messages": [
@@ -87,53 +104,11 @@ fn opencode_probe_body(model: &str) -> Value {
             "include_usage": true
         }
     })
+    .to_string()
 }
 
-const OPENCODE_TITLE_SYSTEM_PROMPT: &str = r#"You are a title generator. You output ONLY a thread title. Nothing else.
-
-<task>
-Generate a brief title that would help the user find this conversation later.
-
-Follow all rules in <rules>
-Use the <examples> so you know what a good title looks like.
-Your output must be:
-- A single line
-- ≤50 characters
-- No explanations
-</task>
-
-<rules>
-- you MUST use the same language as the user message you are summarizing
-- Title must be grammatically correct and read naturally - no word salad
-- Never include tool names in the title (e.g. "read tool", "bash tool", "edit tool")
-- Focus on the main topic or question the user needs to retrieve
-- Vary your phrasing - avoid repetitive patterns like always starting with "Analyzing"
-- When a file is mentioned, focus on WHAT the user wants to do WITH the file, not just that they shared it
-- Keep exact: technical terms, numbers, filenames, HTTP codes
-- Remove: the, this, my, a, an
-- Never assume tech stack
-- Never use tools
-- NEVER respond to questions, just generate a title for the conversation
-- The title should NEVER include "summarizing" or "generating" when generating a title
-- DO NOT SAY YOU CANNOT GENERATE A TITLE OR COMPLAIN ABOUT THE INPUT
-- Always output something meaningful, even if the input is minimal.
-- If the user message is short or conversational (e.g. "hello", "lol", "what's up", "hey"):
-  → create a title that reflects the user's tone or intent (such as Greeting, Quick check-in, Light chat, Intro message, etc.)
-</rules>
-
-<examples>
-"debug 500 errors in production" → Debugging production 500 errors
-"refactor user service" → Refactoring user service
-"why is app.js failing" → app.js failure investigation
-"implement rate limiting" → Rate limiting implementation
-"how do I connect postgres to my API" → Postgres API connection
-"best practices for React hooks" → React hooks best practices
-"@src/auth.ts can you add refresh token support" → Auth refresh token support
-"@utils/parser.ts this is broken" → Parser bug fix
-"look at @config.json" → Config review
-"@App.tsx add dark mode toggle" → Dark mode toggle in App
-</examples>
-"#;
+const OPENCODE_TITLE_SYSTEM_PROMPT: &str =
+    "You are a title generator; output only one concise conversation title in the user's language.";
 
 fn set_provider_data(
     agent_home: &std::path::Path,
@@ -226,8 +201,11 @@ fn set_provider_data(
     Ok(AssetMutationResult::changed())
 }
 
-fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>> {
-    let auth_keys = auth_api_keys(agent_home)?;
+fn provider_data(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
+    let auth_keys = auth_api_keys(agent_home, mask_secrets)?;
     let mut results = Vec::new();
     let mut provider_ids = Vec::new();
 
@@ -300,9 +278,9 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                     ProviderFieldSource::Inferred
                 }
             });
-            candidate.api_key = configured_api_key(raw, options)
+            candidate.api_key = configured_api_key(raw, options, mask_secrets)
                 .or_else(|| auth_keys.get(provider_id).cloned())
-                .or_else(|| environment_api_key(provider_id));
+                .or_else(|| environment_api_key(provider_id, mask_secrets));
             candidate.activation = provider_activation(
                 active_model_ref.map(|(provider, _)| provider),
                 provider_id,
@@ -390,15 +368,17 @@ fn model_ref(provider_id: &str, model_id: &str) -> String {
 
 fn npm_package_for_protocol(protocol: Option<WireProtocol>) -> &'static str {
     match protocol {
+        Some(WireProtocol::Responses) => "@ai-sdk/openai",
+        Some(WireProtocol::ChatCompletions) | None => "@ai-sdk/openai-compatible",
         Some(WireProtocol::AnthropicMessages) => "@ai-sdk/anthropic",
-        _ => "@ai-sdk/openai",
     }
 }
 
 fn api_for_protocol(protocol: Option<WireProtocol>) -> &'static str {
     match protocol {
+        Some(WireProtocol::Responses) => "openai-responses",
+        Some(WireProtocol::ChatCompletions) | None => "openai-chat-completions",
         Some(WireProtocol::AnthropicMessages) => "anthropic",
-        _ => "openai-chat-completions",
     }
 }
 
@@ -506,11 +486,12 @@ fn base_url(
 fn configured_api_key(
     raw: Option<&serde_json::Map<String, Value>>,
     options: Option<&serde_json::Map<String, Value>>,
+    mask_secrets: bool,
 ) -> Option<String> {
     string_field(options, &["apiKey", "api_key", "key", "token"])
         .or_else(|| string_field(raw, &["apiKey", "api_key", "key", "token"]))
         .and_then(|value| resolve_secret(&value))
-        .and_then(|value| mask_secret(Some(&value)))
+        .and_then(|value| maybe_mask_secret(value, mask_secrets))
 }
 
 fn string_field(raw: Option<&serde_json::Map<String, Value>>, keys: &[&str]) -> Option<String> {
@@ -552,7 +533,10 @@ fn provider_activation(
     }
 }
 
-fn auth_api_keys(agent_home: &std::path::Path) -> SentraResult<BTreeMap<String, String>> {
+fn auth_api_keys(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<BTreeMap<String, String>> {
     let Some(auth) =
         read_json_file(crate::agents::opencode::data_home(agent_home).join("auth.json"))?
     else {
@@ -561,13 +545,13 @@ fn auth_api_keys(agent_home: &std::path::Path) -> SentraResult<BTreeMap<String, 
     let mut keys = BTreeMap::new();
     for container in ["provider", "providers", "credential", "credentials"] {
         if let Some(map) = auth.get(container).and_then(Value::as_object) {
-            collect_provider_secret_map(map, &mut keys);
+            collect_provider_secret_map(map, &mut keys, mask_secrets);
         }
     }
     if let Some(map) = auth.as_object() {
         for (provider_id, value) in map {
             if value.is_object()
-                && let Some(secret) = secret_from_value(value)
+                && let Some(secret) = secret_from_value(value, mask_secrets)
             {
                 keys.insert(provider_id.clone(), secret);
             }
@@ -579,15 +563,16 @@ fn auth_api_keys(agent_home: &std::path::Path) -> SentraResult<BTreeMap<String, 
 fn collect_provider_secret_map(
     map: &serde_json::Map<String, Value>,
     keys: &mut BTreeMap<String, String>,
+    mask_secrets: bool,
 ) {
     for (provider_id, value) in map {
-        if let Some(secret) = secret_from_value(value) {
+        if let Some(secret) = secret_from_value(value, mask_secrets) {
             keys.insert(provider_id.clone(), secret);
         }
     }
 }
 
-fn secret_from_value(value: &Value) -> Option<String> {
+fn secret_from_value(value: &Value, mask_secrets: bool) -> Option<String> {
     let raw = if let Some(value) = value.as_str() {
         Some(value)
     } else {
@@ -605,7 +590,7 @@ fn secret_from_value(value: &Value) -> Option<String> {
         .iter()
         .find_map(|key| value.get(*key).and_then(Value::as_str))
     }?;
-    resolve_secret(raw).and_then(|value| mask_secret(Some(&value)))
+    resolve_secret(raw).and_then(|value| maybe_mask_secret(value, mask_secrets))
 }
 
 fn resolve_secret(value: &str) -> Option<String> {
@@ -629,10 +614,18 @@ fn resolve_secret(value: &str) -> Option<String> {
     Some(value.to_string())
 }
 
-fn environment_api_key(provider_id: &str) -> Option<String> {
+fn environment_api_key(provider_id: &str, mask_secrets: bool) -> Option<String> {
     ProviderRegistry::builtin()
         .environment_keys("opencode", provider_id)
         .into_iter()
         .find_map(|key| std::env::var(key).ok().filter(|value| !value.is_empty()))
-        .and_then(|value| mask_secret(Some(&value)))
+        .and_then(|value| maybe_mask_secret(value, mask_secrets))
+}
+
+fn maybe_mask_secret(value: String, mask_secrets: bool) -> Option<String> {
+    if mask_secrets {
+        mask_secret(Some(&value))
+    } else {
+        Some(value)
+    }
 }

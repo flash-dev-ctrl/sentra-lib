@@ -882,6 +882,36 @@ fn opencode_provider_can_read_masked_api_key_from_auth_json() {
 }
 
 #[test]
+fn opencode_provider_runtime_data_keeps_api_key_for_model_probe() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("opencode.json"),
+        r#"{"model":"chaitin/dev/gpt-5.4","provider":{"chaitin":{"npm":"@ai-sdk/openai-compatible","name":"Baizhi Gateway","options":{"baseURL":"https://gateway.example.test/v1","apiKey":"sk-chaitin-secret"},"models":{"dev/gpt-5.4":{"name":"Dev GPT-5.4"}}}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let provider_asset = opencode
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let masked: Vec<ProviderData> = serde_json::from_value(provider_asset.data().unwrap()).unwrap();
+    let runtime: Vec<ProviderData> =
+        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
+
+    assert_ne!(masked[0].api_key.as_deref(), Some("sk-chaitin-secret"));
+    assert_eq!(runtime[0].api_key.as_deref(), Some("sk-chaitin-secret"));
+}
+
+#[test]
 fn opencode_provider_set_data_writes_provider_config() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".config").join("opencode");
@@ -920,7 +950,10 @@ fn opencode_provider_set_data_writes_provider_config() {
         serde_json::from_str(&fs::read_to_string(home.join("opencode.json")).unwrap()).unwrap();
     assert_eq!(config["model"], "chaitin/dev/gpt-5.4");
     assert_eq!(config["provider"]["chaitin"]["name"], "Baizhi Gateway");
-    assert_eq!(config["provider"]["chaitin"]["npm"], "@ai-sdk/openai");
+    assert_eq!(
+        config["provider"]["chaitin"]["npm"],
+        "@ai-sdk/openai-compatible"
+    );
     assert_eq!(
         config["provider"]["chaitin"]["api"],
         "openai-chat-completions"
@@ -944,6 +977,47 @@ fn opencode_provider_set_data_writes_provider_config() {
     assert_eq!(provider["activationStatus"], "active");
     assert!(provider["apiKey"].as_str().unwrap().contains("****"));
     assert_ne!(provider["apiKey"], "sk-chaitin-secret");
+}
+
+#[test]
+fn opencode_provider_set_data_writes_openai_npm_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&home).unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let provider_asset = opencode
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    provider_asset
+        .set_provider_data(ProviderData {
+            name: "OpenAI".to_string(),
+            raw_provider_id: Some("openai".to_string()),
+            base_url: Some("https://api.openai.com/v1".to_string()),
+            api_key: Some("sk-openai-secret".to_string()),
+            enabled: true,
+            models: vec![ProviderModel {
+                id: "gpt-5".to_string(),
+                name: Some("GPT-5".to_string()),
+                enabled: true,
+            }],
+            protocol: Some(WireProtocol::Responses),
+            ..ProviderData::default()
+        })
+        .unwrap();
+
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(home.join("opencode.json")).unwrap()).unwrap();
+    assert_eq!(config["model"], "openai/gpt-5");
+    assert_eq!(config["provider"]["openai"]["npm"], "@ai-sdk/openai");
+    assert_eq!(config["provider"]["openai"]["api"], "openai-responses");
 }
 
 #[test]
@@ -1006,11 +1080,24 @@ fn opencode_provider_probe_uses_agent_title_request_body() {
         .unwrap();
     let requests = provider.provider_requests("dev/gpt-5.4");
 
-    assert_eq!(requests.len(), 1);
-    assert_eq!(requests[0].protocol, WireProtocol::ChatCompletions);
-    assert!(requests[0].prompt.is_none());
+    assert_eq!(requests.len(), 3);
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.protocol == WireProtocol::Responses)
+    );
+    assert!(
+        requests
+            .iter()
+            .any(|request| request.protocol == WireProtocol::AnthropicMessages)
+    );
+    let chat_request = requests
+        .iter()
+        .find(|request| request.protocol == WireProtocol::ChatCompletions)
+        .unwrap();
+    assert!(requests.iter().all(|request| request.prompt.is_none()));
     let body: serde_json::Value =
-        serde_json::from_str(requests[0].body.as_deref().unwrap()).unwrap();
+        serde_json::from_str(chat_request.body.as_deref().unwrap()).unwrap();
     assert_eq!(body["model"], "dev/gpt-5.4");
     assert_eq!(body["max_tokens"], 32000);
     assert_eq!(body["stream"], true);
