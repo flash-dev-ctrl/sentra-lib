@@ -580,6 +580,14 @@ pub trait ErasedAsset {
     fn data_async<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = SentraResult<serde_json::Value>> + 'a>>;
+    fn runtime_data(&self) -> SentraResult<serde_json::Value> {
+        self.data()
+    }
+    fn runtime_data_async<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = SentraResult<serde_json::Value>> + 'a>> {
+        Box::pin(async move { self.runtime_data() })
+    }
     fn provider_requests(&self, _model: &str) -> Vec<ProviderProbeRequest> {
         Vec::new()
     }
@@ -614,6 +622,16 @@ pub trait Asset<TData, TItem = TData>: ErasedAsset {
 
     fn get_data_async<'a>(&'a self) -> Pin<Box<dyn Future<Output = SentraResult<TData>> + 'a>> {
         Box::pin(async move { self.get_data() })
+    }
+
+    fn get_runtime_data(&self) -> SentraResult<TData> {
+        self.get_data()
+    }
+
+    fn get_runtime_data_async<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = SentraResult<TData>> + 'a>> {
+        Box::pin(async move { self.get_runtime_data() })
     }
 
     fn set_data(&self, _value: TItem) -> SentraResult<AssetMutationResult> {
