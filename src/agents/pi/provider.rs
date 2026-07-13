@@ -11,7 +11,7 @@ use crate::providers::{
     protocol_for_api,
 };
 use crate::utils::protocol::{WireProtocol, default_model_probe_prompt};
-use crate::utils::read_json_file;
+use crate::utils::{mask_secret, read_json_file};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -124,7 +124,8 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                         .and_then(|value| resolve_config_string(value, None))
                 })
                 .or_else(|| auth_key(auth_providers, provider_id))
-                .or_else(|| env_api_key(provider_id));
+                .or_else(|| env_api_key(provider_id))
+                .and_then(|value| mask_secret(Some(&value)));
             candidate.activation = activation;
             candidate.models = models;
             providers.push(ProviderRegistry::builtin().resolve(candidate));
@@ -242,7 +243,9 @@ fn fallback_provider(
     let mut candidate = ProviderCandidate::new("pi");
     candidate.agent_provider_id = Some(provider_id.to_string());
     candidate.display_name = Some(provider_id.to_string());
-    candidate.api_key = auth_key(auth_providers, provider_id).or_else(|| env_api_key(provider_id));
+    candidate.api_key = auth_key(auth_providers, provider_id)
+        .or_else(|| env_api_key(provider_id))
+        .and_then(|value| mask_secret(Some(&value)));
     candidate.activation = activation;
     candidate.models = default_model
         .map(|id| vec![model(id, Some(id), true)])

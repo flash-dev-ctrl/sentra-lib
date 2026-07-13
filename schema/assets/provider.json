@@ -61,6 +61,40 @@
                 null
             ]
         },
+        "routeStatus": {
+            "type": "string",
+            "description": "Endpoint 路由判定：厂商验证直连、未验证、疑似中转、Provider/Endpoint 冲突、自定义、歧义或未知。",
+            "enum": [
+                "official",
+                "unverified",
+                "relay_candidate",
+                "provider_mismatch",
+                "custom",
+                "ambiguous",
+                "unknown"
+            ],
+            "default": "unknown"
+        },
+        "routeReason": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "非官方或无法确认路由时的判定原因。"
+        },
+        "endpointTrust": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "已观测 Endpoint 的来源信任等级；未配置 URL 时为空。",
+            "enum": [
+                "vendor_verified",
+                "models_dev",
+                "unverified",
+                null
+            ]
+        },
         "account": {
             "description": "账号型 provider 的登录账号元数据，不包含 token 原文。",
             "anyOf": [

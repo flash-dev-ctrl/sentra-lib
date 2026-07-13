@@ -438,7 +438,8 @@ fn pi_agent_is_discovered_and_reads_llm_provider_config() {
     let provider = &providers[0].data[0];
     assert_eq!(provider["name"], "SVIP Gateway");
     assert_eq!(provider["baseUrl"], "https://svip.example.com/v1");
-    assert_eq!(provider["apiKey"], "sk-pi");
+    assert_eq!(provider["apiKey"], "sk****pi");
+    assert_ne!(provider["apiKey"], "sk-pi");
     assert_eq!(provider["enabled"], true);
     assert_eq!(provider["protocol"], "responses");
     assert_eq!(provider["models"][0]["id"], "svip/gpt-5.5");
@@ -498,7 +499,7 @@ fn pi_provider_uses_builtin_opencode_go_defaults_without_models_config() {
 
     assert_eq!(provider["name"], "opencode-go");
     assert_eq!(provider["baseUrl"], "https://opencode.ai/zen/go/v1");
-    assert_eq!(provider["apiKey"], "sk-opencode");
+    assert_eq!(provider["apiKey"], "sk-o****code");
     assert_eq!(provider["enabled"], true);
     assert_eq!(provider["providerId"], "opencode");
     assert_eq!(provider["providerDisplayName"], "OpenCode");
@@ -548,14 +549,14 @@ fn pi_provider_lists_inactive_auth_providers_without_models_config() {
 
     assert_eq!(deepseek["enabled"], true);
     assert_eq!(deepseek["baseUrl"], "https://api.deepseek.com");
-    assert_eq!(deepseek["apiKey"], "sk-deepseek");
+    assert_eq!(deepseek["apiKey"], "sk-d****seek");
     assert_eq!(deepseek["models"][0]["id"], "deepseek-v4-flash");
     assert_eq!(opencode_go["enabled"], false);
     assert_eq!(opencode_go["baseUrl"], "https://opencode.ai/zen/go/v1");
-    assert_eq!(opencode_go["apiKey"], "sk-opencode");
+    assert_eq!(opencode_go["apiKey"], "sk-o****code");
     assert_eq!(minimax_cn["enabled"], false);
     assert_eq!(minimax_cn["baseUrl"], "https://api.minimaxi.com/anthropic");
-    assert_eq!(minimax_cn["apiKey"], "sk-minimax-cn");
+    assert_eq!(minimax_cn["apiKey"], "sk-m****x-cn");
     assert_eq!(minimax_cn["providerId"], "minimax");
     assert_eq!(minimax_cn["rawProviderId"], "minimax-cn");
     assert_eq!(minimax_cn["endpointVariant"], "cn-anthropic");

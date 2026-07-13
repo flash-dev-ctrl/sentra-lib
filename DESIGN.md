@@ -26,6 +26,8 @@ xxx == hash yara ti llm online-ti
 
 LLM Provider 扫描分为 Agent 配置解析与公共供应商知识解析两层。Agent Adapter 只负责读取本地事实；Provider Registry 负责标准化供应商身份、补全缺失 Endpoint、选择协议变体并标记字段来源。
 
+Catalog 以 Endpoint 为核心：Canonical Provider 表示实际厂商，区域、套餐、Coding Plan 和协议作为 Endpoint Variant，不重复创建厂商。Endpoint 同时记录 `vendor_verified`、`models_dev` 或 `unverified` 信任来源；Provider 身份与路由官方性分别判定，避免已知 Provider ID 或二级数据源掩盖第三方中转地址。
+
 ```mermaid
 flowchart LR
     subgraph Agents["Agent Adapter"]
@@ -63,15 +65,17 @@ flowchart LR
         Providers["Canonical Providers"]
         Aliases["Global + Agent-scoped Aliases"]
         Endpoints["CN / Global<br/>Responses / Chat / Anthropic"]
-        Auth["Environment Key Names"]
+        Auth["Credential + Configuration Key Names"]
+        Trust["Endpoint Trust<br/>vendor_verified | models_dev | unverified"]
     end
 
     Providers --> Alias
     Aliases --> Alias
     Endpoints --> Endpoint
     Auth --> Enrich
+    Trust --> Endpoint
 
-    Provenance --> Resolved["ProviderData<br/>providerId?<br/>rawProviderId?<br/>endpointVariant?<br/>resolutionStatus<br/>activationStatus"]
+    Provenance --> Resolved["ProviderData<br/>providerId?<br/>rawProviderId?<br/>endpointVariant?<br/>resolutionStatus<br/>routeStatus<br/>activationStatus"]
     Resolved --> Inventory["Inventory UI"]
     Resolved --> Risk["Provider Risk Scanner"]
     Resolved --> Probe["Model Probe"]
@@ -86,6 +90,16 @@ flowchart LR
 4. 根据显式 Endpoint 反向识别供应商；只在唯一匹配时采用。
 5. 无法识别时保留原始条目，不猜测或丢弃。
 
+路由状态独立于供应商身份：
+
+- `official`：观测到的显式 URL 命中经过厂商资料验证的 Endpoint。
+- `unverified`：显式 URL 命中 Models.dev/未验证条目，或该 Provider 明确允许自定义 Endpoint。
+- `relay_candidate`：Provider 身份已知，但显式 URL 不属于该厂商的官方 Endpoint。
+- `provider_mismatch`：Provider ID 与显式 URL 分别命中不同的 Canonical Provider。
+- `custom`：显式 URL 和 Provider ID 均无法归入已知厂商。
+- `ambiguous`：显式 URL 同时命中多个 Canonical Provider。
+- `unknown`：未观察到显式 Endpoint，或缺少足够信息；Catalog 默认 URL 的补全不作为“当前正在官方直连”的证据。
+
 识别状态：
 
 - `known`：Catalog 中唯一匹配的供应商。
@@ -95,7 +109,10 @@ flowchart LR
 
 边界约束：
 
-- Catalog 不保存真实 API Key，只维护认证方式所需的环境变量名等元数据。
+- Catalog 不保存真实 API Key，只维护认证方式所需的环境变量名等元数据；凭据变量与 Host、账号、配置文件路径等普通配置变量分开建模。
+- Models.dev 是覆盖率和候选地址来源，不是官方信任根。只有经过厂商资料复核的 Endpoint 才能标记为 `vendor_verified` 并产生 `official` 路由状态。
+- 动态云 Endpoint 使用 URL 解析后的 HTTPS Scheme、受约束 Host/域名后缀和 Path 规则匹配，不使用不受控正则；凭据、Query、Fragment、伪造域名后缀和非默认端口均不能命中。
+- Canonical Provider 不按品牌、地区、套餐或协议重复拆分。例如智谱/Z.AI、MiniMax 国内/国际入口均使用同一个 Provider ID。
 - `activationStatus` 由 Agent Adapter 决定；Registry 不推测当前激活项。
 - Agent 的 Provider 写入和删除逻辑继续归各 Adapter 所有，Registry 只负责标准化与补全。
 - 同一 Base URL 可以对应多个协议变体，供应商身份识别和 Endpoint Variant 识别必须分别处理。

@@ -505,6 +505,13 @@ pub struct ProviderData {
     pub resolution_status: crate::providers::ProviderResolutionStatus,
     #[serde(rename = "resolutionReason", skip_serializing_if = "Option::is_none")]
     pub resolution_reason: Option<String>,
+    #[serde(default)]
+    #[serde(rename = "routeStatus")]
+    pub route_status: crate::providers::ProviderRouteStatus,
+    #[serde(rename = "routeReason", skip_serializing_if = "Option::is_none")]
+    pub route_reason: Option<String>,
+    #[serde(rename = "endpointTrust", skip_serializing_if = "Option::is_none")]
+    pub endpoint_trust: Option<crate::providers::ProviderEndpointTrust>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account: Option<ProviderAccount>,
 }

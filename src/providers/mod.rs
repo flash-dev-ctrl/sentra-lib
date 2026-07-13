@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
+use url::Url;
 
 use crate::interfaces::{ProviderData, ProviderModel, ProviderType};
 use crate::utils::protocol::WireProtocol;
@@ -21,6 +22,28 @@ pub enum ProviderResolutionStatus {
     Ambiguous,
     #[default]
     Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderRouteStatus {
+    Official,
+    Unverified,
+    RelayCandidate,
+    ProviderMismatch,
+    Custom,
+    Ambiguous,
+    #[default]
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderEndpointTrust {
+    VendorVerified,
+    #[default]
+    ModelsDev,
+    Unverified,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +92,10 @@ pub struct ProviderDefinition {
     pub aliases: Vec<String>,
     #[serde(default)]
     pub environment_keys: Vec<String>,
+    #[serde(default)]
+    pub configuration_keys: Vec<String>,
+    #[serde(default)]
+    pub allows_custom_endpoints: bool,
     pub default_endpoint: Option<String>,
     #[serde(default)]
     pub endpoints: Vec<ProviderEndpoint>,
@@ -80,10 +107,30 @@ pub struct ProviderDefinition {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderEndpoint {
     pub id: String,
-    pub base_url: String,
-    pub protocol: WireProtocol,
+    pub base_url: Option<String>,
+    #[serde(default)]
+    pub base_url_aliases: Vec<String>,
+    #[serde(default)]
+    pub match_rules: Vec<ProviderEndpointMatchRule>,
+    #[serde(default)]
+    pub trust: ProviderEndpointTrust,
+    #[serde(default)]
+    pub protocol: Option<WireProtocol>,
     #[serde(default)]
     pub environment_keys: Vec<String>,
+    #[serde(default)]
+    pub configuration_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderEndpointMatchRule {
+    #[serde(default = "default_https_scheme")]
+    pub scheme: String,
+    pub host: Option<String>,
+    pub host_suffix: Option<String>,
+    pub path_prefix: Option<String>,
+    pub path_suffix: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -94,6 +141,12 @@ pub struct ProviderAgentAlias {
     pub endpoint: Option<String>,
     #[serde(default)]
     pub environment_keys: Vec<String>,
+    #[serde(default)]
+    pub configuration_keys: Vec<String>,
+}
+
+fn default_https_scheme() -> String {
+    "https".to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -167,6 +220,32 @@ impl ProviderRegistry {
                         endpoint.id, provider.id
                     ));
                 }
+                if endpoint.base_url.is_none() && endpoint.match_rules.is_empty() {
+                    return Err(format!(
+                        "endpoint {} for provider {} has no base URL or match rule",
+                        endpoint.id, provider.id
+                    ));
+                }
+                for value in endpoint
+                    .base_url
+                    .iter()
+                    .chain(endpoint.base_url_aliases.iter())
+                {
+                    validate_catalog_url(value).map_err(|reason| {
+                        format!(
+                            "invalid URL for endpoint {} / {}: {reason}",
+                            provider.id, endpoint.id
+                        )
+                    })?;
+                }
+                for rule in &endpoint.match_rules {
+                    validate_match_rule(rule).map_err(|reason| {
+                        format!(
+                            "invalid match rule for endpoint {} / {}: {reason}",
+                            provider.id, endpoint.id
+                        )
+                    })?;
+                }
             }
             if let Some(default_endpoint) = provider.default_endpoint.as_deref()
                 && !endpoint_ids.contains(default_endpoint)
@@ -232,14 +311,35 @@ impl ProviderRegistry {
         &self,
         base_url: &str,
     ) -> Vec<(&ProviderDefinition, &ProviderEndpoint)> {
-        let base_url = normalized_url(base_url);
+        let parsed_url = Url::parse(base_url.trim()).ok();
+        let normalized_base_url = parsed_url.as_ref().and_then(normalized_url);
         self.providers
             .iter()
             .flat_map(|provider| {
                 provider
                     .endpoints
                     .iter()
-                    .filter(|endpoint| normalized_url(&endpoint.base_url) == base_url)
+                    .filter(|endpoint| {
+                        normalized_base_url.is_some()
+                            && endpoint
+                                .base_url
+                                .as_deref()
+                                .and_then(|value| Url::parse(value).ok())
+                                .as_ref()
+                                .and_then(normalized_url)
+                                == normalized_base_url
+                            || endpoint
+                                .base_url_aliases
+                                .iter()
+                                .filter_map(|alias| Url::parse(alias).ok())
+                                .any(|alias| normalized_url(&alias) == normalized_base_url)
+                            || parsed_url.as_ref().is_some_and(|url| {
+                                endpoint
+                                    .match_rules
+                                    .iter()
+                                    .any(|rule| endpoint_rule_matches(rule, url))
+                            })
+                    })
                     .map(move |endpoint| (provider, endpoint))
             })
             .collect()
@@ -275,6 +375,36 @@ impl ProviderRegistry {
         deduplicated
     }
 
+    pub fn configuration_keys(&self, agent_id: &str, provider_id: &str) -> Vec<&str> {
+        let Some(provider_match) = self.match_by_id(agent_id, provider_id) else {
+            return Vec::new();
+        };
+        let mut keys = Vec::new();
+        if let Some(alias) = provider_match.provider.agent_aliases.iter().find(|alias| {
+            normalized_id(&alias.agent) == normalized_id(agent_id)
+                && normalized_id(&alias.alias) == normalized_id(provider_id)
+        }) {
+            keys.extend(alias.configuration_keys.iter().map(String::as_str));
+        }
+        if let Some(endpoint) = provider_match.endpoint {
+            keys.extend(endpoint.configuration_keys.iter().map(String::as_str));
+        }
+        keys.extend(
+            provider_match
+                .provider
+                .configuration_keys
+                .iter()
+                .map(String::as_str),
+        );
+        let mut deduplicated = Vec::new();
+        for key in keys {
+            if !deduplicated.contains(&key) {
+                deduplicated.push(key);
+            }
+        }
+        deduplicated
+    }
+
     pub fn resolve(&self, candidate: ProviderCandidate) -> ProviderData {
         let raw_provider_id = candidate.agent_provider_id.clone();
         let configured_base_url = candidate
@@ -292,13 +422,19 @@ impl ProviderRegistry {
 
         let provider_match = match (id_match, endpoint_matches.as_slice()) {
             (Some(mut id_match), matches) => {
+                if configured_base_url.is_some() {
+                    // An explicit URL must prove its own endpoint identity. Keeping the
+                    // provider's default endpoint here would incorrectly label a relay URL
+                    // as the official default endpoint.
+                    id_match.endpoint = None;
+                }
                 let matching_endpoints = matches
                     .iter()
                     .filter(|(provider, endpoint)| {
                         provider.id == id_match.provider.id
                             && candidate
                                 .protocol_hint
-                                .is_none_or(|protocol| endpoint.protocol == protocol)
+                                .is_none_or(|protocol| endpoint.protocol == Some(protocol))
                     })
                     .map(|(_, endpoint)| *endpoint)
                     .collect::<Vec<_>>();
@@ -309,13 +445,13 @@ impl ProviderRegistry {
                     && let Some(protocol) = candidate.protocol_hint
                     && id_match
                         .endpoint
-                        .is_none_or(|endpoint| endpoint.protocol != protocol)
+                        .is_none_or(|endpoint| endpoint.protocol != Some(protocol))
                 {
                     let protocol_endpoints = id_match
                         .provider
                         .endpoints
                         .iter()
-                        .filter(|endpoint| endpoint.protocol == protocol)
+                        .filter(|endpoint| endpoint.protocol == Some(protocol))
                         .collect::<Vec<_>>();
                     if protocol_endpoints.len() == 1 {
                         id_match.endpoint = protocol_endpoints.first().copied();
@@ -338,7 +474,7 @@ impl ProviderRegistry {
                             matched_provider.id == provider.id
                                 && candidate
                                     .protocol_hint
-                                    .is_none_or(|protocol| endpoint.protocol == protocol)
+                                    .is_none_or(|protocol| endpoint.protocol == Some(protocol))
                         })
                         .map(|(_, endpoint)| *endpoint)
                         .collect::<Vec<_>>();
@@ -367,15 +503,69 @@ impl ProviderRegistry {
         };
 
         let endpoint = provider_match.and_then(|matched| matched.endpoint);
+        let endpoint_provider_ids = endpoint_matches
+            .iter()
+            .map(|(provider, _)| provider.id.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        let observed_endpoint_trust = configured_base_url.and_then(|_| {
+            let mut trusts = endpoint_matches
+                .iter()
+                .filter(|(provider, endpoint)| {
+                    id_match.is_none_or(|matched| matched.provider.id == provider.id)
+                        && candidate
+                            .protocol_hint
+                            .is_none_or(|protocol| endpoint.protocol == Some(protocol))
+                })
+                .map(|(_, endpoint)| endpoint.trust)
+                .collect::<Vec<_>>();
+            let first = trusts.pop()?;
+            trusts.iter().all(|trust| *trust == first).then_some(first)
+        });
+        let route_status = match configured_base_url {
+            Some(_) if endpoint_provider_ids.len() > 1 => ProviderRouteStatus::Ambiguous,
+            Some(_)
+                if let Some(id_match) = id_match
+                    && !endpoint_provider_ids.is_empty()
+                    && !endpoint_provider_ids.contains(id_match.provider.id.as_str()) =>
+            {
+                ProviderRouteStatus::ProviderMismatch
+            }
+            Some(_)
+                if observed_endpoint_trust.is_some()
+                    && endpoint_provider_ids.len() == 1
+                    && id_match.is_none_or(|id_match| {
+                        endpoint_provider_ids.contains(id_match.provider.id.as_str())
+                    }) =>
+            {
+                match observed_endpoint_trust {
+                    Some(ProviderEndpointTrust::VendorVerified) => ProviderRouteStatus::Official,
+                    Some(ProviderEndpointTrust::ModelsDev | ProviderEndpointTrust::Unverified)
+                    | None => ProviderRouteStatus::Unverified,
+                }
+            }
+            Some(_) if id_match.is_some_and(|matched| matched.provider.allows_custom_endpoints) => {
+                ProviderRouteStatus::Unverified
+            }
+            Some(_) if id_match.is_some() => ProviderRouteStatus::RelayCandidate,
+            Some(_) => ProviderRouteStatus::Custom,
+            None => ProviderRouteStatus::Unknown,
+        };
         let base_url = configured_base_url
             .map(str::to_string)
-            .or_else(|| endpoint.map(|endpoint| endpoint.base_url.clone()));
+            .or_else(|| endpoint.and_then(|endpoint| endpoint.base_url.clone()));
         let protocol = candidate
             .protocol_hint
-            .or_else(|| endpoint.map(|endpoint| endpoint.protocol));
+            .or_else(|| endpoint.and_then(|endpoint| endpoint.protocol));
         let base_url_source = configured_base_url
             .map(|_| ProviderFieldSource::Configured)
-            .or_else(|| endpoint.map(|_| ProviderFieldSource::Catalog));
+            .or_else(|| {
+                endpoint.and_then(|endpoint| {
+                    endpoint
+                        .base_url
+                        .as_ref()
+                        .map(|_| ProviderFieldSource::Catalog)
+                })
+            });
         let protocol_source = candidate
             .protocol_hint
             .map(|_| {
@@ -383,7 +573,49 @@ impl ProviderRegistry {
                     .protocol_source
                     .unwrap_or(ProviderFieldSource::Inferred)
             })
-            .or_else(|| endpoint.map(|_| ProviderFieldSource::Catalog));
+            .or_else(|| {
+                endpoint
+                    .and_then(|endpoint| endpoint.protocol.map(|_| ProviderFieldSource::Catalog))
+            });
+
+        let endpoint_trust = match route_status {
+            ProviderRouteStatus::Official => observed_endpoint_trust,
+            ProviderRouteStatus::Unverified => {
+                observed_endpoint_trust.or(Some(ProviderEndpointTrust::Unverified))
+            }
+            _ => None,
+        };
+        let route_reason = match route_status {
+            ProviderRouteStatus::Official => None,
+            ProviderRouteStatus::Unverified => Some(match observed_endpoint_trust {
+                Some(ProviderEndpointTrust::ModelsDev) => {
+                    "configured endpoint is cataloged from Models.dev but has not been vendor-verified"
+                        .to_string()
+                }
+                Some(ProviderEndpointTrust::Unverified) => {
+                    "configured endpoint is explicitly cataloged as unverified".to_string()
+                }
+                _ => "provider permits custom endpoints; the configured endpoint is not vendor-verified"
+                    .to_string(),
+            }),
+            ProviderRouteStatus::RelayCandidate => Some(
+                "provider is known but the configured endpoint is not an official catalog endpoint"
+                    .to_string(),
+            ),
+            ProviderRouteStatus::ProviderMismatch => Some(
+                "configured endpoint belongs to a different catalog provider than the configured provider id"
+                    .to_string(),
+            ),
+            ProviderRouteStatus::Custom => {
+                Some("configured endpoint is not present in the provider catalog".to_string())
+            }
+            ProviderRouteStatus::Ambiguous => {
+                Some("configured endpoint matches multiple catalog providers".to_string())
+            }
+            ProviderRouteStatus::Unknown => {
+                Some("no configured endpoint was observed; a catalog default is not route evidence".to_string())
+            }
+        };
 
         let resolution_reason = match resolution_status {
             ProviderResolutionStatus::Known => provider_match.and_then(|matched| {
@@ -424,6 +656,9 @@ impl ProviderRegistry {
             endpoint_variant: endpoint.map(|endpoint| endpoint.id.clone()),
             resolution_status,
             resolution_reason,
+            route_status,
+            route_reason,
+            endpoint_trust,
             account: None,
         }
     }
@@ -483,8 +718,125 @@ fn normalized_id(value: &str) -> String {
     value.trim().to_ascii_lowercase().replace('_', "-")
 }
 
-fn normalized_url(value: &str) -> String {
-    value.trim().trim_end_matches('/').to_ascii_lowercase()
+fn validate_catalog_url(value: &str) -> Result<(), String> {
+    let parsed = Url::parse(value.trim()).map_err(|error| error.to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("only HTTP(S) URLs are supported".to_string());
+    }
+    if parsed.scheme() == "http" && !is_loopback_host(&parsed) {
+        return Err("plain HTTP is only allowed for loopback endpoints".to_string());
+    }
+    normalized_url(&parsed).map(|_| ()).ok_or_else(|| {
+        "URL must not contain credentials, query parameters, or fragments".to_string()
+    })
+}
+
+fn validate_match_rule(rule: &ProviderEndpointMatchRule) -> Result<(), String> {
+    if rule.scheme != "https" {
+        return Err("dynamic endpoint rules must use HTTPS".to_string());
+    }
+    if rule.host.is_some() == rule.host_suffix.is_some() {
+        return Err("exactly one of host or hostSuffix is required".to_string());
+    }
+    if let Some(host) = rule.host.as_deref()
+        && (host.is_empty() || host != host.to_ascii_lowercase())
+    {
+        return Err("host must be a non-empty lowercase hostname".to_string());
+    }
+    if let Some(host) = rule.host.as_deref()
+        && Url::parse(&format!("https://{host}/"))
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_string))
+            .as_deref()
+            != Some(host)
+    {
+        return Err("host must be a valid hostname without a port".to_string());
+    }
+    if let Some(suffix) = rule.host_suffix.as_deref()
+        && (!suffix.starts_with('.')
+            || !suffix[1..].contains('.')
+            || suffix != suffix.to_ascii_lowercase())
+    {
+        return Err("hostSuffix must be a lowercase DNS suffix beginning with '.'".to_string());
+    }
+    for path in [rule.path_prefix.as_deref(), rule.path_suffix.as_deref()]
+        .into_iter()
+        .flatten()
+    {
+        if !path.starts_with('/')
+            || path.trim_end_matches('/').is_empty()
+            || path.contains('?')
+            || path.contains('#')
+        {
+            return Err(
+                "path constraints must be absolute paths without query or fragment".to_string(),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn endpoint_rule_matches(rule: &ProviderEndpointMatchRule, url: &Url) -> bool {
+    if normalized_url(url).is_none()
+        || url.scheme() != rule.scheme
+        || url.port_or_known_default() != Some(443)
+    {
+        return false;
+    }
+    let Some(host) = url.host_str().map(str::to_ascii_lowercase) else {
+        return false;
+    };
+    let host_matches = rule
+        .host
+        .as_deref()
+        .is_some_and(|expected| host == expected)
+        || rule
+            .host_suffix
+            .as_deref()
+            .is_some_and(|suffix| host.ends_with(suffix));
+    if !host_matches {
+        return false;
+    }
+    let path = url.path().trim_end_matches('/');
+    let prefix_matches = rule.path_prefix.as_deref().is_none_or(|prefix| {
+        let prefix = prefix.trim_end_matches('/');
+        path == prefix
+            || path
+                .strip_prefix(prefix)
+                .is_some_and(|remainder| remainder.starts_with('/'))
+    });
+    let suffix_matches = rule
+        .path_suffix
+        .as_deref()
+        .is_none_or(|suffix| path.ends_with(suffix.trim_end_matches('/')));
+    prefix_matches && suffix_matches
+}
+
+fn normalized_url(url: &Url) -> Option<String> {
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !matches!(url.scheme(), "http" | "https")
+    {
+        return None;
+    }
+    let host = url.host_str()?.to_ascii_lowercase();
+    let port = match (url.scheme(), url.port()) {
+        ("https", Some(443)) | ("http", Some(80)) | (_, None) => String::new(),
+        (_, Some(port)) => format!(":{port}"),
+    };
+    let path = url.path().trim_end_matches('/');
+    Some(format!("{}://{host}{port}{path}", url.scheme()))
+}
+
+fn is_loopback_host(url: &Url) -> bool {
+    url.host_str().is_some_and(|host| {
+        host.eq_ignore_ascii_case("localhost")
+            || host
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|address| address.is_loopback())
+    })
 }
 
 #[cfg(test)]
@@ -542,6 +894,7 @@ mod tests {
             provider.base_url_source,
             Some(ProviderFieldSource::Configured)
         );
+        assert_eq!(provider.route_status, ProviderRouteStatus::Official);
     }
 
     #[test]
@@ -561,5 +914,200 @@ mod tests {
             custom.base_url.as_deref(),
             Some("https://llm.example.test/v1")
         );
+        assert_eq!(custom.route_status, ProviderRouteStatus::Custom);
+    }
+
+    #[test]
+    fn marks_known_provider_with_non_catalog_endpoint_as_relay_candidate() {
+        let mut candidate = ProviderCandidate::new("opencode");
+        candidate.agent_provider_id = Some("openai".to_string());
+        candidate.configured_base_url = Some("https://relay.example.test/v1".to_string());
+        let provider = ProviderRegistry::builtin().resolve(candidate);
+
+        assert_eq!(provider.provider_id.as_deref(), Some("openai"));
+        assert_eq!(provider.resolution_status, ProviderResolutionStatus::Known);
+        assert_eq!(provider.route_status, ProviderRouteStatus::RelayCandidate);
+        assert_eq!(provider.endpoint_variant, None);
+    }
+
+    #[test]
+    fn recognizes_official_shared_base_url_without_protocol_hint() {
+        let mut candidate = ProviderCandidate::new("opencode");
+        candidate.agent_provider_id = Some("openai".to_string());
+        candidate.configured_base_url = Some("https://api.openai.com/v1".to_string());
+        let provider = ProviderRegistry::builtin().resolve(candidate);
+
+        assert_eq!(provider.provider_id.as_deref(), Some("openai"));
+        assert_eq!(provider.route_status, ProviderRouteStatus::Official);
+        assert_eq!(provider.endpoint_variant, None);
+    }
+
+    #[test]
+    fn marks_provider_id_and_official_endpoint_conflict() {
+        let mut candidate = ProviderCandidate::new("opencode");
+        candidate.agent_provider_id = Some("openai".to_string());
+        candidate.configured_base_url = Some("https://api.deepseek.com".to_string());
+        let provider = ProviderRegistry::builtin().resolve(candidate);
+
+        assert_eq!(provider.provider_id.as_deref(), Some("openai"));
+        assert_eq!(provider.route_status, ProviderRouteStatus::ProviderMismatch);
+        assert_eq!(provider.endpoint_variant, None);
+    }
+
+    #[test]
+    fn recognizes_official_endpoint_aliases() {
+        let matches =
+            ProviderRegistry::builtin().identify_by_endpoint("https://api.minimax.io/anthropic/v1");
+
+        assert!(matches.iter().any(|(provider, endpoint)| {
+            provider.id == "minimax" && endpoint.id == "global-anthropic"
+        }));
+    }
+
+    #[test]
+    fn catalog_default_without_an_observed_url_is_not_marked_official() {
+        let mut candidate = ProviderCandidate::new("opencode");
+        candidate.agent_provider_id = Some("openai".to_string());
+        let provider = ProviderRegistry::builtin().resolve(candidate);
+
+        assert_eq!(provider.route_status, ProviderRouteStatus::Unknown);
+        assert_eq!(provider.endpoint_trust, None);
+        assert_eq!(provider.base_url_source, Some(ProviderFieldSource::Catalog));
+    }
+
+    #[test]
+    fn recognizes_constrained_dynamic_vendor_endpoints() {
+        for (provider_id, base_url) in [
+            (
+                "databricks",
+                "https://acme.cloud.databricks.com/ai-gateway/mlflow/v1",
+            ),
+            (
+                "snowflake",
+                "https://acme-org.snowflakecomputing.com/api/v2/cortex/v1",
+            ),
+            (
+                "cloudflare-workers-ai",
+                "https://api.cloudflare.com/client/v4/accounts/account-id/ai/v1",
+            ),
+        ] {
+            let mut candidate = ProviderCandidate::new("opencode");
+            candidate.agent_provider_id = Some(provider_id.to_string());
+            candidate.configured_base_url = Some(base_url.to_string());
+            candidate.protocol_hint = Some(WireProtocol::ChatCompletions);
+            let provider = ProviderRegistry::builtin().resolve(candidate);
+
+            assert_eq!(
+                provider.route_status,
+                ProviderRouteStatus::Official,
+                "{provider_id} should recognize {base_url}"
+            );
+            assert_eq!(
+                provider.endpoint_trust,
+                Some(ProviderEndpointTrust::VendorVerified)
+            );
+        }
+    }
+
+    #[test]
+    fn dynamic_endpoint_rules_reject_deceptive_hosts_and_paths() {
+        for (provider_id, base_url) in [
+            (
+                "snowflake",
+                "https://acme.snowflakecomputing.com.evil.test/api/v2/cortex/v1",
+            ),
+            (
+                "snowflake",
+                "https://acme.snowflakecomputing.com/api/v2/cortex/v10",
+            ),
+            (
+                "snowflake",
+                "https://user@acme.snowflakecomputing.com/api/v2/cortex/v1",
+            ),
+            (
+                "databricks",
+                "https://acme.cloud.databricks.com:444/ai-gateway/mlflow/v1",
+            ),
+            (
+                "cloudflare-workers-ai",
+                "https://api.cloudflare.com.evil.test/client/v4/accounts/acct/ai/v1",
+            ),
+            (
+                "cloudflare-workers-ai",
+                "https://api.cloudflare.com/client/v4/accounts/acct/ai/v1?route=relay",
+            ),
+        ] {
+            let mut candidate = ProviderCandidate::new("opencode");
+            candidate.agent_provider_id = Some(provider_id.to_string());
+            candidate.configured_base_url = Some(base_url.to_string());
+            let provider = ProviderRegistry::builtin().resolve(candidate);
+
+            assert_eq!(provider.route_status, ProviderRouteStatus::RelayCandidate);
+            assert_eq!(provider.endpoint_trust, None);
+        }
+    }
+
+    #[test]
+    fn provider_declared_custom_endpoints_are_unverified_not_official() {
+        let mut candidate = ProviderCandidate::new("opencode");
+        candidate.agent_provider_id = Some("neon".to_string());
+        candidate.configured_base_url = Some("https://gateway.example.test/v1".to_string());
+        let provider = ProviderRegistry::builtin().resolve(candidate);
+
+        assert_eq!(provider.route_status, ProviderRouteStatus::Unverified);
+        assert_eq!(
+            provider.endpoint_trust,
+            Some(ProviderEndpointTrust::Unverified)
+        );
+    }
+
+    #[test]
+    fn credential_keys_exclude_non_secret_provider_configuration() {
+        let registry = ProviderRegistry::builtin();
+
+        assert_eq!(
+            registry.environment_keys("pi", "databricks"),
+            vec!["DATABRICKS_TOKEN"]
+        );
+        assert_eq!(
+            registry.configuration_keys("pi", "databricks"),
+            vec!["DATABRICKS_HOST"]
+        );
+        assert_eq!(
+            registry.environment_keys("pi", "neon"),
+            vec!["NEON_AI_GATEWAY_TOKEN"]
+        );
+        assert_eq!(
+            registry.configuration_keys("pi", "neon"),
+            vec!["NEON_AI_GATEWAY_BASE_URL"]
+        );
+    }
+
+    #[test]
+    fn catalog_covers_requested_mainstream_providers() {
+        let registry = ProviderRegistry::builtin();
+        for id in [
+            "deepseek",
+            "moonshotai",
+            "zai",
+            "minimax",
+            "volcengine",
+            "alibaba",
+            "tencent",
+            "baidu-qianfan",
+            "openrouter",
+            "opencode",
+            "xiaomi",
+            "siliconflow",
+            "modelscope",
+            "stepfun",
+            "github-models",
+            "cohere",
+            "perplexity",
+            "deepinfra",
+            "ollama",
+        ] {
+            assert!(registry.lookup(id).is_some(), "missing provider {id}");
+        }
     }
 }

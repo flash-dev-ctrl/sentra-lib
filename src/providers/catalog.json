@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "2026-07-10",
+  "revision": "2026-07-13",
   "providers": [
     {
       "id": "anthropic",
@@ -9,7 +9,7 @@
       "environmentKeys": ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"],
       "defaultEndpoint": "default",
       "endpoints": [
-        { "id": "default", "baseUrl": "https://api.anthropic.com", "protocol": "anthropic_messages" }
+        { "id": "default", "baseUrl": "https://api.anthropic.com", "trust": "vendor_verified", "protocol": "anthropic_messages" }
       ],
       "agentAliases": []
     },
@@ -20,11 +20,13 @@
       "environmentKeys": ["OPENAI_API_KEY"],
       "defaultEndpoint": "responses",
       "endpoints": [
-        { "id": "responses", "baseUrl": "https://api.openai.com/v1", "protocol": "responses" },
-        { "id": "chat-completions", "baseUrl": "https://api.openai.com/v1", "protocol": "chat_completions" }
+        { "id": "responses", "baseUrl": "https://api.openai.com/v1", "trust": "vendor_verified", "protocol": "responses" },
+        { "id": "chat-completions", "baseUrl": "https://api.openai.com/v1", "trust": "vendor_verified", "protocol": "chat_completions" },
+        { "id": "codex-account", "baseUrl": "https://chatgpt.com/backend-api", "trust": "vendor_verified", "protocol": "responses" }
       ],
       "agentAliases": [
         { "agent": "pi", "alias": "openai", "endpoint": "responses" },
+        { "agent": "pi", "alias": "openai-codex", "endpoint": "codex-account" },
         { "agent": "codex", "alias": "openai", "endpoint": "responses" },
         { "agent": "openclaw", "alias": "openai", "endpoint": "chat-completions" }
       ]
@@ -35,7 +37,10 @@
       "aliases": ["azure-openai-responses"],
       "environmentKeys": ["AZURE_OPENAI_API_KEY"],
       "endpoints": [],
-      "agentAliases": []
+      "agentAliases": [
+        { "agent": "opencode", "alias": "azure" },
+        { "agent": "opencode", "alias": "azure-cognitive-services" }
+      ]
     },
     {
       "id": "openrouter",
@@ -44,7 +49,7 @@
       "environmentKeys": ["OPENROUTER_API_KEY"],
       "defaultEndpoint": "openai",
       "endpoints": [
-        { "id": "openai", "baseUrl": "https://openrouter.ai/api/v1", "protocol": "chat_completions" }
+        { "id": "openai", "baseUrl": "https://openrouter.ai/api/v1", "trust": "vendor_verified", "protocol": "chat_completions" }
       ],
       "agentAliases": []
     },
@@ -55,8 +60,8 @@
       "environmentKeys": ["DEEPSEEK_API_KEY"],
       "defaultEndpoint": "openai",
       "endpoints": [
-        { "id": "openai", "baseUrl": "https://api.deepseek.com", "protocol": "chat_completions" },
-        { "id": "hermes-openai", "baseUrl": "https://api.deepseek.com/v1", "protocol": "chat_completions" }
+        { "id": "openai", "baseUrl": "https://api.deepseek.com", "trust": "vendor_verified", "protocol": "chat_completions" },
+        { "id": "hermes-openai", "baseUrl": "https://api.deepseek.com/v1", "trust": "vendor_verified", "protocol": "chat_completions" }
       ],
       "agentAliases": [
         { "agent": "hermes", "alias": "deepseek", "endpoint": "hermes-openai" }
@@ -69,7 +74,7 @@
       "environmentKeys": ["GROQ_API_KEY"],
       "defaultEndpoint": "openai",
       "endpoints": [
-        { "id": "openai", "baseUrl": "https://api.groq.com/openai/v1", "protocol": "chat_completions" }
+        { "id": "openai", "baseUrl": "https://api.groq.com/openai/v1", "trust": "vendor_verified", "protocol": "chat_completions" }
       ],
       "agentAliases": []
     },
@@ -80,11 +85,16 @@
       "environmentKeys": ["MINIMAX_API_KEY"],
       "defaultEndpoint": "global-anthropic",
       "endpoints": [
-        { "id": "global-anthropic", "baseUrl": "https://api.minimax.io/anthropic", "protocol": "anthropic_messages" },
-        { "id": "cn-anthropic", "baseUrl": "https://api.minimaxi.com/anthropic", "protocol": "anthropic_messages", "environmentKeys": ["MINIMAX_CN_API_KEY"] }
+        { "id": "global-anthropic", "baseUrl": "https://api.minimax.io/anthropic", "baseUrlAliases": ["https://api.minimax.io/anthropic/v1"], "trust": "vendor_verified", "protocol": "anthropic_messages" },
+        { "id": "global-openai", "baseUrl": "https://api.minimax.io/v1", "trust": "vendor_verified", "protocol": "chat_completions" },
+        { "id": "cn-anthropic", "baseUrl": "https://api.minimaxi.com/anthropic", "baseUrlAliases": ["https://api.minimaxi.com/anthropic/v1"], "trust": "vendor_verified", "protocol": "anthropic_messages", "environmentKeys": ["MINIMAX_CN_API_KEY"] },
+        { "id": "cn-openai", "baseUrl": "https://api.minimaxi.com/v1", "trust": "vendor_verified", "protocol": "chat_completions", "environmentKeys": ["MINIMAX_CN_API_KEY"] }
       ],
       "agentAliases": [
         { "agent": "pi", "alias": "minimax-cn", "endpoint": "cn-anthropic" },
+        { "agent": "opencode", "alias": "minimax-cn", "endpoint": "cn-anthropic" },
+        { "agent": "opencode", "alias": "minimax-coding-plan", "endpoint": "global-anthropic" },
+        { "agent": "opencode", "alias": "minimax-cn-coding-plan", "endpoint": "cn-anthropic" },
         { "agent": "openclaw", "alias": "minimax-cn", "endpoint": "cn-anthropic" },
         { "agent": "hermes", "alias": "minimax-cn", "endpoint": "cn-anthropic" }
       ]
@@ -96,7 +106,7 @@
       "environmentKeys": ["MISTRAL_API_KEY"],
       "defaultEndpoint": "openai",
       "endpoints": [
-        { "id": "openai", "baseUrl": "https://api.mistral.ai/v1", "protocol": "chat_completions" }
+        { "id": "openai", "baseUrl": "https://api.mistral.ai/v1", "baseUrlAliases": ["https://api.mistral.ai"], "trust": "vendor_verified", "protocol": "chat_completions" }
       ],
       "agentAliases": []
     },
@@ -107,7 +117,7 @@
       "environmentKeys": ["XAI_API_KEY"],
       "defaultEndpoint": "openai",
       "endpoints": [
-        { "id": "openai", "baseUrl": "https://api.x.ai/v1", "protocol": "chat_completions" }
+        { "id": "openai", "baseUrl": "https://api.x.ai/v1", "trust": "vendor_verified", "protocol": "chat_completions" }
       ],
       "agentAliases": []
     },
@@ -118,9 +128,9 @@
       "environmentKeys": ["OPENCODE_API_KEY"],
       "defaultEndpoint": "zen",
       "endpoints": [
-        { "id": "zen", "baseUrl": "https://opencode.ai/zen/v1", "protocol": "chat_completions" },
-        { "id": "go", "baseUrl": "https://opencode.ai/zen/go/v1", "protocol": "chat_completions" },
-        { "id": "go-anthropic", "baseUrl": "https://opencode.ai/zen/go", "protocol": "anthropic_messages" }
+        { "id": "zen", "baseUrl": "https://opencode.ai/zen/v1", "trust": "vendor_verified", "protocol": "chat_completions" },
+        { "id": "go", "baseUrl": "https://opencode.ai/zen/go/v1", "trust": "vendor_verified", "protocol": "chat_completions" },
+        { "id": "go-anthropic", "baseUrl": "https://opencode.ai/zen/go", "trust": "vendor_verified", "protocol": "anthropic_messages" }
       ],
       "agentAliases": [
         { "agent": "pi", "alias": "opencode-go", "endpoint": "go" },
@@ -138,7 +148,10 @@
       "displayName": "Google AI",
       "aliases": ["gemini"],
       "environmentKeys": ["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"],
-      "endpoints": [],
+      "defaultEndpoint": "generative-ai",
+      "endpoints": [
+        { "id": "generative-ai", "baseUrl": "https://generativelanguage.googleapis.com/v1beta", "trust": "vendor_verified" }
+      ],
       "agentAliases": []
     },
     {
@@ -146,7 +159,10 @@
       "displayName": "Cerebras",
       "aliases": [],
       "environmentKeys": ["CEREBRAS_API_KEY"],
-      "endpoints": [],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.cerebras.ai/v1", "trust": "vendor_verified", "protocol": "chat_completions" }
+      ],
       "agentAliases": []
     },
     {
@@ -156,7 +172,7 @@
       "environmentKeys": ["NVIDIA_API_KEY"],
       "defaultEndpoint": "nim",
       "endpoints": [
-        { "id": "nim", "baseUrl": "https://integrate.api.nvidia.com/v1", "protocol": "chat_completions" }
+        { "id": "nim", "baseUrl": "https://integrate.api.nvidia.com/v1", "trust": "vendor_verified", "protocol": "chat_completions" }
       ],
       "agentAliases": []
     },
@@ -165,25 +181,58 @@
       "displayName": "Cloudflare AI",
       "aliases": ["cloudflare-ai-gateway", "cloudflare-workers-ai"],
       "environmentKeys": ["CLOUDFLARE_API_KEY"],
-      "endpoints": [],
+      "configurationKeys": ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_GATEWAY_ID"],
+      "endpoints": [
+        {
+          "id": "workers-ai",
+          "trust": "vendor_verified",
+          "matchRules": [
+            { "host": "api.cloudflare.com", "pathPrefix": "/client/v4/accounts/", "pathSuffix": "/ai/v1" }
+          ],
+          "protocol": "chat_completions"
+        },
+        {
+          "id": "ai-gateway",
+          "trust": "vendor_verified",
+          "matchRules": [
+            { "host": "gateway.ai.cloudflare.com", "pathPrefix": "/v1/" }
+          ],
+          "protocol": "chat_completions"
+        }
+      ],
       "agentAliases": []
     },
     {
       "id": "vercel-ai-gateway",
       "displayName": "Vercel AI Gateway",
-      "aliases": [],
+      "aliases": ["vercel"],
       "environmentKeys": ["AI_GATEWAY_API_KEY"],
-      "endpoints": [],
+      "defaultEndpoint": "anthropic",
+      "endpoints": [
+        { "id": "anthropic", "baseUrl": "https://ai-gateway.vercel.sh", "protocol": "anthropic_messages" }
+      ],
       "agentAliases": []
     },
     {
       "id": "zai",
-      "displayName": "Z.AI",
-      "aliases": [],
-      "environmentKeys": ["ZAI_API_KEY"],
-      "endpoints": [],
+      "displayName": "Zhipu AI / Z.AI",
+      "aliases": ["zhipu", "zhipuai", "glm", "bigmodel"],
+      "environmentKeys": ["ZAI_API_KEY", "ZHIPU_API_KEY"],
+      "defaultEndpoint": "global",
+      "endpoints": [
+        { "id": "global", "baseUrl": "https://api.z.ai/api/paas/v4", "protocol": "chat_completions" },
+        { "id": "global-coding", "baseUrl": "https://api.z.ai/api/coding/paas/v4", "protocol": "chat_completions" },
+        { "id": "cn", "baseUrl": "https://open.bigmodel.cn/api/paas/v4", "protocol": "chat_completions", "environmentKeys": ["ZHIPU_API_KEY"] },
+        { "id": "cn-coding", "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4", "protocol": "chat_completions", "environmentKeys": ["ZAI_CODING_CN_API_KEY", "ZHIPU_API_KEY"] },
+        { "id": "cn-anthropic", "baseUrl": "https://open.bigmodel.cn/api/anthropic", "protocol": "anthropic_messages", "environmentKeys": ["ZHIPU_API_KEY"] }
+      ],
       "agentAliases": [
-        { "agent": "pi", "alias": "zai-coding-cn", "environmentKeys": ["ZAI_CODING_CN_API_KEY"] }
+        { "agent": "pi", "alias": "zai", "endpoint": "global-coding" },
+        { "agent": "pi", "alias": "zai-coding-cn", "endpoint": "cn-coding", "environmentKeys": ["ZAI_CODING_CN_API_KEY"] },
+        { "agent": "opencode", "alias": "zai", "endpoint": "global" },
+        { "agent": "opencode", "alias": "zai-coding-plan", "endpoint": "global-coding" },
+        { "agent": "opencode", "alias": "zhipuai", "endpoint": "cn" },
+        { "agent": "opencode", "alias": "zhipuai-coding-plan", "endpoint": "cn-coding" }
       ]
     },
     {
@@ -191,8 +240,648 @@
       "displayName": "Ant Ling",
       "aliases": [],
       "environmentKeys": ["ANT_LING_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.ant-ling.com/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "fireworks",
+      "displayName": "Fireworks AI",
+      "aliases": ["fireworks-ai"],
+      "environmentKeys": ["FIREWORKS_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.fireworks.ai/inference", "baseUrlAliases": ["https://api.fireworks.ai/inference/v1"], "protocol": "chat_completions" },
+        { "id": "anthropic", "baseUrl": "https://api.fireworks.ai/inference", "baseUrlAliases": ["https://api.fireworks.ai/inference/v1"], "protocol": "anthropic_messages" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "together",
+      "displayName": "Together AI",
+      "aliases": ["togetherai"],
+      "environmentKeys": ["TOGETHER_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.together.ai/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "huggingface",
+      "displayName": "Hugging Face",
+      "aliases": ["hugging-face"],
+      "environmentKeys": ["HF_TOKEN", "HUGGINGFACE_API_KEY"],
+      "defaultEndpoint": "router",
+      "endpoints": [
+        { "id": "router", "baseUrl": "https://router.huggingface.co/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "moonshotai",
+      "displayName": "Moonshot AI / Kimi",
+      "aliases": ["moonshot", "kimi"],
+      "environmentKeys": ["MOONSHOT_API_KEY", "KIMI_API_KEY"],
+      "defaultEndpoint": "global",
+      "endpoints": [
+        { "id": "global", "baseUrl": "https://api.moonshot.ai/v1", "protocol": "chat_completions" },
+        { "id": "cn", "baseUrl": "https://api.moonshot.cn/v1", "protocol": "chat_completions" },
+        { "id": "kimi-coding", "baseUrl": "https://api.kimi.com/coding", "baseUrlAliases": ["https://api.kimi.com/coding/v1"], "protocol": "anthropic_messages", "environmentKeys": ["KIMI_API_KEY"] }
+      ],
+      "agentAliases": [
+        { "agent": "pi", "alias": "moonshotai-cn", "endpoint": "cn" },
+        { "agent": "pi", "alias": "kimi-coding", "endpoint": "kimi-coding" },
+        { "agent": "opencode", "alias": "moonshotai-cn", "endpoint": "cn" },
+        { "agent": "opencode", "alias": "kimi-for-coding", "endpoint": "kimi-coding" }
+      ]
+    },
+    {
+      "id": "xiaomi",
+      "displayName": "Xiaomi MiMo",
+      "aliases": ["mimo", "xiaomi-mimo"],
+      "environmentKeys": ["XIAOMI_API_KEY"],
+      "defaultEndpoint": "api",
+      "endpoints": [
+        { "id": "api", "baseUrl": "https://api.xiaomimimo.com/v1", "protocol": "chat_completions" },
+        { "id": "token-plan-cn", "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1", "protocol": "chat_completions", "environmentKeys": ["XIAOMI_TOKEN_PLAN_CN_API_KEY"] },
+        { "id": "token-plan-ams", "baseUrl": "https://token-plan-ams.xiaomimimo.com/v1", "protocol": "chat_completions", "environmentKeys": ["XIAOMI_TOKEN_PLAN_AMS_API_KEY"] },
+        { "id": "token-plan-sgp", "baseUrl": "https://token-plan-sgp.xiaomimimo.com/v1", "protocol": "chat_completions", "environmentKeys": ["XIAOMI_TOKEN_PLAN_SGP_API_KEY"] }
+      ],
+      "agentAliases": [
+        { "agent": "pi", "alias": "xiaomi-token-plan-cn", "endpoint": "token-plan-cn" },
+        { "agent": "pi", "alias": "xiaomi-token-plan-ams", "endpoint": "token-plan-ams" },
+        { "agent": "pi", "alias": "xiaomi-token-plan-sgp", "endpoint": "token-plan-sgp" },
+        { "agent": "opencode", "alias": "xiaomi-token-plan-cn", "endpoint": "token-plan-cn" },
+        { "agent": "opencode", "alias": "xiaomi-token-plan-ams", "endpoint": "token-plan-ams" },
+        { "agent": "opencode", "alias": "xiaomi-token-plan-sgp", "endpoint": "token-plan-sgp" }
+      ]
+    },
+    {
+      "id": "alibaba",
+      "displayName": "Alibaba Cloud Model Studio / Bailian",
+      "aliases": ["bailian", "dashscope", "alibaba-cloud"],
+      "environmentKeys": ["DASHSCOPE_API_KEY"],
+      "defaultEndpoint": "cn-openai",
+      "endpoints": [
+        { "id": "cn-openai", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1", "protocol": "chat_completions" },
+        { "id": "cn-anthropic", "baseUrl": "https://dashscope.aliyuncs.com/apps/anthropic", "protocol": "anthropic_messages" },
+        { "id": "global-openai", "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "protocol": "chat_completions" },
+        { "id": "coding-cn-openai", "baseUrl": "https://coding.dashscope.aliyuncs.com/v1", "protocol": "chat_completions", "environmentKeys": ["ALIBABA_CODING_PLAN_API_KEY"] },
+        { "id": "coding-cn-anthropic", "baseUrl": "https://coding.dashscope.aliyuncs.com/apps/anthropic", "protocol": "anthropic_messages", "environmentKeys": ["ALIBABA_CODING_PLAN_API_KEY"] },
+        { "id": "coding-global-openai", "baseUrl": "https://coding-intl.dashscope.aliyuncs.com/v1", "protocol": "chat_completions", "environmentKeys": ["ALIBABA_CODING_PLAN_API_KEY"] },
+        { "id": "token-plan-cn-openai", "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", "protocol": "chat_completions", "environmentKeys": ["ALIBABA_TOKEN_PLAN_API_KEY"] },
+        { "id": "token-plan-cn-anthropic", "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic", "protocol": "anthropic_messages", "environmentKeys": ["ALIBABA_TOKEN_PLAN_API_KEY"] },
+        { "id": "token-plan-global-openai", "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1", "protocol": "chat_completions", "environmentKeys": ["ALIBABA_TOKEN_PLAN_API_KEY"] }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "alibaba", "endpoint": "global-openai" },
+        { "agent": "opencode", "alias": "alibaba-cn", "endpoint": "cn-openai" },
+        { "agent": "opencode", "alias": "alibaba-coding-plan-cn", "endpoint": "coding-cn-openai" },
+        { "agent": "opencode", "alias": "alibaba-coding-plan", "endpoint": "coding-global-openai" },
+        { "agent": "opencode", "alias": "alibaba-token-plan-cn", "endpoint": "token-plan-cn-openai" },
+        { "agent": "opencode", "alias": "alibaba-token-plan", "endpoint": "token-plan-global-openai" }
+      ]
+    },
+    {
+      "id": "tencent",
+      "displayName": "Tencent Hunyuan / Tencent MaaS",
+      "aliases": ["hunyuan", "tencent-hunyuan", "tencent-cloud"],
+      "environmentKeys": ["HUNYUAN_API_KEY"],
+      "defaultEndpoint": "hunyuan-openai",
+      "endpoints": [
+        { "id": "hunyuan-openai", "baseUrl": "https://api.hunyuan.cloud.tencent.com/v1", "protocol": "chat_completions" },
+        { "id": "coding-plan", "baseUrl": "https://api.lkeap.cloud.tencent.com/coding/v3", "protocol": "chat_completions", "environmentKeys": ["TENCENT_CODING_PLAN_API_KEY"] },
+        { "id": "token-plan", "baseUrl": "https://api.lkeap.cloud.tencent.com/plan/v3", "protocol": "chat_completions", "environmentKeys": ["TENCENT_TOKEN_PLAN_API_KEY"] },
+        { "id": "tokenhub", "baseUrl": "https://tokenhub.tencentmaas.com/v1", "protocol": "chat_completions", "environmentKeys": ["TENCENT_TOKENHUB_API_KEY"] }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "tencent-coding-plan", "endpoint": "coding-plan" },
+        { "agent": "opencode", "alias": "tencent-token-plan", "endpoint": "token-plan" },
+        { "agent": "opencode", "alias": "tencent-tokenhub", "endpoint": "tokenhub" }
+      ]
+    },
+    {
+      "id": "baidu-qianfan",
+      "displayName": "Baidu AI Cloud Qianfan",
+      "aliases": ["baidu", "qianfan", "wenxin"],
+      "environmentKeys": ["QIANFAN_API_KEY", "BAIDU_API_KEY"],
+      "defaultEndpoint": "chat-completions",
+      "endpoints": [
+        { "id": "chat-completions", "baseUrl": "https://qianfan.baidubce.com/v2", "protocol": "chat_completions" },
+        { "id": "responses", "baseUrl": "https://qianfan.baidubce.com/v2", "protocol": "responses" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "volcengine",
+      "displayName": "Volcengine Ark",
+      "aliases": ["ark", "doubao", "volcano-engine"],
+      "environmentKeys": ["ARK_API_KEY", "VOLCENGINE_API_KEY"],
+      "defaultEndpoint": "cn-openai",
+      "endpoints": [
+        { "id": "cn-openai", "baseUrl": "https://ark.cn-beijing.volces.com/api/v3", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "github-copilot",
+      "displayName": "GitHub Copilot",
+      "aliases": ["copilot"],
+      "environmentKeys": ["COPILOT_GITHUB_TOKEN"],
+      "defaultEndpoint": "individual",
+      "endpoints": [
+        { "id": "individual", "baseUrl": "https://api.individual.githubcopilot.com", "baseUrlAliases": ["https://api.githubcopilot.com"] }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "amazon-bedrock",
+      "displayName": "Amazon Bedrock",
+      "aliases": ["bedrock", "aws-bedrock"],
+      "environmentKeys": ["AWS_BEARER_TOKEN_BEDROCK"],
+      "configurationKeys": ["AWS_PROFILE", "AWS_ACCESS_KEY_ID"],
+      "endpoints": [
+        { "id": "nova-api", "baseUrl": "https://api.nova.amazon.com/v1", "protocol": "chat_completions", "environmentKeys": ["NOVA_API_KEY"] }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "nova", "endpoint": "nova-api", "environmentKeys": ["NOVA_API_KEY"] }
+      ]
+    },
+    {
+      "id": "google-vertex",
+      "displayName": "Google Vertex AI",
+      "aliases": ["vertex", "vertex-ai", "google-vertex-anthropic"],
+      "environmentKeys": ["GOOGLE_CLOUD_API_KEY"],
+      "configurationKeys": ["GOOGLE_APPLICATION_CREDENTIALS"],
       "endpoints": [],
       "agentAliases": []
-    }
+    },
+    {
+      "id": "siliconflow",
+      "displayName": "SiliconFlow",
+      "aliases": ["silicon-flow"],
+      "environmentKeys": ["SILICONFLOW_API_KEY"],
+      "defaultEndpoint": "global",
+      "endpoints": [
+        { "id": "global", "baseUrl": "https://api.siliconflow.com/v1", "protocol": "chat_completions" },
+        { "id": "cn", "baseUrl": "https://api.siliconflow.cn/v1", "protocol": "chat_completions", "environmentKeys": ["SILICONFLOW_CN_API_KEY"] }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "siliconflow-cn", "endpoint": "cn" }
+      ]
+    },
+    {
+      "id": "modelscope",
+      "displayName": "ModelScope",
+      "aliases": ["model-scope"],
+      "environmentKeys": ["MODELSCOPE_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api-inference.modelscope.cn/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "stepfun",
+      "displayName": "StepFun",
+      "aliases": ["step-ai", "stepfun-ai"],
+      "environmentKeys": ["STEPFUN_API_KEY"],
+      "defaultEndpoint": "api",
+      "endpoints": [
+        { "id": "api", "baseUrl": "https://api.stepfun.com/v1", "protocol": "chat_completions" },
+        { "id": "step-plan", "baseUrl": "https://api.stepfun.ai/step_plan/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "stepfun-ai", "endpoint": "step-plan" }
+      ]
+    },
+    {
+      "id": "qiniu-ai",
+      "displayName": "Qiniu AI",
+      "aliases": ["qiniu"],
+      "environmentKeys": ["QINIU_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.qnaigc.com/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "iflow",
+      "displayName": "iFlow",
+      "aliases": ["iflowcn"],
+      "environmentKeys": ["IFLOW_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://apis.iflow.cn/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "longcat",
+      "displayName": "LongCat",
+      "aliases": ["long-cat"],
+      "environmentKeys": ["LONGCAT_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.longcat.chat/openai", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "bailing",
+      "displayName": "Bailing",
+      "aliases": ["ant-bailing"],
+      "environmentKeys": ["BAILING_API_TOKEN"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.tbox.cn/api/llm/v1/chat/completions", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "qihang-ai",
+      "displayName": "QiHang AI",
+      "aliases": ["qihang"],
+      "environmentKeys": ["QIHANG_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.qhaigc.net/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "drun",
+      "displayName": "D.Run",
+      "aliases": ["d-run"],
+      "environmentKeys": ["DRUN_API_KEY"],
+      "defaultEndpoint": "cn-openai",
+      "endpoints": [
+        { "id": "cn-openai", "baseUrl": "https://chat.d.run/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "kuae-cloud",
+      "displayName": "KUAE Cloud",
+      "aliases": ["kuae"],
+      "environmentKeys": ["KUAE_API_KEY"],
+      "defaultEndpoint": "coding-plan",
+      "endpoints": [
+        { "id": "coding-plan", "baseUrl": "https://coding-plan-endpoint.kuaecloud.net/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "kuae-cloud-coding-plan", "endpoint": "coding-plan" }
+      ]
+    },
+    {
+      "id": "302ai",
+      "displayName": "302.AI",
+      "aliases": ["302-ai"],
+      "environmentKeys": ["302AI_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.302.ai/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "github-models",
+      "displayName": "GitHub Models",
+      "aliases": [],
+      "environmentKeys": ["GITHUB_TOKEN"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://models.github.ai/inference", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "cohere",
+      "displayName": "Cohere",
+      "aliases": [],
+      "environmentKeys": ["COHERE_API_KEY"],
+      "defaultEndpoint": "v2",
+      "endpoints": [
+        { "id": "v2", "baseUrl": "https://api.cohere.com/v2" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "perplexity",
+      "displayName": "Perplexity",
+      "aliases": ["perplexity-ai"],
+      "environmentKeys": ["PERPLEXITY_API_KEY"],
+      "defaultEndpoint": "api",
+      "endpoints": [
+        { "id": "api", "baseUrl": "https://api.perplexity.ai", "protocol": "chat_completions" },
+        { "id": "agent", "baseUrl": "https://api.perplexity.ai/v1", "protocol": "responses" }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "perplexity-agent", "endpoint": "agent" }
+      ]
+    },
+    {
+      "id": "deepinfra",
+      "displayName": "DeepInfra",
+      "aliases": ["deep-infra"],
+      "environmentKeys": ["DEEPINFRA_API_KEY", "DEEPINFRA_TOKEN"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.deepinfra.com/v1/openai", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "lmstudio",
+      "displayName": "LM Studio",
+      "aliases": ["lm-studio"],
+      "environmentKeys": ["LMSTUDIO_API_KEY"],
+      "defaultEndpoint": "local-openai",
+      "endpoints": [
+        { "id": "local-openai", "baseUrl": "http://127.0.0.1:1234/v1", "baseUrlAliases": ["http://localhost:1234/v1"], "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "ollama",
+      "displayName": "Ollama",
+      "aliases": [],
+      "environmentKeys": ["OLLAMA_API_KEY"],
+      "defaultEndpoint": "local-openai",
+      "endpoints": [
+        { "id": "local-openai", "baseUrl": "http://localhost:11434/v1", "baseUrlAliases": ["http://127.0.0.1:11434/v1"], "protocol": "chat_completions" },
+        { "id": "cloud", "baseUrl": "https://ollama.com/v1", "protocol": "chat_completions", "environmentKeys": ["OLLAMA_API_KEY"] }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "ollama-cloud", "endpoint": "cloud" }
+      ]
+    },
+    {
+      "id": "baseten",
+      "displayName": "Baseten",
+      "aliases": [],
+      "environmentKeys": ["BASETEN_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://inference.baseten.co/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "clarifai",
+      "displayName": "Clarifai",
+      "aliases": [],
+      "environmentKeys": ["CLARIFAI_PAT"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.clarifai.com/v2/ext/openai/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "digitalocean",
+      "displayName": "DigitalOcean Gradient AI",
+      "aliases": ["digital-ocean"],
+      "environmentKeys": ["DIGITALOCEAN_ACCESS_TOKEN"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://inference.do-ai.run/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "nebius",
+      "displayName": "Nebius Token Factory",
+      "aliases": ["nebius-token-factory"],
+      "environmentKeys": ["NEBIUS_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.tokenfactory.nebius.com/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "novita-ai",
+      "displayName": "Novita AI",
+      "aliases": ["novita"],
+      "environmentKeys": ["NOVITA_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.novita.ai/openai", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "requesty",
+      "displayName": "Requesty",
+      "aliases": [],
+      "environmentKeys": ["REQUESTY_API_KEY"],
+      "defaultEndpoint": "router",
+      "endpoints": [
+        { "id": "router", "baseUrl": "https://router.requesty.ai/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "venice",
+      "displayName": "Venice AI",
+      "aliases": ["venice-ai"],
+      "environmentKeys": ["VENICE_API_KEY"],
+      "endpoints": [],
+      "agentAliases": []
+    },
+    {
+      "id": "poe",
+      "displayName": "Poe",
+      "aliases": [],
+      "environmentKeys": ["POE_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.poe.com/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "meta",
+      "displayName": "Meta AI",
+      "aliases": [],
+      "environmentKeys": ["META_MODEL_API_KEY"],
+      "defaultEndpoint": "api",
+      "endpoints": [
+        { "id": "api", "baseUrl": "https://api.meta.ai/v1" },
+        { "id": "llama-api", "baseUrl": "https://api.llama.com/compat/v1", "protocol": "chat_completions", "environmentKeys": ["LLAMA_API_KEY"] }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "llama", "endpoint": "llama-api", "environmentKeys": ["LLAMA_API_KEY"] }
+      ]
+    },
+    {
+      "id": "databricks",
+      "displayName": "Databricks",
+      "aliases": [],
+      "environmentKeys": ["DATABRICKS_TOKEN"],
+      "configurationKeys": ["DATABRICKS_HOST"],
+      "endpoints": [
+        {
+          "id": "ai-gateway",
+          "trust": "vendor_verified",
+          "matchRules": [
+            { "hostSuffix": ".cloud.databricks.com", "pathPrefix": "/ai-gateway/mlflow/v1" },
+            { "hostSuffix": ".azuredatabricks.net", "pathPrefix": "/ai-gateway/mlflow/v1" },
+            { "hostSuffix": ".gcp.databricks.com", "pathPrefix": "/ai-gateway/mlflow/v1" }
+          ],
+          "protocol": "chat_completions"
+        }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "snowflake-cortex",
+      "displayName": "Snowflake Cortex",
+      "aliases": ["snowflake"],
+      "environmentKeys": ["SNOWFLAKE_CORTEX_PAT"],
+      "configurationKeys": ["SNOWFLAKE_ACCOUNT"],
+      "endpoints": [
+        {
+          "id": "cortex",
+          "trust": "vendor_verified",
+          "matchRules": [
+            { "hostSuffix": ".snowflakecomputing.com", "pathPrefix": "/api/v2/cortex/v1" }
+          ],
+          "protocol": "chat_completions"
+        }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "gitlab",
+      "displayName": "GitLab Duo",
+      "aliases": ["gitlab-duo"],
+      "environmentKeys": ["GITLAB_TOKEN"],
+      "endpoints": [],
+      "agentAliases": []
+    },
+    {
+      "id": "aihubmix",
+      "displayName": "AIHubMix",
+      "aliases": ["ai-hub-mix"],
+      "environmentKeys": ["AIHUBMIX_API_KEY"],
+      "endpoints": [],
+      "agentAliases": []
+    },
+    {
+      "id": "zenmux",
+      "displayName": "ZenMux",
+      "aliases": [],
+      "environmentKeys": ["ZENMUX_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://zenmux.ai/api/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "vivgrid",
+      "displayName": "Vivgrid",
+      "aliases": [],
+      "environmentKeys": ["VIVGRID_API_KEY"],
+      "defaultEndpoint": "openai",
+      "endpoints": [
+        { "id": "openai", "baseUrl": "https://api.vivgrid.com/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": []
+    },
+    {
+      "id": "umans-ai",
+      "displayName": "Umans AI",
+      "aliases": ["umans"],
+      "environmentKeys": ["UMANS_AI_API_KEY"],
+      "defaultEndpoint": "coding",
+      "endpoints": [
+        { "id": "coding", "baseUrl": "https://api.code.umans.ai/v1", "protocol": "chat_completions" }
+      ],
+      "agentAliases": [
+        { "agent": "opencode", "alias": "umans-ai-coding-plan", "endpoint": "coding", "environmentKeys": ["UMANS_AI_CODING_PLAN_API_KEY"] }
+      ]
+    },
+{"id":"regolo-ai","displayName":"Regolo AI","aliases":[],"environmentKeys":["REGOLO_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.regolo.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"stackit","displayName":"STACKIT","aliases":[],"environmentKeys":["STACKIT_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.openai-compat.model-serving.eu01.onstackit.cloud/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"submodel","displayName":"submodel","aliases":[],"environmentKeys":["SUBMODEL_INSTAGEN_ACCESS_KEY"],"endpoints":[{"id":"api","baseUrl":"https://llm.submodel.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"privatemode-ai","displayName":"Privatemode AI","aliases":[],"environmentKeys":["PRIVATEMODE_API_KEY"],"configurationKeys":["PRIVATEMODE_ENDPOINT"],"endpoints":[{"id":"api","baseUrl":"http://localhost:8080/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"vultr","displayName":"Vultr","aliases":[],"environmentKeys":["VULTR_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.vultrinference.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"trustedrouter","displayName":"TrustedRouter","aliases":[],"environmentKeys":["TRUSTEDROUTER_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.trustedrouter.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"cortecs","displayName":"Cortecs","aliases":[],"environmentKeys":["CORTECS_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.cortecs.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"auriko","displayName":"Auriko","aliases":[],"environmentKeys":["AURIKO_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.auriko.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"tinfoil","displayName":"Tinfoil","aliases":[],"environmentKeys":["TINFOIL_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://inference.tinfoil.sh/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"anyapi","displayName":"AnyAPI","aliases":[],"environmentKeys":["ANYAPI_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.anyapi.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"subconscious","displayName":"Subconscious","aliases":[],"environmentKeys":["SUBCONSCIOUS_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.subconscious.dev/v1","protocol":"anthropic_messages"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"crossmodel","displayName":"CrossModel","aliases":[],"environmentKeys":["CROSSMODEL_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.crossmodel.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"poolside","displayName":"Poolside","aliases":[],"environmentKeys":["POOLSIDE_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://inference.poolside.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"zenifra","displayName":"Zenifra","aliases":[],"environmentKeys":["ZENIFRA_AI_KEY"],"endpoints":[{"id":"api","baseUrl":"https://ai.zenifra.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"kenari","displayName":"Kenari","aliases":[],"environmentKeys":["KENARI_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://kenari.id/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"model-oracle-ai","displayName":"Model Oracle AI","aliases":[],"environmentKeys":["MODEL_ORACLE_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.modeloracle.com/api/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"berget","displayName":"Berget.AI","aliases":[],"environmentKeys":["BERGET_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.berget.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"neuralwatt","displayName":"Neuralwatt","aliases":[],"environmentKeys":["NEURALWATT_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.neuralwatt.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"merge-gateway","displayName":"Merge Gateway","aliases":[],"environmentKeys":["MERGE_GATEWAY_API_KEY"],"endpoints":[],"agentAliases":[]},
+    {"id":"mixlayer","displayName":"Mixlayer","aliases":[],"environmentKeys":["MIXLAYER_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://models.mixlayer.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"orcarouter","displayName":"OrcaRouter","aliases":[],"environmentKeys":["ORCAROUTER_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.orcarouter.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"helicone","displayName":"Helicone","aliases":[],"environmentKeys":["HELICONE_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://ai-gateway.helicone.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"nearai","displayName":"NEAR AI Cloud","aliases":[],"environmentKeys":["NEARAI_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://cloud-api.near.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"pioneer","displayName":"Pioneer","aliases":[],"environmentKeys":["PIONEER_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.pioneer.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"llmgateway","displayName":"LLM Gateway","aliases":[],"environmentKeys":["LLMGATEWAY_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.llmgateway.io/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"abacus","displayName":"Abacus","aliases":[],"environmentKeys":["ABACUS_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://routellm.abacus.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"cloudferro-sherlock","displayName":"CloudFerro Sherlock","aliases":[],"environmentKeys":["CLOUDFERRO_SHERLOCK_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api-sherlock.cloudferro.com/openai/v1/","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"morph","displayName":"Morph","aliases":[],"environmentKeys":["MORPH_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.morphllm.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"sakana","displayName":"Sakana AI","aliases":[],"environmentKeys":["SAKANA_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.sakana.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"v0","displayName":"v0","aliases":[],"environmentKeys":["V0_API_KEY"],"endpoints":[],"agentAliases":[]},
+    {"id":"evroc","displayName":"evroc","aliases":[],"environmentKeys":["EVROC_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://models.think.evroc.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"inception","displayName":"Inception","aliases":[],"environmentKeys":["INCEPTION_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.inceptionlabs.ai/v1/","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"freemodel","displayName":"FreeModel","aliases":[],"environmentKeys":["FREEMODEL_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://cc.freemodel.dev/v1","protocol":"anthropic_messages"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"sap-ai-core","displayName":"SAP AI Core","aliases":[],"environmentKeys":["AICORE_SERVICE_KEY"],"endpoints":[],"agentAliases":[]},
+    {"id":"inference","displayName":"Inference","aliases":[],"environmentKeys":["INFERENCE_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://inference.net/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"inceptron","displayName":"Inceptron","aliases":[],"environmentKeys":["INCEPTRON_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.inceptron.io/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"llmtr","displayName":"LLMTR","aliases":[],"environmentKeys":["LLMTR_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://llmtr.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"sarvam","displayName":"Sarvam AI","aliases":[],"environmentKeys":["SARVAM_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.sarvam.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"hpc-ai","displayName":"HPC-AI","aliases":[],"environmentKeys":["HPC_AI_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.hpc-ai.com/inference/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"unorouter","displayName":"UnoRouter","aliases":[],"environmentKeys":["UNOROUTER_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.unorouter.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"dinference","displayName":"DInference","aliases":[],"environmentKeys":["DINFERENCE_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.dinference.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"io-net","displayName":"IO.NET","aliases":[],"environmentKeys":["IOINTELLIGENCE_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.intelligence.io.solutions/api/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"gmicloud","displayName":"GMI Cloud","aliases":[],"environmentKeys":["GMICLOUD_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.gmi-serving.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"zeldoc","displayName":"Zeldoc","aliases":[],"environmentKeys":["ZELDOC_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.zeldoc.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"scaleway","displayName":"Scaleway","aliases":[],"environmentKeys":["SCALEWAY_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.scaleway.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"empiriolabs","displayName":"EmpirioLabs AI","aliases":[],"environmentKeys":["EMPIRIOLABS_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.empiriolabs.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"ovhcloud","displayName":"OVHcloud AI Endpoints","aliases":[],"environmentKeys":["OVHCLOUD_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://oai.endpoints.kepler.ai.cloud.ovh.net/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"friendli","displayName":"Friendli","aliases":[],"environmentKeys":["FRIENDLI_TOKEN"],"endpoints":[{"id":"api","baseUrl":"https://api.friendli.ai/serverless/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"wandb","displayName":"Weights & Biases","aliases":[],"environmentKeys":["WANDB_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.inference.wandb.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"kilo","displayName":"Kilo Gateway","aliases":[],"environmentKeys":["KILO_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.kilo.ai/api/gateway","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"lucidquery","displayName":"LucidQuery","aliases":[],"environmentKeys":["LUCIDQUERY_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.lucidquery.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"meganova","displayName":"Meganova","aliases":[],"environmentKeys":["MEGANOVA_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.meganova.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"inferx","displayName":"InferX","aliases":[],"environmentKeys":["INFERX_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://model.inferx.net/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"frogbot","displayName":"FrogBot","aliases":[],"environmentKeys":["FROGBOT_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://app.frogbot.ai/api/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"jiekou","displayName":"Jiekou.AI","aliases":[],"environmentKeys":["JIEKOU_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.jiekou.ai/openai","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"crof","displayName":"CrofAI","aliases":[],"environmentKeys":["CROF_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://crof.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"fastrouter","displayName":"FastRouter","aliases":[],"environmentKeys":["FASTROUTER_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://go.fastrouter.ai/api/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"abliteration-ai","displayName":"abliteration.ai","aliases":[],"environmentKeys":["ABLIT_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.abliteration.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"xpersona","displayName":"Xpersona","aliases":[],"environmentKeys":["XPERSONA_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://www.xpersona.co/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"atomic-chat","displayName":"Atomic Chat","aliases":[],"environmentKeys":["ATOMIC_CHAT_API_KEY"],"endpoints":[{"id":"api","baseUrl":"http://127.0.0.1:1337/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"routing-run","displayName":"routing.run","aliases":[],"environmentKeys":["ROUTING_RUN_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.routing.run/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"nano-gpt","displayName":"NanoGPT","aliases":[],"environmentKeys":["NANO_GPT_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://nano-gpt.com/api/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"moark","displayName":"Moark","aliases":[],"environmentKeys":["MOARK_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://moark.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"lilac","displayName":"Lilac","aliases":[],"environmentKeys":["LILAC_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.getlilac.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"ambient","displayName":"Ambient","aliases":[],"environmentKeys":["AMBIENT_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.ambient.xyz/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"neon","displayName":"Neon","aliases":[],"environmentKeys":["NEON_AI_GATEWAY_TOKEN"],"configurationKeys":["NEON_AI_GATEWAY_BASE_URL"],"allowsCustomEndpoints":true,"endpoints":[],"agentAliases":[]},
+    {"id":"upstage","displayName":"Upstage","aliases":[],"environmentKeys":["UPSTAGE_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.upstage.ai/v1/solar","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"chutes","displayName":"Chutes","aliases":[],"environmentKeys":["CHUTES_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://llm.chutes.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"wafer.ai","displayName":"Wafer","aliases":[],"environmentKeys":["WAFER_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://pass.wafer.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"the-grid-ai","displayName":"The Grid AI","aliases":[],"environmentKeys":["THEGRIDAI_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.thegrid.ai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"synthetic","displayName":"Synthetic","aliases":[],"environmentKeys":["SYNTHETIC_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.synthetic.new/openai/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"claudinio","displayName":"Claudinio","aliases":[],"environmentKeys":["CLAUDINIO_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.claudin.io/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"daoxe","displayName":"DaoXE","aliases":[],"environmentKeys":["DAOXE_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://daoxe.com/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"ai-router","displayName":"AI-ROUTER","aliases":[],"environmentKeys":["AI_ROUTER_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://api.ai-router.dev/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"},
+    {"id":"blueclaw","displayName":"Blue Claw","aliases":[],"environmentKeys":["BLUECLAW_API_KEY"],"endpoints":[{"id":"api","baseUrl":"https://openai.blueclaw.network/v1","protocol":"chat_completions"}],"agentAliases":[],"defaultEndpoint":"api"}
   ]
 }

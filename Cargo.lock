@@ -3140,6 +3140,7 @@ dependencies = [
  "tokio",
  "toml",
  "ureq",
+ "url",
  "walkdir",
  "yara-x",
  "zip 2.4.2",
