@@ -1,6 +1,7 @@
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 
+use fs4::FileExt;
 use sha2::{Digest, Sha256};
 
 use crate::config::{sentra_hash_rule_dir, sentra_home, sentra_ti_rule_dir, sentra_yara_rule_dir};
@@ -10,6 +11,7 @@ use super::{RuleDirectoryConfig, RuleStore};
 
 const BUNDLED_RULES_ZIP: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/bundled-rules.zip"));
 const VERSION_FILE_NAME: &str = ".bundled-rules-version";
+const LOCK_FILE_NAME: &str = ".bundled-rules.lock";
 
 /// Ensure bundled risk rules are released into the default Sentra rule store.
 ///
@@ -20,6 +22,18 @@ pub fn ensure_bundled_rules(home: impl AsRef<Path>) -> SentraResult<RuleDirector
     let config = bundled_rule_directory_config(home);
     let version = bundled_rules_version();
     let version_path = bundled_rules_version_file(home);
+    let sentra_dir = sentra_home(home);
+    fs::create_dir_all(&sentra_dir)
+        .map_err(|err| SentraError::io(Some(sentra_dir.clone()), err))?;
+    let lock_path = bundled_rules_lock_file(home);
+    let lock_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+        .map_err(|err| SentraError::io(Some(lock_path.clone()), err))?;
+    FileExt::lock(&lock_file).map_err(|err| SentraError::io(Some(lock_path), err))?;
 
     if fs::read_to_string(&version_path)
         .map(|content| content.trim() == version)
@@ -95,6 +109,10 @@ fn bundled_rules_version_file(home: &Path) -> PathBuf {
     sentra_home(home).join(VERSION_FILE_NAME)
 }
 
+fn bundled_rules_lock_file(home: &Path) -> PathBuf {
+    sentra_home(home).join(LOCK_FILE_NAME)
+}
+
 fn bundled_rules_version() -> String {
     let hash = Sha256::digest(BUNDLED_RULES_ZIP);
     format!("{}:{hash:x}", env!("CARGO_PKG_VERSION"))
@@ -102,7 +120,10 @@ fn bundled_rules_version() -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::fs::{self, OpenOptions};
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
 
     use super::*;
 
@@ -156,5 +177,44 @@ mod tests {
                 .join("prompt_injection_generic.yara")
                 .exists()
         );
+    }
+
+    #[test]
+    fn ensure_bundled_rules_waits_for_first_use_lock_before_checking_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let sentra_dir = sentra_home(dir.path());
+        fs::create_dir_all(&sentra_dir).unwrap();
+        fs::write(
+            bundled_rules_version_file(dir.path()),
+            format!("{}\n", bundled_rules_version()),
+        )
+        .unwrap();
+        let lock_path = bundled_rules_lock_file(dir.path());
+        let lock_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(lock_path)
+            .unwrap();
+        FileExt::lock(&lock_file).unwrap();
+        let home = dir.path().to_path_buf();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            done_tx.send(ensure_bundled_rules(home)).unwrap();
+        });
+
+        started_rx.recv().unwrap();
+
+        assert!(done_rx.recv_timeout(Duration::from_millis(250)).is_err());
+
+        drop(lock_file);
+        done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap();
+        worker.join().unwrap();
     }
 }
