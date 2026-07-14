@@ -1538,6 +1538,9 @@ fn sentra_agent_is_discovered_and_exposes_skill_and_provider_assets() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".sentra");
     fs::create_dir_all(&home).unwrap();
+    let bin_dir = home.join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    fs::write(bin_dir.join(test_binary_name("sentra")), "").unwrap();
     fs::write(
         home.join("config.json"),
         r#"{"llm":{"api":"https://api.example.com/v1","key":"sk-test","model":"gpt-5","protocol":"responses"}}"#,
@@ -1550,6 +1553,8 @@ fn sentra_agent_is_discovered_and_exposes_skill_and_provider_assets() {
         .find(|agent| agent.name() == "sentra")
         .unwrap();
 
+    let meta = asset_data(sentra_agent, AssetType::Meta);
+    assert_eq!(meta[0].data["installed"], true);
     assert_eq!(sentra_agent.get_assets(AssetType::Skill).unwrap().len(), 1);
     let providers = asset_data(sentra_agent, AssetType::Provider);
 
@@ -1558,6 +1563,24 @@ fn sentra_agent_is_discovered_and_exposes_skill_and_provider_assets() {
         "https://api.example.com/v1"
     );
     assert_eq!(providers[0].data[0]["models"][0]["id"], "gpt-5");
+}
+
+#[test]
+fn devin_general_agent_reports_detected_install_marker() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".devin");
+    let bin_dir = home.join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    fs::write(bin_dir.join(test_binary_name("devin")), "").unwrap();
+
+    let agents = discover_agents(dir.path());
+    let devin_agent = agents
+        .iter()
+        .find(|agent| agent.name() == "devin")
+        .unwrap();
+    let meta = asset_data(devin_agent, AssetType::Meta);
+
+    assert_eq!(meta[0].data["installed"], true);
 }
 
 #[test]

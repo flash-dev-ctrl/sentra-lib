@@ -1,5 +1,10 @@
+use std::path::{Path, PathBuf};
+
 use crate::SentraResult;
-use crate::agents::install_status::{AgentInstallProbe, is_agent_installed};
+use crate::agents::install_status::{
+    InstallStatusProbe, any_command_exists_with, any_existing_file_with, binary_paths,
+    hidden_home_parent,
+};
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::{dir_exists, read_text_file};
@@ -46,11 +51,35 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
         ),
         version,
         author: Some("Nous Research".to_string()),
-        installed: is_agent_installed(AgentInstallProbe::Hermes, agent_home),
+        installed: is_agent_installed(agent_name, agent_home),
         home: Some(agent_home.to_path_buf()),
         created_at: None,
         updated_at: None,
     }))
+}
+
+fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
+    let probe = InstallStatusProbe::real();
+    is_agent_installed_with(agent_home, &probe)
+}
+
+fn is_agent_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
+    any_command_exists_with(&["hermes", "hermes-agent"], probe)
+        || any_existing_file_with(hermes_install_paths(agent_home), probe)
+}
+
+fn hermes_install_paths(agent_home: &Path) -> Vec<PathBuf> {
+    let user_home = hidden_home_parent(agent_home);
+    let mut paths = binary_paths(user_home.join(".local").join("bin"), "hermes");
+    paths.extend(binary_paths(
+        user_home.join(".local").join("bin"),
+        "hermes-agent",
+    ));
+    paths.extend(binary_paths(agent_home.join("bin"), "hermes"));
+    paths.extend(binary_paths(agent_home.join("bin"), "hermes-agent"));
+    paths.extend(binary_paths("/usr/local/bin", "hermes"));
+    paths.extend(binary_paths("/usr/local/bin", "hermes-agent"));
+    paths
 }
 
 fn read_yaml_file(path: &std::path::Path) -> SentraResult<Option<serde_yaml::Value>> {

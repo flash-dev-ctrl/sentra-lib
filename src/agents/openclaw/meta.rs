@@ -1,5 +1,10 @@
+use std::path::{Path, PathBuf};
+
 use crate::SentraResult;
-use crate::agents::install_status::{AgentInstallProbe, is_agent_installed};
+use crate::agents::install_status::{
+    InstallStatusProbe, any_command_exists_with, any_existing_file_with, binary_paths,
+    hidden_home_parent,
+};
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::{dir_exists, read_json_file};
@@ -58,7 +63,7 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
             .get("author")
             .and_then(|value| value.as_str())
             .map(str::to_string),
-        installed: is_agent_installed(AgentInstallProbe::OpenClaw, agent_home),
+        installed: is_agent_installed(agent_name, agent_home),
         home: Some(agent_home.to_path_buf()),
         created_at: wizard
             .and_then(|wizard| wizard.get("lastRunAt"))
@@ -71,4 +76,26 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
             .or_else(|| config.get("updatedAt").and_then(|value| value.as_str()))
             .map(str::to_string),
     }))
+}
+
+fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
+    let probe = InstallStatusProbe::real();
+    is_agent_installed_with(agent_home, &probe)
+}
+
+fn is_agent_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
+    any_command_exists_with(&["openclaw", "openclawcli"], probe)
+        || any_existing_file_with(openclaw_install_paths(agent_home), probe)
+}
+
+fn openclaw_install_paths(agent_home: &Path) -> Vec<PathBuf> {
+    let user_home = hidden_home_parent(agent_home);
+    let mut paths = binary_paths(user_home.join(".local").join("bin"), "openclaw");
+    paths.extend(binary_paths(
+        user_home.join(".local").join("bin"),
+        "openclawcli",
+    ));
+    paths.extend(binary_paths(agent_home.join("bin"), "openclaw"));
+    paths.extend(binary_paths(agent_home.join("bin"), "openclawcli"));
+    paths
 }
