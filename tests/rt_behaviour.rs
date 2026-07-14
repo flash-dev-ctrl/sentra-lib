@@ -851,6 +851,39 @@ fn opencode_provider_reads_legacy_dot_opencode_config() {
 }
 
 #[test]
+fn opencode_provider_prefers_legacy_dot_opencode_model_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_home = dir.path().join(".config").join("opencode");
+    let legacy_home = dir.path().join(".opencode");
+    fs::create_dir_all(&config_home).unwrap();
+    fs::create_dir_all(&legacy_home).unwrap();
+    fs::write(
+        config_home.join("opencode.json"),
+        r#"{"model":"chaitin/config-model","provider":{"chaitin":{"name":"Config Gateway","options":{"baseURL":"https://config.example.test/v1","apiKey":"sk-config-secret"},"models":{"config-model":{"name":"Config Model"}}}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        legacy_home.join("opencode.json"),
+        r#"{"model":"chaitin/legacy-model","provider":{"chaitin":{"name":"Legacy Gateway","options":{"baseURL":"https://legacy.example.test/v1","apiKey":"sk-legacy-secret"},"models":{"legacy-model":{"name":"Legacy Model"}}}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let providers = asset_data(opencode, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert_eq!(provider["name"], "Legacy Gateway");
+    assert_eq!(provider["baseUrl"], "https://legacy.example.test/v1");
+    assert_eq!(provider["models"][0]["id"], "legacy-model");
+    assert_eq!(provider["models"][0]["name"], "Legacy Model");
+    assert_eq!(provider["activationStatus"], "active");
+}
+
+#[test]
 fn opencode_provider_can_read_masked_api_key_from_auth_json() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".config").join("opencode");
@@ -1059,6 +1092,83 @@ fn opencode_provider_set_data_writes_anthropic_npm_package() {
     assert_eq!(config["model"], "anthropic/claude-sonnet-4");
     assert_eq!(config["provider"]["anthropic"]["npm"], "@ai-sdk/anthropic");
     assert_eq!(config["provider"]["anthropic"]["api"], "anthropic");
+}
+
+#[test]
+fn opencode_provider_set_data_updates_existing_legacy_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_home = dir.path().join(".config").join("opencode");
+    let legacy_home = dir.path().join(".opencode");
+    fs::create_dir_all(&config_home).unwrap();
+    fs::create_dir_all(&legacy_home).unwrap();
+    fs::write(
+        legacy_home.join("opencode.json"),
+        r#"{
+          "$schema": "https://opencode.ai/config.json",
+          "model": "chaitin/dev/gpt-5.4",
+          "plugin": ["superpowers@git+https://github.com/obra/superpowers.git"],
+          "provider": {
+            "chaitin3": {
+              "npm": "@ai-sdk/anthropic",
+              "name": "Baizhi Gateway Anthropic",
+              "options": {
+                "baseURL": "https://ai-api-gateway.app.baizhi.cloud/api/anthropic",
+                "apiKey": "sk-old"
+              },
+              "models": {
+                "dev/gpt-5.4": { "name": "Dev GPT-5.4" }
+              }
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let provider_asset = opencode
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    provider_asset
+        .set_provider_data(ProviderData {
+            name: "Baizhi Gateway Anthropic".to_string(),
+            raw_provider_id: Some("chaitin3".to_string()),
+            base_url: Some("https://ai-api-gateway.app.baizhi.cloud/api/anthropic".to_string()),
+            api_key: Some("sk-new".to_string()),
+            enabled: true,
+            models: vec![ProviderModel {
+                id: "dev/gpt-5.5".to_string(),
+                name: Some("Dev GPT-5.5".to_string()),
+                enabled: true,
+            }],
+            protocol: Some(WireProtocol::AnthropicMessages),
+            ..ProviderData::default()
+        })
+        .unwrap();
+
+    assert!(!config_home.join("opencode.json").exists());
+    let config: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(legacy_home.join("opencode.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(config["model"], "chaitin3/dev/gpt-5.5");
+    assert_eq!(
+        config["plugin"][0],
+        "superpowers@git+https://github.com/obra/superpowers.git"
+    );
+    assert_eq!(config["provider"]["chaitin3"]["name"], "Baizhi Gateway Anthropic");
+    assert_eq!(config["provider"]["chaitin3"]["api"], "anthropic");
+    assert_eq!(config["provider"]["chaitin3"]["options"]["apiKey"], "sk-new");
+    assert_eq!(
+        config["provider"]["chaitin3"]["models"]["dev/gpt-5.5"]["name"],
+        "Dev GPT-5.5"
+    );
 }
 
 #[test]

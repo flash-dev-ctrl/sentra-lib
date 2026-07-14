@@ -29,11 +29,11 @@ pub(crate) fn config_homes(agent_home: &Path) -> Vec<PathBuf> {
 pub(crate) fn config_files(agent_home: &Path) -> Vec<PathBuf> {
     let user_home = user_home(agent_home);
     let mut files = vec![
+        user_home.join(".opencode").join("opencode.json"),
         user_home
             .join(".config")
             .join("opencode")
             .join("opencode.json"),
-        user_home.join(".opencode").join("opencode.json"),
     ];
     let primary = agent_home.join("opencode.json");
     if !files.iter().any(|file| file == &primary) {

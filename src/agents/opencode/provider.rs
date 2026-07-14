@@ -154,7 +154,7 @@ fn set_provider_data(
     };
 
     let provider_id = provider_config_id(&provider);
-    let path = agent_home.join("opencode.json");
+    let path = provider_config_path(agent_home, &provider_id)?;
     let mut config = read_json_file(&path)?.unwrap_or_else(|| json!({}));
     if !config.is_object() {
         config = json!({});
@@ -199,6 +199,38 @@ fn set_provider_data(
     backup_file(&path)?;
     write_json_file(path, &config)?;
     Ok(AssetMutationResult::changed())
+}
+
+fn provider_config_path(
+    agent_home: &std::path::Path,
+    provider_id: &str,
+) -> SentraResult<std::path::PathBuf> {
+    let mut first_existing = None;
+    for path in crate::agents::opencode::config_files(agent_home) {
+        let Some(config) = read_json_file(&path)? else {
+            continue;
+        };
+        if first_existing.is_none() {
+            first_existing = Some(path.clone());
+        }
+        if config_references_provider(&config, provider_id) {
+            return Ok(path);
+        }
+    }
+    Ok(first_existing.unwrap_or_else(|| agent_home.join("opencode.json")))
+}
+
+fn config_references_provider(config: &Value, provider_id: &str) -> bool {
+    config
+        .get("provider")
+        .or_else(|| config.get("providers"))
+        .and_then(Value::as_object)
+        .is_some_and(|providers| providers.contains_key(provider_id))
+        || config
+            .get("model")
+            .and_then(Value::as_str)
+            .and_then(split_model_ref)
+            .is_some_and(|(active_provider, _)| active_provider == provider_id)
 }
 
 fn provider_data(
