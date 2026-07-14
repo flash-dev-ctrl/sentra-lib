@@ -301,6 +301,20 @@ pub struct AgentInstallResult {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentUninstallOptions {
+    pub delete_config: bool,
+}
+
+impl Default for AgentUninstallOptions {
+    fn default() -> Self {
+        Self {
+            delete_config: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentInstallProgressStage {
     Trying,

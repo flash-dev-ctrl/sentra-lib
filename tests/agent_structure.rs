@@ -47,7 +47,11 @@ fn rust_agents_mirror_typescript_agent_object_files() {
         "opencode",
         &["mod.rs", "meta.rs", "skill.rs", "mcp.rs", "provider.rs"],
     );
-    assert_agent_files(&src, "pi", &["mod.rs", "skill.rs", "provider.rs"]);
+    assert_agent_files(
+        &src,
+        "pi",
+        &["mod.rs", "meta.rs", "install.rs", "skill.rs", "provider.rs"],
+    );
     assert_agent_files(&src, "general", &["mod.rs", "meta.rs", "skill.rs"]);
     assert_agent_files(
         &src,
@@ -361,8 +365,8 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
     );
     assert_asset_logic_is_colocated(
         &root.join("src").join("agents").join("pi"),
-        &["fn provider_data"],
-        &["provider.rs"],
+        &["fn meta_data", "fn provider_data"],
+        &["meta.rs", "provider.rs"],
     );
     for agent in ["claude_app", "claude_cli", "hermes", "openclaw"] {
         assert_asset_logic_is_colocated(
