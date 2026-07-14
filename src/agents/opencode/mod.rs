@@ -3,10 +3,13 @@ use std::path::{Path, PathBuf};
 
 use crate::interfaces::{AssetType, ErasedAsset};
 
+mod install;
 mod mcp;
 mod meta;
 mod provider;
 mod skill;
+
+pub(crate) use install::{install_plans_for_platform, uninstall_plan_for_platform};
 
 pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
     crate::agents::discovery::discover_entry_agents(
@@ -29,11 +32,11 @@ pub(crate) fn config_homes(agent_home: &Path) -> Vec<PathBuf> {
 pub(crate) fn config_files(agent_home: &Path) -> Vec<PathBuf> {
     let user_home = user_home(agent_home);
     let mut files = vec![
+        user_home.join(".opencode").join("opencode.json"),
         user_home
             .join(".config")
             .join("opencode")
             .join("opencode.json"),
-        user_home.join(".opencode").join("opencode.json"),
     ];
     let primary = agent_home.join("opencode.json");
     if !files.iter().any(|file| file == &primary) {

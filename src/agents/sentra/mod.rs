@@ -2,6 +2,7 @@ use std::path::Path;
 
 use crate::interfaces::{AssetType, ErasedAsset};
 
+mod meta;
 mod provider;
 mod skill;
 
@@ -18,6 +19,7 @@ pub(crate) fn asset_for_type(
     asset_type: AssetType,
 ) -> Vec<Box<dyn ErasedAsset>> {
     match asset_type {
+        AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
         AssetType::Skill => vec![Box::new(skill::SkillAsset::new(agent_name, agent_home))],
         AssetType::Provider => vec![Box::new(provider::ProviderAsset::new(
             agent_name, agent_home,

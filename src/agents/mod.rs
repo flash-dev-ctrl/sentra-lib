@@ -2,6 +2,7 @@ mod base;
 mod discovery;
 mod entries;
 mod install;
+mod install_status;
 mod object;
 
 mod claude_app;
@@ -25,6 +26,7 @@ fn installable_agent(
         "codex" => Ok(install::InstallableAgent::Codex),
         "claude" | "claude-cli" => Ok(install::InstallableAgent::ClaudeCli),
         "opencode" => Ok(install::InstallableAgent::OpenCode),
+        "pi" => Ok(install::InstallableAgent::Pi),
         other => Err(crate::SentraError::Message(format!(
             "unsupported {operation} agent: {other}"
         ))),
@@ -52,6 +54,14 @@ pub fn uninstall_agent(agent: &str) -> crate::SentraResult<crate::interfaces::Ag
     install::uninstall_agent(agent)
 }
 
+pub fn uninstall_agent_with_options(
+    agent: &str,
+    options: crate::interfaces::AgentUninstallOptions,
+) -> crate::SentraResult<crate::interfaces::AgentInstallResult> {
+    let agent = installable_agent(agent, "uninstallable")?;
+    install::uninstall_agent_with_options(agent, options, None)
+}
+
 pub fn uninstall_agent_with_progress<F>(
     agent: &str,
     mut progress: F,
@@ -61,4 +71,29 @@ where
 {
     let agent = installable_agent(agent, "uninstallable")?;
     install::uninstall_agent_with_progress(agent, Some(&mut progress))
+}
+
+pub fn uninstall_agent_with_options_and_progress<F>(
+    agent: &str,
+    options: crate::interfaces::AgentUninstallOptions,
+    mut progress: F,
+) -> crate::SentraResult<crate::interfaces::AgentInstallResult>
+where
+    F: FnMut(crate::interfaces::AgentInstallProgress),
+{
+    let agent = installable_agent(agent, "uninstallable")?;
+    install::uninstall_agent_with_options(agent, options, Some(&mut progress))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pi_is_installable() {
+        assert_eq!(
+            installable_agent("pi", "installable").unwrap(),
+            install::InstallableAgent::Pi
+        );
+    }
 }

@@ -5,6 +5,8 @@ trash/
 .env
 .env.*
 codex/
+!src/agents/codex/
+!src/agents/codex/install.rs
 .cargo-home/
 cpp_example
 test-results

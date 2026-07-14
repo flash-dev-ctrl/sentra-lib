@@ -2,6 +2,7 @@ use std::process::Command;
 
 use crate::interfaces::{
     AgentInstallAction, AgentInstallProgress, AgentInstallProgressStage, AgentInstallResult,
+    AgentUninstallOptions,
 };
 use crate::{SentraError, SentraResult};
 
@@ -10,6 +11,7 @@ pub(crate) enum InstallableAgent {
     Codex,
     ClaudeCli,
     OpenCode,
+    Pi,
 }
 
 impl InstallableAgent {
@@ -18,6 +20,7 @@ impl InstallableAgent {
             Self::Codex => "codex",
             Self::ClaudeCli => "claude-cli",
             Self::OpenCode => "opencode",
+            Self::Pi => "pi",
         }
     }
 
@@ -26,6 +29,7 @@ impl InstallableAgent {
             Self::Codex => "codex",
             Self::ClaudeCli => "claude",
             Self::OpenCode => "opencode",
+            Self::Pi => "pi",
         }
     }
 }
@@ -33,16 +37,142 @@ impl InstallableAgent {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct InstallCommandPlan {
     pub(crate) program: &'static str,
-    pub(crate) args: Vec<&'static str>,
+    pub(crate) args: Vec<String>,
     pub(crate) method: &'static str,
 }
 
 impl InstallCommandPlan {
-    fn command_line(&self) -> String {
-        std::iter::once(self.program)
-            .chain(self.args.iter().copied())
+    pub(crate) fn command_line(&self) -> String {
+        std::iter::once(self.program.to_string())
+            .chain(self.args.iter().cloned())
             .collect::<Vec<_>>()
             .join(" ")
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AgentInstallSpec {
+    pub(crate) npm_package: Option<&'static str>,
+    pub(crate) npm_update_package: Option<&'static str>,
+    pub(crate) npm_global_options: &'static [&'static str],
+    pub(crate) pnpm_package: Option<&'static str>,
+    pub(crate) pnpm_update_package: Option<&'static str>,
+    pub(crate) pnpm_global_options: &'static [&'static str],
+    pub(crate) curl_command: Option<&'static str>,
+    pub(crate) powershell_command: Option<&'static str>,
+    pub(crate) brew_package: Option<&'static str>,
+    pub(crate) brew_uninstall_package: Option<&'static str>,
+    pub(crate) unix_files: &'static [&'static str],
+    pub(crate) unix_dirs: &'static [&'static str],
+    pub(crate) unix_config_files: &'static [&'static str],
+    pub(crate) unix_config_dirs: &'static [&'static str],
+    pub(crate) windows_paths: &'static [&'static str],
+    pub(crate) windows_config_paths: &'static [&'static str],
+    pub(crate) powershell_error_action: &'static str,
+}
+
+impl AgentInstallSpec {
+    pub(crate) fn plans_for_platform(
+        self,
+        platform: Platform,
+        action: AgentInstallAction,
+    ) -> Vec<InstallCommandPlan> {
+        let mut plans = Vec::new();
+        if let Some(package) = package_for_action(self.npm_package, self.npm_update_package, action)
+        {
+            plans.push(match platform {
+                Platform::Unix => npm_plan(package, self.npm_global_options),
+                Platform::Windows => windows_npm_plan(package, self.npm_global_options),
+            });
+        }
+        if let Some(package) =
+            package_for_action(self.pnpm_package, self.pnpm_update_package, action)
+        {
+            plans.push(match platform {
+                Platform::Unix => pnpm_plan(package, self.pnpm_global_options),
+                Platform::Windows => windows_pnpm_plan(package, self.pnpm_global_options),
+            });
+        }
+
+        match platform {
+            Platform::Unix => {
+                if let Some(package) = self.brew_package {
+                    plans.push(brew_plan(package, action));
+                }
+                if let Some(command) = self.curl_command {
+                    plans.push(sh_plan(command, "standalone installer"));
+                }
+            }
+            Platform::Windows => {
+                if let Some(command) = self.powershell_command {
+                    plans.push(powershell_plan(command, "PowerShell installer"));
+                }
+            }
+        }
+        plans
+    }
+
+    pub(crate) fn uninstall_plan_for_platform(
+        self,
+        platform: Platform,
+        options: AgentUninstallOptions,
+    ) -> InstallCommandPlan {
+        match platform {
+            Platform::Unix => sh_plan(
+                self.unix_uninstall_script(options),
+                "shell uninstall script",
+            ),
+            Platform::Windows => powershell_plan(
+                self.windows_uninstall_script(options),
+                "PowerShell uninstall script",
+            ),
+        }
+    }
+
+    fn unix_uninstall_script(self, options: AgentUninstallOptions) -> String {
+        let mut commands = Vec::new();
+        push_shell_remove(&mut commands, "rm -f", self.unix_files);
+        push_shell_remove(&mut commands, "rm -rf", self.unix_dirs);
+        if options.delete_config {
+            push_shell_remove(&mut commands, "rm -f", self.unix_config_files);
+            push_shell_remove(&mut commands, "rm -rf", self.unix_config_dirs);
+        }
+        if let Some(package) = self.npm_package {
+            commands.push(format!(
+                "if command -v npm >/dev/null 2>&1 && npm list -g {package} >/dev/null 2>&1; then npm uninstall -g {package}; fi"
+            ));
+        }
+        if let Some(package) = self.pnpm_package {
+            commands.push(format!(
+                "if command -v pnpm >/dev/null 2>&1 && pnpm list -g {package} >/dev/null 2>&1; then pnpm remove -g {package}; fi"
+            ));
+        }
+        if let Some(package) = self.brew_package {
+            let uninstall_package = self.brew_uninstall_package.unwrap_or(package);
+            commands.push(format!(
+                "if command -v brew >/dev/null 2>&1 && brew list {package} >/dev/null 2>&1; then brew uninstall {uninstall_package}; fi"
+            ));
+        }
+        commands.join("; ")
+    }
+
+    fn windows_uninstall_script(self, options: AgentUninstallOptions) -> String {
+        let mut commands = vec![format!(
+            "$ErrorActionPreference = '{}'",
+            self.powershell_error_action
+        )];
+        push_powershell_remove(&mut commands, self.windows_paths);
+        if options.delete_config {
+            push_powershell_remove(&mut commands, self.windows_config_paths);
+        }
+        if let Some(package) = self.npm_package {
+            push_windows_package_uninstall(&mut commands, "npm", "uninstall", package);
+        }
+        if let Some(package) = self.pnpm_package {
+            push_windows_package_uninstall(&mut commands, "pnpm", "remove", package);
+        }
+        commands.push("exit 0".to_string());
+        commands.join("; ")
     }
 }
 
@@ -71,8 +201,22 @@ pub(crate) fn uninstall_agent_with_progress(
     agent: InstallableAgent,
     progress: Option<&mut dyn FnMut(AgentInstallProgress)>,
 ) -> SentraResult<AgentInstallResult> {
+    uninstall_agent_with_options(agent, AgentUninstallOptions::default(), progress)
+}
+
+pub(crate) fn uninstall_agent_with_options(
+    agent: InstallableAgent,
+    options: AgentUninstallOptions,
+    progress: Option<&mut dyn FnMut(AgentInstallProgress)>,
+) -> SentraResult<AgentInstallResult> {
     let action = AgentInstallAction::Uninstall;
-    execute_agent_command(agent, action, uninstall_plans(agent), "uninstall", progress)
+    execute_agent_command(
+        agent,
+        action,
+        uninstall_plans(agent, options),
+        "uninstall",
+        progress,
+    )
 }
 
 fn execute_agent_command(
@@ -146,105 +290,42 @@ fn install_plans_for_platform(
     action: AgentInstallAction,
 ) -> Vec<InstallCommandPlan> {
     match agent {
-        InstallableAgent::Codex => codex_install_plans_for_platform(platform, action),
-        InstallableAgent::ClaudeCli => claude_install_plans_for_platform(platform, action),
-        InstallableAgent::OpenCode => opencode_install_plans_for_platform(platform, action),
-    }
-}
-
-fn codex_install_plans_for_platform(
-    platform: Platform,
-    action: AgentInstallAction,
-) -> Vec<InstallCommandPlan> {
-    match platform {
-        Platform::Unix => vec![
-            npm_plan(npm_codex_package(action)),
-            install_plan_for_platform(InstallableAgent::Codex, platform),
-        ],
-        Platform::Windows => vec![
-            windows_npm_plan(npm_codex_package(action)),
-            winget_codex_plan(action),
-            install_plan_for_platform(InstallableAgent::Codex, platform),
-        ],
-    }
-}
-
-fn claude_install_plans_for_platform(
-    platform: Platform,
-    action: AgentInstallAction,
-) -> Vec<InstallCommandPlan> {
-    match platform {
-        Platform::Unix => vec![
-            npm_plan(npm_claude_package(action)),
-            install_plan_for_platform(InstallableAgent::ClaudeCli, platform),
-        ],
-        Platform::Windows => vec![
-            windows_npm_plan(npm_claude_package(action)),
-            winget_claude_plan(action),
-            install_plan_for_platform(InstallableAgent::ClaudeCli, platform),
-            claude_cmd_install_plan(),
-        ],
-    }
-}
-
-fn install_plan_for_platform(agent: InstallableAgent, platform: Platform) -> InstallCommandPlan {
-    match (agent, platform) {
-        (InstallableAgent::Codex, Platform::Windows) => powershell_plan(
-            "Import-Module Microsoft.PowerShell.Utility; irm https://chatgpt.com/codex/install.ps1 | iex",
-            "PowerShell installer",
-        ),
-        (InstallableAgent::Codex, Platform::Unix) => sh_plan(
-            "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
-            "standalone installer",
-        ),
-        (InstallableAgent::ClaudeCli, Platform::Windows) => powershell_plan(
-            "Import-Module Microsoft.PowerShell.Utility; irm https://claude.ai/install.ps1 | iex",
-            "PowerShell installer",
-        ),
-        (InstallableAgent::ClaudeCli, Platform::Unix) => sh_plan(
-            "curl -fsSL https://claude.ai/install.sh | bash",
-            "standalone installer",
-        ),
-        (InstallableAgent::OpenCode, Platform::Unix) => sh_plan(
-            "curl -fsSL https://opencode.ai/install | bash",
-            "standalone installer",
-        ),
-        (InstallableAgent::OpenCode, Platform::Windows) => {
-            windows_npm_plan(opencode_npm_package(AgentInstallAction::Install))
+        InstallableAgent::Codex => {
+            crate::agents::codex::install_plans_for_platform(platform, action)
         }
+        InstallableAgent::ClaudeCli => {
+            crate::agents::claude_cli::install_plans_for_platform(platform, action)
+        }
+        InstallableAgent::OpenCode => {
+            crate::agents::opencode::install_plans_for_platform(platform, action)
+        }
+        InstallableAgent::Pi => crate::agents::pi::install_plans_for_platform(platform, action),
     }
 }
 
-fn uninstall_plans(agent: InstallableAgent) -> Vec<InstallCommandPlan> {
-    vec![uninstall_plan_for_platform(agent, platform())]
+fn uninstall_plans(
+    agent: InstallableAgent,
+    options: AgentUninstallOptions,
+) -> Vec<InstallCommandPlan> {
+    vec![uninstall_plan_for_platform(agent, platform(), options)]
 }
 
-fn uninstall_plan_for_platform(agent: InstallableAgent, platform: Platform) -> InstallCommandPlan {
-    match (agent, platform) {
-        (InstallableAgent::Codex, Platform::Windows) => powershell_plan(
-            r#"$ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath "$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin","$env:USERPROFILE\.codex" -Recurse -Force -ErrorAction SilentlyContinue; if (Get-Command npm -ErrorAction SilentlyContinue) { npm list -g @openai/codex *> $null; if ($LASTEXITCODE -eq 0) { npm uninstall -g @openai/codex; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; exit 0"#,
-            "PowerShell uninstall script",
-        ),
-        (InstallableAgent::Codex, Platform::Unix) => sh_plan(
-            r#"rm -f "$HOME/.local/bin/codex" "${CODEX_INSTALL_DIR:-$HOME/.local/bin}/codex"; rm -rf "$HOME/.codex"; if command -v npm >/dev/null 2>&1 && npm list -g @openai/codex >/dev/null 2>&1; then npm uninstall -g @openai/codex; fi"#,
-            "shell uninstall script",
-        ),
-        (InstallableAgent::ClaudeCli, Platform::Windows) => powershell_plan(
-            r#"$ErrorActionPreference = 'Stop'; Remove-Item -LiteralPath "$env:USERPROFILE\.local\bin\claude.exe","$env:USERPROFILE\.local\share\claude","$env:USERPROFILE\.claude","$env:USERPROFILE\.claude.json" -Recurse -Force -ErrorAction SilentlyContinue; if (Get-Command winget -ErrorAction SilentlyContinue) { winget list --id Anthropic.ClaudeCode --exact *> $null; if ($LASTEXITCODE -eq 0) { winget uninstall Anthropic.ClaudeCode; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; if (Get-Command npm -ErrorAction SilentlyContinue) { npm list -g @anthropic-ai/claude-code *> $null; if ($LASTEXITCODE -eq 0) { npm uninstall -g @anthropic-ai/claude-code; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; exit 0"#,
-            "PowerShell uninstall script",
-        ),
-        (InstallableAgent::ClaudeCli, Platform::Unix) => sh_plan(
-            r#"rm -f "$HOME/.local/bin/claude" "$HOME/.claude.json"; rm -rf "$HOME/.local/share/claude" "$HOME/.claude"; if command -v brew >/dev/null 2>&1 && brew list --cask claude-code >/dev/null 2>&1; then brew uninstall --cask claude-code; fi; if command -v npm >/dev/null 2>&1 && npm list -g @anthropic-ai/claude-code >/dev/null 2>&1; then npm uninstall -g @anthropic-ai/claude-code; fi"#,
-            "shell uninstall script",
-        ),
-        (InstallableAgent::OpenCode, Platform::Windows) => powershell_plan(
-            r#"$ErrorActionPreference = 'Continue'; Remove-Item -LiteralPath "$env:USERPROFILE\.opencode","$env:USERPROFILE\.config\opencode","$env:USERPROFILE\.local\share\opencode" -Recurse -Force -ErrorAction SilentlyContinue; if (Get-Command npm -ErrorAction SilentlyContinue) { npm list -g opencode-ai *> $null; if ($LASTEXITCODE -eq 0) { npm uninstall -g opencode-ai; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; if (Get-Command bun -ErrorAction SilentlyContinue) { bun pm ls -g opencode-ai *> $null; if ($LASTEXITCODE -eq 0) { bun remove -g opencode-ai; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } }; exit 0"#,
-            "PowerShell uninstall script",
-        ),
-        (InstallableAgent::OpenCode, Platform::Unix) => sh_plan(
-            r#"rm -rf "$HOME/.opencode" "$HOME/.config/opencode" "$HOME/.local/share/opencode"; if command -v npm >/dev/null 2>&1 && npm list -g opencode-ai >/dev/null 2>&1; then npm uninstall -g opencode-ai; fi; if command -v bun >/dev/null 2>&1; then bun remove -g opencode-ai >/dev/null 2>&1 || true; fi; if command -v brew >/dev/null 2>&1 && brew list anomalyco/tap/opencode >/dev/null 2>&1; then brew uninstall opencode; fi"#,
-            "shell uninstall script",
-        ),
+fn uninstall_plan_for_platform(
+    agent: InstallableAgent,
+    platform: Platform,
+    options: AgentUninstallOptions,
+) -> InstallCommandPlan {
+    match agent {
+        InstallableAgent::Codex => {
+            crate::agents::codex::uninstall_plan_for_platform(platform, options)
+        }
+        InstallableAgent::ClaudeCli => {
+            crate::agents::claude_cli::uninstall_plan_for_platform(platform, options)
+        }
+        InstallableAgent::OpenCode => {
+            crate::agents::opencode::uninstall_plan_for_platform(platform, options)
+        }
+        InstallableAgent::Pi => crate::agents::pi::uninstall_plan_for_platform(platform, options),
     }
 }
 
@@ -259,144 +340,98 @@ fn command_exists(binary: &str) -> SentraResult<bool> {
     Ok(output.status.success())
 }
 
-fn powershell_plan(command: &'static str, method: &'static str) -> InstallCommandPlan {
+pub(crate) fn powershell_plan(
+    command: impl Into<String>,
+    method: &'static str,
+) -> InstallCommandPlan {
     InstallCommandPlan {
         program: "powershell",
         args: vec![
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            command,
+            "-NoProfile".to_string(),
+            "-ExecutionPolicy".to_string(),
+            "Bypass".to_string(),
+            "-Command".to_string(),
+            command.into(),
         ],
         method,
     }
 }
 
-fn sh_plan(command: &'static str, method: &'static str) -> InstallCommandPlan {
+pub(crate) fn sh_plan(command: impl Into<String>, method: &'static str) -> InstallCommandPlan {
     InstallCommandPlan {
         program: "sh",
-        args: vec!["-c", command],
+        args: vec!["-c".to_string(), command.into()],
         method,
     }
 }
 
-fn winget_claude_plan(action: AgentInstallAction) -> InstallCommandPlan {
-    let verb = match action {
-        AgentInstallAction::Install => "install",
-        AgentInstallAction::Update => "upgrade",
-        AgentInstallAction::Uninstall => "uninstall",
-    };
-    InstallCommandPlan {
-        program: "winget",
-        args: vec![
-            verb,
-            "Anthropic.ClaudeCode",
-            "--accept-package-agreements",
-            "--accept-source-agreements",
-        ],
-        method: "WinGet",
-    }
-}
-
-fn winget_codex_plan(action: AgentInstallAction) -> InstallCommandPlan {
-    let verb = match action {
-        AgentInstallAction::Install => "install",
-        AgentInstallAction::Update => "upgrade",
-        AgentInstallAction::Uninstall => "uninstall",
-    };
-    InstallCommandPlan {
-        program: "winget",
-        args: vec![
-            verb,
-            "-e",
-            "--id",
-            "OpenAI.Codex",
-            "--accept-package-agreements",
-            "--accept-source-agreements",
-        ],
-        method: "WinGet",
-    }
-}
-
-fn claude_cmd_install_plan() -> InstallCommandPlan {
-    InstallCommandPlan {
-        program: "cmd",
-        args: vec![
-            "/C",
-            "curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del install.cmd",
-        ],
-        method: "CMD installer",
-    }
-}
-
-fn opencode_install_plans_for_platform(
-    platform: Platform,
-    action: AgentInstallAction,
-) -> Vec<InstallCommandPlan> {
-    match platform {
-        Platform::Unix => vec![
-            npm_plan(opencode_npm_package(action)),
-            bun_plan(opencode_bun_package(action)),
-            brew_opencode_plan(action),
-            install_plan_for_platform(InstallableAgent::OpenCode, platform),
-        ],
-        Platform::Windows => vec![
-            windows_npm_plan(opencode_npm_package(action)),
-            windows_bun_plan(opencode_bun_package(action)),
-        ],
-    }
-}
-
-fn npm_codex_package(action: AgentInstallAction) -> &'static str {
-    match action {
-        AgentInstallAction::Install => "@openai/codex",
-        AgentInstallAction::Update => "@openai/codex@latest",
-        AgentInstallAction::Uninstall => "@openai/codex",
-    }
-}
-
-fn opencode_npm_package(action: AgentInstallAction) -> &'static str {
-    match action {
-        AgentInstallAction::Install => "opencode-ai",
-        AgentInstallAction::Update => "opencode-ai@latest",
-        AgentInstallAction::Uninstall => "opencode-ai",
-    }
-}
-
-fn opencode_bun_package(action: AgentInstallAction) -> &'static str {
-    match action {
-        AgentInstallAction::Install => "opencode-ai",
-        AgentInstallAction::Update => "opencode-ai@latest",
-        AgentInstallAction::Uninstall => "opencode-ai",
-    }
-}
-
-fn npm_plan(package: &'static str) -> InstallCommandPlan {
+pub(crate) fn npm_plan(
+    package: &'static str,
+    global_options: &'static [&'static str],
+) -> InstallCommandPlan {
+    let mut args = vec!["install".to_string(), "-g".to_string()];
+    args.extend(global_options.iter().map(|arg| (*arg).to_string()));
+    args.push(package.to_string());
     InstallCommandPlan {
         program: "npm",
-        args: vec!["install", "-g", package],
+        args,
         method: "npm",
     }
 }
 
-fn bun_plan(package: &'static str) -> InstallCommandPlan {
+pub(crate) fn pnpm_plan(
+    package: &'static str,
+    global_options: &'static [&'static str],
+) -> InstallCommandPlan {
+    let mut args = vec!["add".to_string(), "-g".to_string()];
+    args.extend(global_options.iter().map(|arg| (*arg).to_string()));
+    args.push(package.to_string());
     InstallCommandPlan {
-        program: "bun",
-        args: vec!["add", "-g", package],
-        method: "bun",
+        program: "pnpm",
+        args,
+        method: "pnpm",
     }
 }
 
-fn windows_bun_plan(package: &'static str) -> InstallCommandPlan {
+pub(crate) fn windows_pnpm_plan(
+    package: &'static str,
+    global_options: &'static [&'static str],
+) -> InstallCommandPlan {
+    let mut args = vec![
+        "/C".to_string(),
+        "pnpm".to_string(),
+        "add".to_string(),
+        "-g".to_string(),
+    ];
+    args.extend(global_options.iter().map(|arg| (*arg).to_string()));
+    args.push(package.to_string());
     InstallCommandPlan {
         program: "cmd",
-        args: vec!["/C", "bun", "add", "-g", package],
-        method: "bun",
+        args,
+        method: "pnpm",
     }
 }
 
-fn brew_opencode_plan(action: AgentInstallAction) -> InstallCommandPlan {
+pub(crate) fn windows_npm_plan(
+    package: &'static str,
+    global_options: &'static [&'static str],
+) -> InstallCommandPlan {
+    let mut args = vec![
+        "/C".to_string(),
+        "npm".to_string(),
+        "install".to_string(),
+        "-g".to_string(),
+    ];
+    args.extend(global_options.iter().map(|arg| (*arg).to_string()));
+    args.push(package.to_string());
+    InstallCommandPlan {
+        program: "cmd",
+        args,
+        method: "npm",
+    }
+}
+
+fn brew_plan(package: &'static str, action: AgentInstallAction) -> InstallCommandPlan {
     let verb = match action {
         AgentInstallAction::Install => "install",
         AgentInstallAction::Update => "upgrade",
@@ -404,29 +439,56 @@ fn brew_opencode_plan(action: AgentInstallAction) -> InstallCommandPlan {
     };
     InstallCommandPlan {
         program: "brew",
-        args: vec![verb, "anomalyco/tap/opencode"],
+        args: vec![verb.to_string(), package.to_string()],
         method: "Homebrew",
     }
 }
 
-fn windows_npm_plan(package: &'static str) -> InstallCommandPlan {
-    InstallCommandPlan {
-        program: "cmd",
-        args: vec!["/C", "npm", "install", "-g", package],
-        method: "npm",
+fn package_for_action(
+    install_package: Option<&'static str>,
+    update_package: Option<&'static str>,
+    action: AgentInstallAction,
+) -> Option<&'static str> {
+    match action {
+        AgentInstallAction::Install | AgentInstallAction::Uninstall => install_package,
+        AgentInstallAction::Update => update_package.or(install_package),
     }
 }
 
-fn npm_claude_package(action: AgentInstallAction) -> &'static str {
-    match action {
-        AgentInstallAction::Install => "@anthropic-ai/claude-code",
-        AgentInstallAction::Update => "@anthropic-ai/claude-code@latest",
-        AgentInstallAction::Uninstall => "@anthropic-ai/claude-code",
+fn push_shell_remove(commands: &mut Vec<String>, command: &str, paths: &[&'static str]) {
+    if !paths.is_empty() {
+        commands.push(format!("{command} {}", paths.join(" ")));
     }
+}
+
+fn push_powershell_remove(commands: &mut Vec<String>, paths: &[&'static str]) {
+    if paths.is_empty() {
+        return;
+    }
+
+    let literal_paths = paths
+        .iter()
+        .map(|path| format!("\"{path}\""))
+        .collect::<Vec<_>>()
+        .join(",");
+    commands.push(format!(
+        "Remove-Item -LiteralPath {literal_paths} -Recurse -Force -ErrorAction SilentlyContinue"
+    ));
+}
+
+fn push_windows_package_uninstall(
+    commands: &mut Vec<String>,
+    manager: &str,
+    uninstall_verb: &str,
+    package: &str,
+) {
+    commands.push(format!(
+        "if (Get-Command {manager} -ErrorAction SilentlyContinue) {{ $previousErrorActionPreference = $ErrorActionPreference; $ErrorActionPreference = 'Continue'; cmd /C \"{manager} list -g {package} >NUL 2>NUL\"; $packageInstalled = $LASTEXITCODE -eq 0; if ($packageInstalled) {{ cmd /C \"{manager} {uninstall_verb} -g {package}\"; $packageExitCode = $LASTEXITCODE }} else {{ $packageExitCode = 0 }}; $ErrorActionPreference = $previousErrorActionPreference; if ($packageExitCode -ne 0) {{ exit $packageExitCode }} }}"
+    ));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Platform {
+pub(crate) enum Platform {
     Unix,
     Windows,
 }
@@ -443,102 +505,6 @@ fn platform() -> Platform {
 mod tests {
     use super::*;
 
-    fn command_text(plan: InstallCommandPlan) -> String {
-        plan.command_line()
-    }
-
-    #[test]
-    fn codex_plan_supports_unix_and_windows_installers() {
-        assert_eq!(
-            command_text(install_plan_for_platform(
-                InstallableAgent::Codex,
-                Platform::Unix
-            )),
-            "sh -c curl -fsSL https://chatgpt.com/codex/install.sh | sh"
-        );
-        assert!(command_text(install_plan_for_platform(
-            InstallableAgent::Codex,
-            Platform::Windows
-        ))
-        .contains("powershell -NoProfile -ExecutionPolicy Bypass -Command Import-Module Microsoft.PowerShell.Utility; irm https://chatgpt.com/codex/install.ps1 | iex"));
-    }
-
-    #[test]
-    fn windows_powershell_plan_loads_file_hash_module() {
-        let command = command_text(install_plan_for_platform(
-            InstallableAgent::Codex,
-            Platform::Windows,
-        ));
-
-        assert!(command.contains("Import-Module Microsoft.PowerShell.Utility"));
-        assert!(command.contains("https://chatgpt.com/codex/install.ps1"));
-    }
-
-    #[test]
-    fn codex_install_and_update_prefer_npm_then_fallbacks() {
-        let unix_install_plans = install_plans_for_platform(
-            InstallableAgent::Codex,
-            Platform::Unix,
-            AgentInstallAction::Install,
-        );
-        assert_eq!(
-            unix_install_plans[0].command_line(),
-            "npm install -g @openai/codex"
-        );
-        assert_eq!(
-            unix_install_plans[1].command_line(),
-            "sh -c curl -fsSL https://chatgpt.com/codex/install.sh | sh"
-        );
-
-        let unix_update_plans = install_plans_for_platform(
-            InstallableAgent::Codex,
-            Platform::Unix,
-            AgentInstallAction::Update,
-        );
-        assert_eq!(
-            unix_update_plans[0].command_line(),
-            "npm install -g @openai/codex@latest"
-        );
-
-        let install_plans = install_plans_for_platform(
-            InstallableAgent::Codex,
-            Platform::Windows,
-            AgentInstallAction::Install,
-        );
-        assert_eq!(
-            install_plans[0].command_line(),
-            "cmd /C npm install -g @openai/codex"
-        );
-        assert_eq!(
-            install_plans[1].command_line(),
-            "winget install -e --id OpenAI.Codex --accept-package-agreements --accept-source-agreements"
-        );
-        assert!(
-            install_plans[2]
-                .command_line()
-                .contains("https://chatgpt.com/codex/install.ps1")
-        );
-
-        let update_plans = install_plans_for_platform(
-            InstallableAgent::Codex,
-            Platform::Windows,
-            AgentInstallAction::Update,
-        );
-        assert_eq!(
-            update_plans[0].command_line(),
-            "cmd /C npm install -g @openai/codex@latest"
-        );
-        assert_eq!(
-            update_plans[1].command_line(),
-            "winget upgrade -e --id OpenAI.Codex --accept-package-agreements --accept-source-agreements"
-        );
-        assert!(
-            update_plans[2]
-                .command_line()
-                .contains("https://chatgpt.com/codex/install.ps1")
-        );
-    }
-
     #[test]
     fn command_runner_continues_after_spawn_error() {
         let result = execute_agent_command(
@@ -552,7 +518,7 @@ mod tests {
                 },
                 InstallCommandPlan {
                     program: "rustc",
-                    args: vec!["--version"],
+                    args: vec!["--version".to_string()],
                     method: "rustc test installer",
                 },
             ],
@@ -572,12 +538,12 @@ mod tests {
             vec![
                 InstallCommandPlan {
                     program: "rustc",
-                    args: vec!["--sentra-missing-test-flag"],
+                    args: vec!["--sentra-missing-test-flag".to_string()],
                     method: "failing test installer",
                 },
                 InstallCommandPlan {
                     program: "rustc",
-                    args: vec!["--version"],
+                    args: vec!["--version".to_string()],
                     method: "rustc test installer",
                 },
             ],
@@ -603,7 +569,7 @@ mod tests {
                 },
                 InstallCommandPlan {
                     program: "rustc",
-                    args: vec!["--version"],
+                    args: vec!["--version".to_string()],
                     method: "rustc test installer",
                 },
             ],
@@ -636,7 +602,7 @@ mod tests {
             AgentInstallAction::Update,
             vec![InstallCommandPlan {
                 program: "rustc",
-                args: vec!["--version"],
+                args: vec!["--version".to_string()],
                 method: "rustc test installer",
             }],
             "install",
@@ -657,209 +623,39 @@ mod tests {
     }
 
     #[test]
-    fn opencode_plan_supports_official_installers() {
-        let unix = install_plans_for_platform(
-            InstallableAgent::OpenCode,
-            Platform::Unix,
-            AgentInstallAction::Install,
-        );
-        assert_eq!(unix[0].command_line(), "npm install -g opencode-ai");
-        assert_eq!(unix[1].command_line(), "bun add -g opencode-ai");
-        assert_eq!(
-            unix[2].command_line(),
-            "brew install anomalyco/tap/opencode"
-        );
-        assert_eq!(
-            unix[3].command_line(),
-            "sh -c curl -fsSL https://opencode.ai/install | bash"
-        );
-
-        let windows = install_plans_for_platform(
-            InstallableAgent::OpenCode,
+    fn windows_uninstall_probe_uses_cmd_to_avoid_powershell_shim_errors() {
+        let command = AgentInstallSpec {
+            npm_package: Some("@scope/test-agent"),
+            npm_update_package: Some("@scope/test-agent@latest"),
+            npm_global_options: &[],
+            pnpm_package: Some("@scope/test-agent"),
+            pnpm_update_package: Some("@scope/test-agent@latest"),
+            pnpm_global_options: &[],
+            curl_command: None,
+            powershell_command: None,
+            brew_package: None,
+            brew_uninstall_package: None,
+            unix_files: &[],
+            unix_dirs: &[],
+            unix_config_files: &[],
+            unix_config_dirs: &[],
+            windows_paths: &[],
+            windows_config_paths: &[],
+            powershell_error_action: "Stop",
+        }
+        .uninstall_plan_for_platform(
             Platform::Windows,
-            AgentInstallAction::Install,
-        );
-        assert_eq!(
-            windows[0].command_line(),
-            "cmd /C npm install -g opencode-ai"
-        );
-        assert_eq!(windows[1].command_line(), "cmd /C bun add -g opencode-ai");
-    }
+            AgentUninstallOptions {
+                delete_config: false,
+            },
+        )
+        .command_line();
 
-    #[test]
-    fn opencode_uninstall_plan_removes_user_data() {
-        let unix = command_text(uninstall_plan_for_platform(
-            InstallableAgent::OpenCode,
-            Platform::Unix,
-        ));
-        assert!(unix.contains("npm uninstall -g opencode-ai"));
-        assert!(unix.contains("bun remove -g opencode-ai"));
-        assert!(unix.contains("brew uninstall opencode"));
-        assert!(unix.contains("rm -rf \"$HOME/.opencode\""));
-        assert!(unix.contains("\"$HOME/.config/opencode\""));
-        assert!(unix.contains("\"$HOME/.local/share/opencode\""));
-
-        let windows = command_text(uninstall_plan_for_platform(
-            InstallableAgent::OpenCode,
-            Platform::Windows,
-        ));
-        assert!(windows.contains("npm uninstall -g opencode-ai"));
-        assert!(windows.contains("bun remove -g opencode-ai"));
-        assert!(windows.contains("$ErrorActionPreference = 'Continue'"));
-        assert!(windows.ends_with("exit 0"));
-        assert!(windows.contains("$env:USERPROFILE\\.opencode"));
-        assert!(windows.contains("$env:USERPROFILE\\.config\\opencode"));
-        assert!(windows.contains("$env:USERPROFILE\\.local\\share\\opencode"));
-    }
-
-    #[test]
-    fn windows_claude_install_prefers_package_managers_then_installer_fallbacks() {
-        let plans = install_plans_for_platform(
-            InstallableAgent::ClaudeCli,
-            Platform::Windows,
-            AgentInstallAction::Install,
-        );
-
-        assert_eq!(plans.len(), 4);
-        assert_eq!(
-            plans[0].command_line(),
-            "cmd /C npm install -g @anthropic-ai/claude-code"
-        );
-        assert_eq!(
-            plans[1].command_line(),
-            "winget install Anthropic.ClaudeCode --accept-package-agreements --accept-source-agreements"
-        );
-        assert!(
-            plans[2]
-                .command_line()
-                .contains("https://claude.ai/install.ps1")
-        );
-        assert!(
-            plans[3]
-                .command_line()
-                .contains("https://claude.ai/install.cmd")
-        );
-    }
-
-    #[test]
-    fn windows_claude_update_has_winget_fallback() {
-        let plans = install_plans_for_platform(
-            InstallableAgent::ClaudeCli,
-            Platform::Windows,
-            AgentInstallAction::Update,
-        );
-
-        assert_eq!(
-            plans[1].command_line(),
-            "winget upgrade Anthropic.ClaudeCode --accept-package-agreements --accept-source-agreements"
-        );
-    }
-
-    #[test]
-    fn claude_install_and_update_prefer_npm_then_fallbacks() {
-        let unix_install_plans = install_plans_for_platform(
-            InstallableAgent::ClaudeCli,
-            Platform::Unix,
-            AgentInstallAction::Install,
-        );
-        assert_eq!(
-            unix_install_plans[0].command_line(),
-            "npm install -g @anthropic-ai/claude-code"
-        );
-        assert_eq!(
-            unix_install_plans[1].command_line(),
-            "sh -c curl -fsSL https://claude.ai/install.sh | bash"
-        );
-
-        let unix_update_plans = install_plans_for_platform(
-            InstallableAgent::ClaudeCli,
-            Platform::Unix,
-            AgentInstallAction::Update,
-        );
-        assert_eq!(
-            unix_update_plans[0].command_line(),
-            "npm install -g @anthropic-ai/claude-code@latest"
-        );
-
-        let install_plans = install_plans_for_platform(
-            InstallableAgent::ClaudeCli,
-            Platform::Windows,
-            AgentInstallAction::Install,
-        );
-        assert_eq!(
-            install_plans[0].command_line(),
-            "cmd /C npm install -g @anthropic-ai/claude-code"
-        );
-
-        let update_plans = install_plans_for_platform(
-            InstallableAgent::ClaudeCli,
-            Platform::Windows,
-            AgentInstallAction::Update,
-        );
-        assert_eq!(
-            update_plans[0].command_line(),
-            "cmd /C npm install -g @anthropic-ai/claude-code@latest"
-        );
-    }
-
-    #[test]
-    fn claude_plan_supports_unix_and_windows_installers() {
-        assert_eq!(
-            command_text(install_plan_for_platform(
-                InstallableAgent::ClaudeCli,
-                Platform::Unix
-            )),
-            "sh -c curl -fsSL https://claude.ai/install.sh | bash"
-        );
-        assert!(command_text(install_plan_for_platform(
-            InstallableAgent::ClaudeCli,
-            Platform::Windows
-        ))
-        .contains("powershell -NoProfile -ExecutionPolicy Bypass -Command Import-Module Microsoft.PowerShell.Utility; irm https://claude.ai/install.ps1 | iex"));
-    }
-
-    #[test]
-    fn codex_uninstall_plan_removes_user_data() {
-        let unix = command_text(uninstall_plan_for_platform(
-            InstallableAgent::Codex,
-            Platform::Unix,
-        ));
-        assert!(unix.contains(".local/bin/codex"));
-        assert!(unix.contains("rm -rf \"$HOME/.codex\""));
-        assert!(unix.contains("@openai/codex"));
-
-        let windows = command_text(uninstall_plan_for_platform(
-            InstallableAgent::Codex,
-            Platform::Windows,
-        ));
-        assert!(windows.contains("LOCALAPPDATA"));
-        assert!(windows.contains("$env:USERPROFILE\\.codex"));
-        assert!(windows.contains("@openai/codex"));
-    }
-
-    #[test]
-    fn claude_uninstall_plan_removes_user_data() {
-        let unix = command_text(uninstall_plan_for_platform(
-            InstallableAgent::ClaudeCli,
-            Platform::Unix,
-        ));
-        assert!(unix.contains(".local/bin/claude"));
-        assert!(unix.contains(".local/share/claude"));
-        assert!(unix.contains("brew uninstall --cask claude-code"));
-        assert!(unix.contains("npm uninstall -g @anthropic-ai/claude-code"));
-        assert!(unix.contains("\"$HOME/.claude.json\""));
-        assert!(unix.contains("\"$HOME/.claude\""));
-
-        let windows = command_text(uninstall_plan_for_platform(
-            InstallableAgent::ClaudeCli,
-            Platform::Windows,
-        ));
-        assert!(windows.contains(".local\\bin\\claude.exe"));
-        assert!(windows.contains(".local\\share\\claude"));
-        assert!(windows.contains("winget uninstall Anthropic.ClaudeCode"));
-        assert!(windows.contains("npm uninstall -g @anthropic-ai/claude-code"));
-        assert!(windows.ends_with("exit 0"));
-        assert!(windows.contains("$env:USERPROFILE\\.claude"));
-        assert!(windows.contains("$env:USERPROFILE\\.claude.json"));
+        assert!(command.contains("cmd /C \"npm list -g @scope/test-agent >NUL 2>NUL\""));
+        assert!(command.contains("cmd /C \"pnpm list -g @scope/test-agent >NUL 2>NUL\""));
+        assert!(command.contains("cmd /C \"npm uninstall -g @scope/test-agent\""));
+        assert!(command.contains("cmd /C \"pnpm remove -g @scope/test-agent\""));
+        assert!(command.contains("$ErrorActionPreference = 'Continue'"));
+        assert!(!command.contains("pnpm list -g @scope/test-agent *> $null"));
     }
 }

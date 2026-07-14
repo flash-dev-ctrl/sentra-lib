@@ -116,7 +116,7 @@ pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
     general("firebender", &[&[".firebender"]]),
     general("forgecode", &[&[".forge"]]),
     general("gemini-cli", &[&[".gemini"]]),
-    general("github-copilot", &[&[".copilot"]]),
+    general("copilot", &[&[".copilot"]]),
     general("goose", &[&[".goose"]]),
     general("iflow-cli", &[&[".iflow"]]),
     general("jazz", &[&[".jazz"]]),

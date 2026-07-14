@@ -272,6 +272,8 @@ pub struct MetaData {
     pub description: Option<String>,
     pub version: Option<String>,
     pub author: Option<String>,
+    #[serde(default)]
+    pub installed: bool,
     pub home: Option<PathBuf>,
     #[serde(rename = "createdAt")]
     pub created_at: Option<String>,
@@ -296,6 +298,20 @@ pub struct AgentInstallResult {
     pub exit_code: Option<i32>,
     pub stdout: String,
     pub stderr: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentUninstallOptions {
+    pub delete_config: bool,
+}
+
+impl Default for AgentUninstallOptions {
+    fn default() -> Self {
+        Self {
+            delete_config: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

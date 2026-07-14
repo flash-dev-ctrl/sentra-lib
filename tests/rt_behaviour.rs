@@ -3,7 +3,8 @@ use std::fs;
 use sentra_lib::agents::discover_agents;
 use sentra_lib::collect_skills_from_dir;
 use sentra_lib::interfaces::{
-    AssetType, CronData, CronType, McpData, McpType, ProviderData, ProviderModel, SkillData,
+    AssetType, CronData, CronType, McpData, McpType, MetaData, ProviderData, ProviderModel,
+    SkillData,
 };
 use sentra_lib::protocol::WireProtocol;
 
@@ -25,6 +26,23 @@ fn schema_round_trips_skill_data() {
     assert_eq!(decoded.name, "demo");
     assert_eq!(decoded.tags, vec!["safe"]);
     assert_eq!(decoded.enabled, Some(true));
+}
+
+#[test]
+fn schema_round_trips_meta_installed_status() {
+    let meta = MetaData {
+        id: Some("codex".to_string()),
+        name: "Codex".to_string(),
+        installed: true,
+        home: Some("/tmp/.codex".into()),
+        ..MetaData::default()
+    };
+
+    let json = serde_json::to_value(&meta).unwrap();
+    assert_eq!(json["installed"], true);
+
+    let legacy: MetaData = serde_json::from_str(r#"{"name":"Codex"}"#).unwrap();
+    assert!(!legacy.installed);
 }
 
 #[test]
@@ -90,6 +108,30 @@ fn agent_discovery_finds_codex_home_and_title() {
             .title(),
         "Codex"
     );
+}
+
+#[test]
+fn codex_and_opencode_meta_report_detected_install_markers() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".codex")).unwrap();
+    let opencode_home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&opencode_home).unwrap();
+    fs::write(opencode_home.join("opencode.json"), "{}").unwrap();
+    let bin_dir = dir.path().join(".local").join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    fs::write(bin_dir.join(test_binary_name("codex")), "").unwrap();
+    fs::write(bin_dir.join(test_binary_name("opencode")), "").unwrap();
+
+    let agents = discover_agents(dir.path());
+    for agent_name in ["codex", "opencode"] {
+        let agent = agents
+            .iter()
+            .find(|agent| agent.name() == agent_name)
+            .unwrap();
+        let meta = asset_data(agent, AssetType::Meta);
+
+        assert_eq!(meta[0].data["installed"], true);
+    }
 }
 
 #[test]
@@ -851,6 +893,39 @@ fn opencode_provider_reads_legacy_dot_opencode_config() {
 }
 
 #[test]
+fn opencode_provider_prefers_legacy_dot_opencode_model_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_home = dir.path().join(".config").join("opencode");
+    let legacy_home = dir.path().join(".opencode");
+    fs::create_dir_all(&config_home).unwrap();
+    fs::create_dir_all(&legacy_home).unwrap();
+    fs::write(
+        config_home.join("opencode.json"),
+        r#"{"model":"chaitin/config-model","provider":{"chaitin":{"name":"Config Gateway","options":{"baseURL":"https://config.example.test/v1","apiKey":"sk-config-secret"},"models":{"config-model":{"name":"Config Model"}}}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        legacy_home.join("opencode.json"),
+        r#"{"model":"chaitin/legacy-model","provider":{"chaitin":{"name":"Legacy Gateway","options":{"baseURL":"https://legacy.example.test/v1","apiKey":"sk-legacy-secret"},"models":{"legacy-model":{"name":"Legacy Model"}}}}}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let providers = asset_data(opencode, AssetType::Provider);
+    let provider = &providers[0].data[0];
+
+    assert_eq!(provider["name"], "Legacy Gateway");
+    assert_eq!(provider["baseUrl"], "https://legacy.example.test/v1");
+    assert_eq!(provider["models"][0]["id"], "legacy-model");
+    assert_eq!(provider["models"][0]["name"], "Legacy Model");
+    assert_eq!(provider["activationStatus"], "active");
+}
+
+#[test]
 fn opencode_provider_can_read_masked_api_key_from_auth_json() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".config").join("opencode");
@@ -1059,6 +1134,88 @@ fn opencode_provider_set_data_writes_anthropic_npm_package() {
     assert_eq!(config["model"], "anthropic/claude-sonnet-4");
     assert_eq!(config["provider"]["anthropic"]["npm"], "@ai-sdk/anthropic");
     assert_eq!(config["provider"]["anthropic"]["api"], "anthropic");
+}
+
+#[test]
+fn opencode_provider_set_data_updates_existing_legacy_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_home = dir.path().join(".config").join("opencode");
+    let legacy_home = dir.path().join(".opencode");
+    fs::create_dir_all(&config_home).unwrap();
+    fs::create_dir_all(&legacy_home).unwrap();
+    fs::write(
+        legacy_home.join("opencode.json"),
+        r#"{
+          "$schema": "https://opencode.ai/config.json",
+          "model": "chaitin/dev/gpt-5.4",
+          "plugin": ["superpowers@git+https://github.com/obra/superpowers.git"],
+          "provider": {
+            "chaitin3": {
+              "npm": "@ai-sdk/anthropic",
+              "name": "Baizhi Gateway Anthropic",
+              "options": {
+                "baseURL": "https://ai-api-gateway.app.baizhi.cloud/api/anthropic",
+                "apiKey": "sk-old"
+              },
+              "models": {
+                "dev/gpt-5.4": { "name": "Dev GPT-5.4" }
+              }
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let opencode = agents
+        .iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let provider_asset = opencode
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    provider_asset
+        .set_provider_data(ProviderData {
+            name: "Baizhi Gateway Anthropic".to_string(),
+            raw_provider_id: Some("chaitin3".to_string()),
+            base_url: Some("https://ai-api-gateway.app.baizhi.cloud/api/anthropic".to_string()),
+            api_key: Some("sk-new".to_string()),
+            enabled: true,
+            models: vec![ProviderModel {
+                id: "dev/gpt-5.5".to_string(),
+                name: Some("Dev GPT-5.5".to_string()),
+                enabled: true,
+            }],
+            protocol: Some(WireProtocol::AnthropicMessages),
+            ..ProviderData::default()
+        })
+        .unwrap();
+
+    assert!(!config_home.join("opencode.json").exists());
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(legacy_home.join("opencode.json")).unwrap())
+            .unwrap();
+    assert_eq!(config["model"], "chaitin3/dev/gpt-5.5");
+    assert_eq!(
+        config["plugin"][0],
+        "superpowers@git+https://github.com/obra/superpowers.git"
+    );
+    assert_eq!(
+        config["provider"]["chaitin3"]["name"],
+        "Baizhi Gateway Anthropic"
+    );
+    assert_eq!(config["provider"]["chaitin3"]["api"], "anthropic");
+    assert_eq!(
+        config["provider"]["chaitin3"]["options"]["apiKey"],
+        "sk-new"
+    );
+    assert_eq!(
+        config["provider"]["chaitin3"]["models"]["dev/gpt-5.5"]["name"],
+        "Dev GPT-5.5"
+    );
 }
 
 #[test]
@@ -1386,6 +1543,9 @@ fn sentra_agent_is_discovered_and_exposes_skill_and_provider_assets() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".sentra");
     fs::create_dir_all(&home).unwrap();
+    let bin_dir = home.join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    fs::write(bin_dir.join(test_binary_name("sentra")), "").unwrap();
     fs::write(
         home.join("config.json"),
         r#"{"llm":{"api":"https://api.example.com/v1","key":"sk-test","model":"gpt-5","protocol":"responses"}}"#,
@@ -1398,6 +1558,8 @@ fn sentra_agent_is_discovered_and_exposes_skill_and_provider_assets() {
         .find(|agent| agent.name() == "sentra")
         .unwrap();
 
+    let meta = asset_data(sentra_agent, AssetType::Meta);
+    assert_eq!(meta[0].data["installed"], true);
     assert_eq!(sentra_agent.get_assets(AssetType::Skill).unwrap().len(), 1);
     let providers = asset_data(sentra_agent, AssetType::Provider);
 
@@ -1406,6 +1568,21 @@ fn sentra_agent_is_discovered_and_exposes_skill_and_provider_assets() {
         "https://api.example.com/v1"
     );
     assert_eq!(providers[0].data[0]["models"][0]["id"], "gpt-5");
+}
+
+#[test]
+fn devin_general_agent_reports_detected_install_marker() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".devin");
+    let bin_dir = home.join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    fs::write(bin_dir.join(test_binary_name("devin")), "").unwrap();
+
+    let agents = discover_agents(dir.path());
+    let devin_agent = agents.iter().find(|agent| agent.name() == "devin").unwrap();
+    let meta = asset_data(devin_agent, AssetType::Meta);
+
+    assert_eq!(meta[0].data["installed"], true);
 }
 
 #[test]
@@ -1607,6 +1784,19 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
         r#"{"jobs":[{"id":"o1","enabled":true,"schedule":{"kind":"every","every":"10m"},"payload":{"prompt":"observe","cwd":"/workspace"}}]}"#,
     )
     .unwrap();
+    let bin_dir = dir.path().join(".local").join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    for binary in ["claude", "hermes", "openclaw"] {
+        fs::write(bin_dir.join(test_binary_name(binary)), "").unwrap();
+    }
+    let claude_app_bin = dir
+        .path()
+        .join("AppData")
+        .join("Local")
+        .join("Programs")
+        .join("Claude");
+    fs::create_dir_all(&claude_app_bin).unwrap();
+    fs::write(claude_app_bin.join(test_binary_name("Claude")), "").unwrap();
 
     let agents = discover_agents(dir.path());
     for (name, title) in [
@@ -1618,6 +1808,8 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
         let agent = agents.iter().find(|agent| agent.name() == name).unwrap();
         assert_eq!(agent.title(), title);
         assert_eq!(agent.get_assets(AssetType::Meta).unwrap().len(), 1);
+        let meta = asset_data(agent, AssetType::Meta);
+        assert_eq!(meta[0].data["installed"], true);
         assert_eq!(agent.get_assets(AssetType::Skill).unwrap().len(), 1);
         assert_eq!(agent.get_assets(AssetType::Mcp).unwrap().len(), 1);
         assert_eq!(agent.get_assets(AssetType::Cron).unwrap().len(), 1);
@@ -1686,6 +1878,14 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     assert_eq!(openclaw_provider[0].data[0]["activationStatus"], "unknown");
     let openclaw_cron = asset_data(openclaw, AssetType::Cron);
     assert_eq!(openclaw_cron[0].data[0]["cwds"][0], "/workspace");
+}
+
+fn test_binary_name(name: &str) -> String {
+    if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
 }
 
 fn asset_data(agent: &sentra_lib::agents::Agent, asset_type: AssetType) -> Vec<AssetData> {
