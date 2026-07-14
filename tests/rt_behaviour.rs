@@ -1195,18 +1195,23 @@ fn opencode_provider_set_data_updates_existing_legacy_config() {
         .unwrap();
 
     assert!(!config_home.join("opencode.json").exists());
-    let config: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(legacy_home.join("opencode.json")).unwrap(),
-    )
-    .unwrap();
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(legacy_home.join("opencode.json")).unwrap())
+            .unwrap();
     assert_eq!(config["model"], "chaitin3/dev/gpt-5.5");
     assert_eq!(
         config["plugin"][0],
         "superpowers@git+https://github.com/obra/superpowers.git"
     );
-    assert_eq!(config["provider"]["chaitin3"]["name"], "Baizhi Gateway Anthropic");
+    assert_eq!(
+        config["provider"]["chaitin3"]["name"],
+        "Baizhi Gateway Anthropic"
+    );
     assert_eq!(config["provider"]["chaitin3"]["api"], "anthropic");
-    assert_eq!(config["provider"]["chaitin3"]["options"]["apiKey"], "sk-new");
+    assert_eq!(
+        config["provider"]["chaitin3"]["options"]["apiKey"],
+        "sk-new"
+    );
     assert_eq!(
         config["provider"]["chaitin3"]["models"]["dev/gpt-5.5"]["name"],
         "Dev GPT-5.5"
@@ -1574,10 +1579,7 @@ fn devin_general_agent_reports_detected_install_marker() {
     fs::write(bin_dir.join(test_binary_name("devin")), "").unwrap();
 
     let agents = discover_agents(dir.path());
-    let devin_agent = agents
-        .iter()
-        .find(|agent| agent.name() == "devin")
-        .unwrap();
+    let devin_agent = agents.iter().find(|agent| agent.name() == "devin").unwrap();
     let meta = asset_data(devin_agent, AssetType::Meta);
 
     assert_eq!(meta[0].data["installed"], true);
