@@ -1,4 +1,5 @@
 use crate::SentraResult;
+use crate::agents::install_status::{AgentInstallProbe, is_agent_installed};
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::{dir_exists, read_json_file};
@@ -57,6 +58,7 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
             .get("author")
             .and_then(|value| value.as_str())
             .map(str::to_string),
+        installed: is_agent_installed(AgentInstallProbe::OpenClaw, agent_home),
         home: Some(agent_home.to_path_buf()),
         created_at: wizard
             .and_then(|wizard| wizard.get("lastRunAt"))

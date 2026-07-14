@@ -1,4 +1,5 @@
 use crate::SentraResult;
+use crate::agents::install_status::{AgentInstallProbe, is_agent_installed};
 use crate::agents::object::AssetCore;
 use crate::interfaces::{Asset, AssetType, ErasedAsset, MetaData};
 use crate::utils::dir_exists;
@@ -71,6 +72,7 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
         ),
         version: None,
         author: Some("Anthropic".to_string()),
+        installed: is_agent_installed(AgentInstallProbe::ClaudeCli, agent_home),
         home: Some(agent_home.to_path_buf()),
         created_at: None,
         updated_at: None,

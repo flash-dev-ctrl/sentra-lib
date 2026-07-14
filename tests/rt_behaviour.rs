@@ -3,7 +3,8 @@ use std::fs;
 use sentra_lib::agents::discover_agents;
 use sentra_lib::collect_skills_from_dir;
 use sentra_lib::interfaces::{
-    AssetType, CronData, CronType, McpData, McpType, ProviderData, ProviderModel, SkillData,
+    AssetType, CronData, CronType, McpData, McpType, MetaData, ProviderData, ProviderModel,
+    SkillData,
 };
 use sentra_lib::protocol::WireProtocol;
 
@@ -25,6 +26,23 @@ fn schema_round_trips_skill_data() {
     assert_eq!(decoded.name, "demo");
     assert_eq!(decoded.tags, vec!["safe"]);
     assert_eq!(decoded.enabled, Some(true));
+}
+
+#[test]
+fn schema_round_trips_meta_installed_status() {
+    let meta = MetaData {
+        id: Some("codex".to_string()),
+        name: "Codex".to_string(),
+        installed: true,
+        home: Some("/tmp/.codex".into()),
+        ..MetaData::default()
+    };
+
+    let json = serde_json::to_value(&meta).unwrap();
+    assert_eq!(json["installed"], true);
+
+    let legacy: MetaData = serde_json::from_str(r#"{"name":"Codex"}"#).unwrap();
+    assert!(!legacy.installed);
 }
 
 #[test]
@@ -90,6 +108,30 @@ fn agent_discovery_finds_codex_home_and_title() {
             .title(),
         "Codex"
     );
+}
+
+#[test]
+fn codex_and_opencode_meta_report_detected_install_markers() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".codex")).unwrap();
+    let opencode_home = dir.path().join(".config").join("opencode");
+    fs::create_dir_all(&opencode_home).unwrap();
+    fs::write(opencode_home.join("opencode.json"), "{}").unwrap();
+    let bin_dir = dir.path().join(".local").join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    fs::write(bin_dir.join(test_binary_name("codex")), "").unwrap();
+    fs::write(bin_dir.join(test_binary_name("opencode")), "").unwrap();
+
+    let agents = discover_agents(dir.path());
+    for agent_name in ["codex", "opencode"] {
+        let agent = agents
+            .iter()
+            .find(|agent| agent.name() == agent_name)
+            .unwrap();
+        let meta = asset_data(agent, AssetType::Meta);
+
+        assert_eq!(meta[0].data["installed"], true);
+    }
 }
 
 #[test]
@@ -1717,6 +1759,19 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
         r#"{"jobs":[{"id":"o1","enabled":true,"schedule":{"kind":"every","every":"10m"},"payload":{"prompt":"observe","cwd":"/workspace"}}]}"#,
     )
     .unwrap();
+    let bin_dir = dir.path().join(".local").join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    for binary in ["claude", "hermes", "openclaw"] {
+        fs::write(bin_dir.join(test_binary_name(binary)), "").unwrap();
+    }
+    let claude_app_bin = dir
+        .path()
+        .join("AppData")
+        .join("Local")
+        .join("Programs")
+        .join("Claude");
+    fs::create_dir_all(&claude_app_bin).unwrap();
+    fs::write(claude_app_bin.join(test_binary_name("Claude")), "").unwrap();
 
     let agents = discover_agents(dir.path());
     for (name, title) in [
@@ -1728,6 +1783,8 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
         let agent = agents.iter().find(|agent| agent.name() == name).unwrap();
         assert_eq!(agent.title(), title);
         assert_eq!(agent.get_assets(AssetType::Meta).unwrap().len(), 1);
+        let meta = asset_data(agent, AssetType::Meta);
+        assert_eq!(meta[0].data["installed"], true);
         assert_eq!(agent.get_assets(AssetType::Skill).unwrap().len(), 1);
         assert_eq!(agent.get_assets(AssetType::Mcp).unwrap().len(), 1);
         assert_eq!(agent.get_assets(AssetType::Cron).unwrap().len(), 1);
@@ -1796,6 +1853,14 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     assert_eq!(openclaw_provider[0].data[0]["activationStatus"], "unknown");
     let openclaw_cron = asset_data(openclaw, AssetType::Cron);
     assert_eq!(openclaw_cron[0].data[0]["cwds"][0], "/workspace");
+}
+
+fn test_binary_name(name: &str) -> String {
+    if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
 }
 
 fn asset_data(agent: &sentra_lib::agents::Agent, asset_type: AssetType) -> Vec<AssetData> {

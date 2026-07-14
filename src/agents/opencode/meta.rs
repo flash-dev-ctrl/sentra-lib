@@ -1,4 +1,5 @@
 use crate::SentraResult;
+use crate::agents::install_status::{AgentInstallProbe, is_agent_installed};
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::{dir_exists, read_json_file};
@@ -66,6 +67,7 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
             })
             .map(str::to_string),
         author: Some("OpenCode".to_string()),
+        installed: is_agent_installed(AgentInstallProbe::OpenCode, agent_home),
         home: Some(agent_home.to_path_buf()),
         created_at: None,
         updated_at: None,

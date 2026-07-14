@@ -1,4 +1,5 @@
 use crate::SentraResult;
+use crate::agents::install_status::{AgentInstallProbe, is_agent_installed};
 use crate::agents::object::AssetCore;
 use crate::interfaces::{Asset, AssetType, ErasedAsset, MetaData};
 use crate::utils::dir_exists;
@@ -68,6 +69,7 @@ impl Asset<Option<MetaData>> for MetaAsset {
             ),
             version: None,
             author: Some("OpenAI".to_string()),
+            installed: is_agent_installed(AgentInstallProbe::Codex, home),
             home: Some(home.to_path_buf()),
             created_at: None,
             updated_at: None,

@@ -2,6 +2,7 @@ mod base;
 mod discovery;
 mod entries;
 mod install;
+mod install_status;
 mod object;
 
 mod claude_app;

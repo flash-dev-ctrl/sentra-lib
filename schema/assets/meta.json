@@ -40,6 +40,10 @@
             ],
             "description": "智能体作者或维护者，允许为空。"
         },
+        "installed": {
+            "type": "boolean",
+            "description": "智能体是否已安装。"
+        },
         "home": {
             "type": [
                 "string",

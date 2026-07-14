@@ -272,6 +272,8 @@ pub struct MetaData {
     pub description: Option<String>,
     pub version: Option<String>,
     pub author: Option<String>,
+    #[serde(default)]
+    pub installed: bool,
     pub home: Option<PathBuf>,
     #[serde(rename = "createdAt")]
     pub created_at: Option<String>,
