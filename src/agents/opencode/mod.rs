@@ -6,6 +6,7 @@ use crate::interfaces::{AssetType, ErasedAsset};
 mod install;
 mod mcp;
 mod meta;
+mod plugin;
 mod provider;
 mod skill;
 
@@ -79,5 +80,6 @@ pub(crate) fn asset_for_type(
         AssetType::Provider => vec![Box::new(provider::ProviderAsset::new(
             agent_name, agent_home,
         ))],
+        AssetType::Plugin => vec![Box::new(plugin::PluginAsset::new(agent_name, agent_home))],
     }
 }

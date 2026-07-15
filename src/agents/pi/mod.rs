@@ -27,6 +27,7 @@ pub(crate) fn asset_for_type(
         AssetType::Provider => vec![Box::new(provider::ProviderAsset::new(
             agent_name, agent_home,
         ))],
+        AssetType::Plugin => Vec::new(),
         _ => Vec::new(),
     }
 }

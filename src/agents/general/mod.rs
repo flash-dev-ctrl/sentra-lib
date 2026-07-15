@@ -31,6 +31,7 @@ pub(crate) fn asset_for_type(
     match asset_type {
         AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
         AssetType::Skill => vec![Box::new(skill::SkillAsset::new(agent_name, agent_home))],
+        AssetType::Plugin => Vec::new(),
         _ => Vec::new(),
     }
 }

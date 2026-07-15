@@ -30,5 +30,6 @@ pub(crate) fn asset_for_type(
             agent_name, agent_home,
         ))],
         AssetType::Memory => Vec::new(),
+        AssetType::Plugin => Vec::new(),
     }
 }

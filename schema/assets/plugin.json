@@ -1,7 +1,7 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Plugin",
-    "description": "插件定义结构。",
+    "description": "Agent 插件资产的统一 IR。",
     "type": "object",
     "required": [
         "name"
@@ -9,51 +9,125 @@
     "additionalProperties": true,
     "properties": {
         "id": {
-            "type": "string",
-            "description": "插件唯一标识。"
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "插件唯一标识，允许为空。"
         },
         "name": {
             "type": "string",
             "description": "插件名称。",
-            "minLength": 1,
-            "maxLength": 100
+            "minLength": 1
+        },
+        "displayName": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "插件展示名称，允许为空。"
         },
         "description": {
             "type": [
                 "string",
                 "null"
             ],
-            "description": "插件功能说明。"
+            "description": "插件功能说明，允许为空。"
         },
         "version": {
-            "type": "string",
-            "description": "插件语义化版本。"
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "插件版本，允许为空。"
         },
         "author": {
-            "type": "string",
-            "description": "插件作者或维护者。"
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "插件作者或维护者，允许为空。"
         },
         "enabled": {
-            "type": "boolean",
-            "description": "插件当前是否启用。",
-            "default": true
-        },
-        "createdAt": {
-            "type": "string",
-            "description": "插件创建时间，使用标准时间格式。",
-            "format": "date-time"
-        },
-        "updatedAt": {
-            "type": "string",
-            "description": "插件最后更新时间，使用标准时间格式。",
-            "format": "date-time"
+            "type": [
+                "boolean",
+                "null"
+            ],
+            "description": "插件当前是否启用，允许为空。"
         },
         "origin": {
             "type": [
                 "string",
                 "null"
             ],
-            "description": "插件安装来源，例如市场、本地或代码仓库。"
+            "description": "插件来源说明，允许为空。"
+        },
+        "installSource": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/PluginInstallSource"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "description": "用于后续安装适配器路由的最小来源信息。"
+        },
+        "home": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "插件所在目录或文件路径，允许为空。"
+        },
+        "manifestPath": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "插件 manifest 路径，允许为空。"
+        },
+        "capabilities": {
+            "type": "array",
+            "description": "插件声明或推断出的能力标签。",
+            "items": {
+                "type": "string"
+            }
+        }
+    },
+    "definitions": {
+        "PluginInstallSource": {
+            "type": "object",
+            "required": [
+                "kind",
+                "reference"
+            ],
+            "additionalProperties": true,
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "description": "安装来源类型。",
+                    "enum": [
+                        "marketplace",
+                        "cache",
+                        "npm",
+                        "git",
+                        "local_path"
+                    ]
+                },
+                "reference": {
+                    "type": "string",
+                    "description": "适配器可用于安装或定位插件的最小来源字符串。",
+                    "minLength": 1
+                },
+                "marketplace": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "插件市场标识，允许为空。"
+                }
+            }
         }
     }
 }
