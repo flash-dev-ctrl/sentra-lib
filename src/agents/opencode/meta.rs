@@ -35,11 +35,13 @@ impl Asset<Option<MetaData>> for MetaAsset {
 
 fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Option<MetaData>> {
     let data_home = crate::agents::opencode::data_home(agent_home);
+    let installed = is_agent_installed(agent_name, agent_home);
     if !dir_exists(agent_home)
         && !crate::agents::opencode::config_files(agent_home)
             .iter()
             .any(|path| path.is_file())
         && !dir_exists(&data_home)
+        && !installed
     {
         return Ok(None);
     }
@@ -72,14 +74,14 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
             })
             .map(str::to_string),
         author: Some("OpenCode".to_string()),
-        installed: is_agent_installed(agent_name, agent_home),
+        installed,
         home: Some(agent_home.to_path_buf()),
         created_at: None,
         updated_at: None,
     }))
 }
 
-fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
+pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real();
     is_agent_installed_with(agent_name, agent_home, &probe)
 }

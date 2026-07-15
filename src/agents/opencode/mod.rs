@@ -6,6 +6,7 @@ use crate::interfaces::{AssetType, ErasedAsset};
 mod install;
 mod mcp;
 mod meta;
+mod plugin;
 mod provider;
 mod skill;
 
@@ -16,6 +17,10 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
         user_home.as_ref(),
         std::slice::from_ref(&crate::agents::entries::OPENCODE_AGENT_ENTRY),
     )
+}
+
+pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
+    meta::is_agent_installed(agent_name, agent_home)
 }
 
 pub(crate) fn data_home(agent_home: &Path) -> PathBuf {
@@ -79,5 +84,6 @@ pub(crate) fn asset_for_type(
         AssetType::Provider => vec![Box::new(provider::ProviderAsset::new(
             agent_name, agent_home,
         ))],
+        AssetType::Plugin => vec![Box::new(plugin::PluginAsset::new(agent_name, agent_home))],
     }
 }

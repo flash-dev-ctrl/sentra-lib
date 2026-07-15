@@ -23,6 +23,10 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
     results
 }
 
+pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
+    meta::is_agent_installed(agent_name, agent_home)
+}
+
 pub(crate) fn asset_for_type(
     agent_name: &str,
     agent_home: &std::path::Path,
@@ -31,6 +35,7 @@ pub(crate) fn asset_for_type(
     match asset_type {
         AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
         AssetType::Skill => vec![Box::new(skill::SkillAsset::new(agent_name, agent_home))],
+        AssetType::Plugin => Vec::new(),
         _ => Vec::new(),
     }
 }

@@ -65,7 +65,8 @@ impl Asset<Option<MetaData>> for MetaAsset {
 }
 
 fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Option<MetaData>> {
-    if !dir_exists(agent_home) {
+    let installed = is_agent_installed(agent_name, agent_home);
+    if !dir_exists(agent_home) && !installed {
         return Ok(None);
     }
     Ok(Some(MetaData {
@@ -77,14 +78,14 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
         ),
         version: None,
         author: Some("Anthropic".to_string()),
-        installed: is_agent_installed(agent_name, agent_home),
+        installed,
         home: Some(agent_home.to_path_buf()),
         created_at: None,
         updated_at: None,
     }))
 }
 
-fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
+pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real();
     is_agent_installed_with(agent_home, &probe)
 }

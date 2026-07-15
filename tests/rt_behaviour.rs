@@ -3,8 +3,8 @@ use std::fs;
 use sentra_lib::agents::discover_agents;
 use sentra_lib::collect_skills_from_dir;
 use sentra_lib::interfaces::{
-    AssetType, CronData, CronType, McpData, McpType, MetaData, ProviderData, ProviderModel,
-    SkillData,
+    AssetType, CronData, CronType, McpData, McpType, MetaData, PluginData, PluginInstallSource,
+    PluginSourceKind, ProviderData, ProviderModel, SkillData,
 };
 use sentra_lib::protocol::WireProtocol;
 
@@ -26,6 +26,34 @@ fn schema_round_trips_skill_data() {
     assert_eq!(decoded.name, "demo");
     assert_eq!(decoded.tags, vec!["safe"]);
     assert_eq!(decoded.enabled, Some(true));
+}
+
+#[test]
+fn schema_round_trips_plugin_data() {
+    let plugin = PluginData {
+        id: Some("market/demo@1.0.0".to_string()),
+        name: "demo".to_string(),
+        display_name: Some("Demo Plugin".to_string()),
+        enabled: Some(true),
+        install_source: Some(PluginInstallSource {
+            kind: PluginSourceKind::Marketplace,
+            reference: "market/demo@1.0.0".to_string(),
+            marketplace: Some("market".to_string()),
+        }),
+        capabilities: vec!["skills".to_string()],
+        ..PluginData::default()
+    };
+
+    let json = serde_json::to_string(&plugin).unwrap();
+    let decoded: PluginData = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(decoded.name, "demo");
+    assert_eq!(decoded.display_name.as_deref(), Some("Demo Plugin"));
+    assert_eq!(
+        decoded.install_source.unwrap().kind,
+        PluginSourceKind::Marketplace
+    );
+    assert_eq!(decoded.capabilities, vec!["skills"]);
 }
 
 #[test]
@@ -132,6 +160,41 @@ fn codex_and_opencode_meta_report_detected_install_markers() {
 
         assert_eq!(meta[0].data["installed"], true);
     }
+}
+
+#[test]
+fn discovery_returns_installed_agent_without_initialized_home() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin_dir = dir.path().join(".local").join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    fs::write(bin_dir.join(test_binary_name("codex")), "").unwrap();
+
+    let expected_home = dir.path().join(".codex");
+    assert!(!expected_home.exists());
+
+    let agents = discover_agents(dir.path());
+    let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+
+    assert_eq!(codex.home(), expected_home.as_path());
+    let meta = asset_data(codex, AssetType::Meta);
+    assert_eq!(meta[0].data["installed"], true);
+}
+
+#[test]
+fn discovery_returns_codex_desktop_app_without_cli_or_initialized_home() {
+    let dir = tempfile::tempdir().unwrap();
+    let app_home = dir.path().join("Applications").join("ChatGPT.app");
+    fs::create_dir_all(&app_home).unwrap();
+
+    let expected_home = dir.path().join(".codex");
+    assert!(!expected_home.exists());
+
+    let agents = discover_agents(dir.path());
+    let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+
+    assert_eq!(codex.home(), expected_home.as_path());
+    let meta = asset_data(codex, AssetType::Meta);
+    assert_eq!(meta[0].data["installed"], true);
 }
 
 #[test]
@@ -366,6 +429,147 @@ fn codex_skill_asset_reads_enabled_config_and_plugin_cache() {
     assert_eq!(remote["source"], "plugin-a");
     assert_eq!(remote["version"], "1.2.3");
     assert_eq!(remote["author"], "Alice");
+}
+
+#[test]
+fn codex_plugin_asset_reads_cache_manifest_without_raw_secrets() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".codex");
+    let plugin_root = home
+        .join("plugins")
+        .join("cache")
+        .join("vendor")
+        .join("stable")
+        .join("plugin-root");
+    let manifest_dir = plugin_root.join(".codex-plugin");
+    fs::create_dir_all(&manifest_dir).unwrap();
+    fs::write(
+        manifest_dir.join("plugin.json"),
+        r#"{
+          "id": "codex-demo-id",
+          "name": "codex-demo",
+          "version": "1.2.3",
+          "author": {"name": "Alice"},
+          "skills": "skills",
+          "apiKey": "sk-should-not-leak",
+          "interface": {
+            "displayName": "Codex Demo",
+            "description": "Demo plugin"
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let codex = discover_agents(dir.path())
+        .into_iter()
+        .find(|agent| agent.name() == "codex")
+        .unwrap();
+    let plugins = asset_data(&codex, AssetType::Plugin);
+    let items = plugins[0].data.as_array().unwrap();
+
+    assert_eq!(items.len(), 1);
+    let plugin = &items[0];
+    assert_eq!(plugin["name"], "codex-demo");
+    assert_eq!(plugin["displayName"], "Codex Demo");
+    assert_eq!(plugin["description"], "Demo plugin");
+    assert_eq!(plugin["version"], "1.2.3");
+    assert_eq!(plugin["author"], "Alice");
+    assert_eq!(plugin["enabled"], true);
+    assert_eq!(plugin["installSource"]["kind"], "marketplace");
+    assert_eq!(
+        plugin["installSource"]["reference"],
+        "vendor/codex-demo@1.2.3"
+    );
+    assert_eq!(plugin["installSource"]["marketplace"], "vendor");
+    assert!(
+        plugin["capabilities"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("skills"))
+    );
+    assert!(
+        !serde_json::to_string(plugin)
+            .unwrap()
+            .contains("sk-should-not-leak")
+    );
+}
+
+#[test]
+fn claude_cli_plugin_asset_reads_cache_and_skills_dir_manifests() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".claude");
+    let cache_plugin = home
+        .join("plugins")
+        .join("cache")
+        .join("official")
+        .join("claude-cache")
+        .join("0.1.0");
+    fs::create_dir_all(cache_plugin.join(".claude-plugin")).unwrap();
+    fs::write(
+        cache_plugin.join(".claude-plugin").join("plugin.json"),
+        r#"{
+          "name": "claude-cache",
+          "version": "0.1.0",
+          "author": "Claude Team",
+          "interface": {"displayName": "Claude Cache"},
+          "slashCommands": ["demo"]
+        }"#,
+    )
+    .unwrap();
+
+    let skills_plugin = home.join("skills").join("local-plugin");
+    fs::create_dir_all(skills_plugin.join(".claude-plugin")).unwrap();
+    fs::write(
+        skills_plugin.join(".claude-plugin").join("plugin.json"),
+        r#"{
+          "name": "local-plugin",
+          "description": "Local Claude plugin",
+          "author": {"name": "Local Author"}
+        }"#,
+    )
+    .unwrap();
+
+    let claude = discover_agents(dir.path())
+        .into_iter()
+        .find(|agent| agent.name() == "claude-cli")
+        .unwrap();
+    let plugins = asset_data(&claude, AssetType::Plugin);
+    let items = plugins[0].data.as_array().unwrap();
+    assert_eq!(items.len(), 2);
+
+    let cache = items
+        .iter()
+        .find(|item| item["name"] == "claude-cache")
+        .unwrap();
+    assert_eq!(cache["displayName"], "Claude Cache");
+    assert_eq!(cache["author"], "Claude Team");
+    assert_eq!(cache["installSource"]["kind"], "marketplace");
+    assert_eq!(
+        cache["installSource"]["reference"],
+        "official/claude-cache@0.1.0"
+    );
+    assert!(
+        cache["capabilities"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("slashCommands"))
+    );
+
+    let local = items
+        .iter()
+        .find(|item| item["name"] == "local-plugin")
+        .unwrap();
+    assert_eq!(local["description"], "Local Claude plugin");
+    assert_eq!(local["author"], "Local Author");
+    assert_eq!(local["origin"], "skills_dir");
+    assert_eq!(local["installSource"]["kind"], "local_path");
+    assert!(
+        local["installSource"]["reference"]
+            .as_str()
+            .unwrap()
+            .replace('\\', "/")
+            .ends_with(".claude/skills/local-plugin")
+    );
 }
 
 #[test]
@@ -1215,6 +1419,79 @@ fn opencode_provider_set_data_updates_existing_legacy_config() {
     assert_eq!(
         config["provider"]["chaitin3"]["models"]["dev/gpt-5.5"]["name"],
         "Dev GPT-5.5"
+    );
+}
+
+#[test]
+fn opencode_plugin_asset_reads_config_and_local_plugin_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_home = dir.path().join(".config").join("opencode");
+    let legacy_home = dir.path().join(".opencode");
+    fs::create_dir_all(config_home.join("plugins")).unwrap();
+    fs::create_dir_all(&legacy_home).unwrap();
+    fs::write(
+        config_home.join("plugins").join("local.ts"),
+        "export default {}",
+    )
+    .unwrap();
+    let config = r#"{
+      "plugin": [
+        "superpowers@git+https://github.com/obra/superpowers.git",
+        "@scope/pkg@1.2.3"
+      ],
+      "provider": {
+        "secret": {
+          "options": {"apiKey": "sk-opencode-plugin-test-secret"}
+        }
+      }
+    }"#;
+    fs::write(config_home.join("opencode.json"), config).unwrap();
+    fs::write(
+        legacy_home.join("opencode.json"),
+        r#"{"plugin":["superpowers@git+https://github.com/obra/superpowers.git"]}"#,
+    )
+    .unwrap();
+
+    let opencode = discover_agents(dir.path())
+        .into_iter()
+        .find(|agent| agent.name() == "opencode")
+        .unwrap();
+    let plugins = asset_data(&opencode, AssetType::Plugin);
+    let items = plugins[0].data.as_array().unwrap();
+    assert_eq!(items.len(), 3);
+
+    let git = items
+        .iter()
+        .find(|item| item["name"] == "superpowers")
+        .unwrap();
+    assert_eq!(git["origin"], "config");
+    assert_eq!(git["installSource"]["kind"], "git");
+    assert_eq!(
+        git["installSource"]["reference"],
+        "superpowers@git+https://github.com/obra/superpowers.git"
+    );
+
+    let npm = items
+        .iter()
+        .find(|item| item["name"] == "@scope/pkg")
+        .unwrap();
+    assert_eq!(npm["installSource"]["kind"], "npm");
+    assert_eq!(npm["installSource"]["reference"], "@scope/pkg@1.2.3");
+
+    let local = items.iter().find(|item| item["name"] == "local").unwrap();
+    assert_eq!(local["origin"], "local_path");
+    assert_eq!(local["installSource"]["kind"], "local_path");
+    assert!(
+        local["home"]
+            .as_str()
+            .unwrap()
+            .replace('\\', "/")
+            .ends_with(".config/opencode/plugins/local.ts")
+    );
+    assert!(
+        !serde_json::to_string(items)
+            .unwrap()
+            .contains("sk-opencode-plugin-test-secret")
     );
 }
 

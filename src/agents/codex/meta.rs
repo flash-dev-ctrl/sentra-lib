@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 
 use crate::SentraResult;
 use crate::agents::install_status::{
-    InstallStatusProbe, any_command_exists_with, any_existing_file_with, binary_paths, env_path,
-    hidden_home_parent,
+    InstallStatusProbe, any_command_exists_with, any_existing_dir_with, any_existing_file_with,
+    binary_paths, env_path, hidden_home_parent,
 };
 use crate::agents::object::AssetCore;
 use crate::interfaces::{Asset, AssetType, ErasedAsset, MetaData};
@@ -61,10 +61,11 @@ impl ErasedAsset for MetaAsset {
 impl Asset<Option<MetaData>> for MetaAsset {
     fn get_data(&self) -> SentraResult<Option<MetaData>> {
         let home = self.core.agent_home();
-        if !dir_exists(home) {
+        let agent_name = self.core.agent_name();
+        let installed = is_agent_installed(agent_name, home);
+        if !dir_exists(home) && !installed {
             return Ok(None);
         }
-        let agent_name = self.core.agent_name();
         Ok(Some(MetaData {
             id: Some(agent_name.to_string()),
             name: agent_name.to_string(),
@@ -74,7 +75,7 @@ impl Asset<Option<MetaData>> for MetaAsset {
             ),
             version: None,
             author: Some("OpenAI".to_string()),
-            installed: is_agent_installed(agent_name, home),
+            installed,
             home: Some(home.to_path_buf()),
             created_at: None,
             updated_at: None,
@@ -82,7 +83,7 @@ impl Asset<Option<MetaData>> for MetaAsset {
     }
 }
 
-fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
+pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real();
     is_agent_installed_with(agent_name, agent_home, &probe)
 }
@@ -94,6 +95,8 @@ fn is_agent_installed_with(
 ) -> bool {
     any_command_exists_with(&[agent_name], probe)
         || any_existing_file_with(codex_install_paths(agent_name, agent_home), probe)
+        || any_existing_file_with(codex_app_executable_paths(agent_home), probe)
+        || any_existing_dir_with(codex_app_bundle_paths(agent_home), probe)
 }
 
 fn codex_install_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
@@ -113,6 +116,57 @@ fn codex_install_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
         paths.extend(binary_paths(install_dir, agent_name));
     }
     paths
+}
+
+fn codex_app_executable_paths(agent_home: &Path) -> Vec<PathBuf> {
+    let user_home = hidden_home_parent(agent_home);
+    let mut paths = Vec::new();
+
+    for dir in windows_app_roots(&user_home) {
+        paths.push(dir.join("Codex.exe"));
+        paths.push(dir.join("ChatGPT.exe"));
+        paths.push(dir.join("OpenAI").join("Codex").join("Codex.exe"));
+        paths.push(dir.join("OpenAI").join("ChatGPT").join("ChatGPT.exe"));
+        paths.push(dir.join("OpenAI Codex").join("Codex.exe"));
+        paths.push(dir.join("OpenAI ChatGPT").join("ChatGPT.exe"));
+        paths.push(dir.join("Codex").join("Codex.exe"));
+        paths.push(dir.join("ChatGPT").join("ChatGPT.exe"));
+    }
+
+    paths
+}
+
+fn codex_app_bundle_paths(agent_home: &Path) -> Vec<PathBuf> {
+    let user_home = hidden_home_parent(agent_home);
+    vec![
+        user_home.join("Applications").join("Codex.app"),
+        user_home.join("Applications").join("ChatGPT.app"),
+        PathBuf::from("/Applications/Codex.app"),
+        PathBuf::from("/Applications/ChatGPT.app"),
+    ]
+}
+
+fn windows_app_roots(user_home: &Path) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(local_app_data) = env_path("LOCALAPPDATA") {
+        roots.push(local_app_data.join("Programs"));
+        roots.push(local_app_data.join("Microsoft").join("WindowsApps"));
+    } else {
+        roots.push(user_home.join("AppData").join("Local").join("Programs"));
+        roots.push(
+            user_home
+                .join("AppData")
+                .join("Local")
+                .join("Microsoft")
+                .join("WindowsApps"),
+        );
+    }
+    for env_name in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(root) = env_path(env_name) {
+            roots.push(root);
+        }
+    }
+    roots
 }
 
 #[cfg(test)]
@@ -135,11 +189,30 @@ mod tests {
         assert!(is_agent_installed_with("codex", &codex_home, &probe));
     }
 
+    #[test]
+    fn install_probe_accepts_codex_desktop_app_bundle() {
+        let dir = tempfile::tempdir().unwrap();
+        let codex_home = dir.path().join(".codex");
+        let app_home = dir.path().join("Applications").join("ChatGPT.app");
+        std::fs::create_dir_all(&app_home).unwrap();
+        let probe = InstallStatusProbe::test(command_never_exists, path_never_exists, path_is_dir);
+
+        assert!(is_agent_installed_with("codex", &codex_home, &probe));
+    }
+
     fn only_codex_command_exists(binary: &str) -> bool {
         binary == "codex"
     }
 
+    fn command_never_exists(_: &str) -> bool {
+        false
+    }
+
     fn path_never_exists(_: &Path) -> bool {
         false
+    }
+
+    fn path_is_dir(path: &Path) -> bool {
+        path.is_dir()
     }
 }

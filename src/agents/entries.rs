@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::interfaces::{AssetType, ErasedAsset};
 
 pub(crate) type AgentAssetFactory = fn(&str, &Path, AssetType) -> Vec<Box<dyn ErasedAsset>>;
+pub(crate) type AgentInstallDetector = fn(&str, &Path) -> bool;
 
 #[derive(Debug, Clone)]
 pub(crate) struct AgentEntry {
@@ -10,6 +11,7 @@ pub(crate) struct AgentEntry {
     pub(crate) title: Option<&'static str>,
     pub(crate) homes: &'static [&'static [&'static str]],
     pub(crate) asset_for_type: AgentAssetFactory,
+    pub(crate) is_installed: AgentInstallDetector,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -23,6 +25,7 @@ pub(crate) const CODEX_AGENT_ENTRY: AgentEntry = AgentEntry {
     title: Some("Codex"),
     homes: &[&[".codex"]],
     asset_for_type: crate::agents::codex::asset_for_type,
+    is_installed: crate::agents::codex::is_agent_installed,
 };
 
 pub(crate) const CLAUDE_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
@@ -30,6 +33,7 @@ pub(crate) const CLAUDE_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
     title: Some("Claude Code"),
     homes: &[&[".claude"]],
     asset_for_type: crate::agents::claude_cli::asset_for_type,
+    is_installed: crate::agents::claude_cli::is_agent_installed,
 };
 
 pub(crate) const CLAUDE_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
@@ -42,6 +46,7 @@ pub(crate) const CLAUDE_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
         &["Library", "Application Support", "Claude-3p"],
     ],
     asset_for_type: crate::agents::claude_app::asset_for_type,
+    is_installed: crate::agents::claude_app::is_agent_installed,
 };
 
 pub(crate) const HERMES_AGENT_ENTRY: AgentEntry = AgentEntry {
@@ -49,6 +54,7 @@ pub(crate) const HERMES_AGENT_ENTRY: AgentEntry = AgentEntry {
     title: Some("Hermes"),
     homes: &[&[".hermes"]],
     asset_for_type: crate::agents::hermes::asset_for_type,
+    is_installed: crate::agents::hermes::is_agent_installed,
 };
 
 pub(crate) const OPENCLAW_AGENT_ENTRY: AgentEntry = AgentEntry {
@@ -56,6 +62,7 @@ pub(crate) const OPENCLAW_AGENT_ENTRY: AgentEntry = AgentEntry {
     title: Some("OpenClaw"),
     homes: &[&[".openclaw"]],
     asset_for_type: crate::agents::openclaw::asset_for_type,
+    is_installed: crate::agents::openclaw::is_agent_installed,
 };
 
 pub(crate) const OPENCODE_AGENT_ENTRY: AgentEntry = AgentEntry {
@@ -63,6 +70,7 @@ pub(crate) const OPENCODE_AGENT_ENTRY: AgentEntry = AgentEntry {
     title: Some("OpenCode"),
     homes: &[&[".config", "opencode"]],
     asset_for_type: crate::agents::opencode::asset_for_type,
+    is_installed: crate::agents::opencode::is_agent_installed,
 };
 
 pub(crate) const PI_AGENT_ENTRY: AgentEntry = AgentEntry {
@@ -70,6 +78,7 @@ pub(crate) const PI_AGENT_ENTRY: AgentEntry = AgentEntry {
     title: Some("Pi"),
     homes: &[&[".pi", "agent"]],
     asset_for_type: crate::agents::pi::asset_for_type,
+    is_installed: crate::agents::pi::is_agent_installed,
 };
 
 pub(crate) const SENTRA_AGENT_ENTRY: AgentEntry = AgentEntry {
@@ -77,6 +86,7 @@ pub(crate) const SENTRA_AGENT_ENTRY: AgentEntry = AgentEntry {
     title: Some("Sentra"),
     homes: &[&[crate::config::SENTRA_HOME_DIR_NAME]],
     asset_for_type: crate::agents::sentra::asset_for_type,
+    is_installed: crate::agents::sentra::is_agent_installed,
 };
 
 pub(crate) const HERMES_SYSTEM_AGENT_ENTRY: AgentEntry = AgentEntry {
@@ -84,6 +94,7 @@ pub(crate) const HERMES_SYSTEM_AGENT_ENTRY: AgentEntry = AgentEntry {
     title: Some("Hermes"),
     homes: &[],
     asset_for_type: crate::agents::hermes::asset_for_type,
+    is_installed: crate::agents::hermes::is_agent_installed,
 };
 
 pub(crate) const SYSTEM_AGENT_PATHS: &[SystemAgentPath] = &[
@@ -171,5 +182,6 @@ const fn general(name: &'static str, homes: &'static [&'static [&'static str]]) 
         title: None,
         homes,
         asset_for_type: crate::agents::general::asset_for_type,
+        is_installed: crate::agents::general::is_agent_installed,
     }
 }
