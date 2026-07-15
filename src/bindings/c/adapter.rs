@@ -11,21 +11,22 @@ use crate::{SentraError, SentraResult};
 use super::runtime;
 use super::types::{ScanRequest, ScannerSelection, UnifiedAsset};
 
-const ALL_ASSET_TYPES: [AssetType; 5] = [
+const ALL_ASSET_TYPES: [AssetType; 6] = [
     AssetType::Skill,
     AssetType::Mcp,
     AssetType::Provider,
     AssetType::Memory,
     AssetType::Cron,
+    AssetType::Plugin,
 ];
 
-/// Collect all assets (skill, mcp, provider, memory, cron) from all discovered agents.
+/// Collect all assets (skill, mcp, provider, memory, cron, plugin) from all discovered agents.
 pub fn collect_all_assets(home: Option<&Path>) -> SentraResult<Vec<UnifiedAsset>> {
     let home = home.map(Path::to_path_buf);
     block_on(async move { collect_all_assets_async(home.as_deref()).await })
 }
 
-/// Collect all assets (skill, mcp, provider, memory, cron) from all discovered agents.
+/// Collect all assets (skill, mcp, provider, memory, cron, plugin) from all discovered agents.
 pub async fn collect_all_assets_async(home: Option<&Path>) -> SentraResult<Vec<UnifiedAsset>> {
     let home = resolve_home(home)?;
     let user_name = home
@@ -77,7 +78,7 @@ pub async fn scan_skills_async(request: &ScanRequest) -> SentraResult<Vec<SkillS
     if targets.is_empty() {
         return Ok(results);
     }
-    let mut scanner = RiskScanner::new(options)?;
+    let scanner = RiskScanner::new(options)?;
     for target in targets {
         let report = scanner.scan(RiskAsset::from(&target.skill)).await?;
         results.push(SkillScanResult {
@@ -565,9 +566,23 @@ status = "ACTIVE"
         )
         .unwrap();
 
+        let plugin_dir = codex_home
+            .join("plugins")
+            .join("cache")
+            .join("market")
+            .join("stable")
+            .join("demo-plugin")
+            .join(".codex-plugin");
+        fs::create_dir_all(&plugin_dir).unwrap();
+        fs::write(
+            plugin_dir.join("plugin.json"),
+            r#"{"name":"demo-plugin","version":"1.0.0"}"#,
+        )
+        .unwrap();
+
         let assets = collect_all_assets(Some(dir.path())).unwrap();
 
-        // Verify all 5 asset types appear
+        // Verify all 6 asset types appear
         let types: Vec<AssetType> = assets.iter().map(|a| a.asset_type).collect();
         assert!(
             types.contains(&AssetType::Skill),
@@ -587,6 +602,10 @@ status = "ACTIVE"
         assert!(
             types.contains(&AssetType::Memory),
             "should contain Memory asset"
+        );
+        assert!(
+            types.contains(&AssetType::Plugin),
+            "should contain Plugin asset"
         );
 
         // Verify MCP data content
@@ -621,6 +640,13 @@ status = "ACTIVE"
                 .iter()
                 .any(|item| item["name"] == "Daily Security Scan")
         );
+
+        let plugin_asset = assets
+            .iter()
+            .find(|a| a.asset_type == AssetType::Plugin)
+            .unwrap();
+        let plugin_items = plugin_asset.data.as_array().unwrap();
+        assert!(plugin_items.iter().any(|item| item["name"] == "demo-plugin"));
     }
 
     #[test]
