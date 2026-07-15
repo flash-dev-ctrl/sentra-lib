@@ -34,7 +34,8 @@ impl Asset<Option<MetaData>> for MetaAsset {
 }
 
 fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Option<MetaData>> {
-    if !dir_exists(agent_home) {
+    let installed = is_agent_installed(agent_name, agent_home);
+    if !dir_exists(agent_home) && !installed {
         return Ok(None);
     }
     let config = read_json_file(agent_home.join("openclaw.json"))?.unwrap_or_default();
@@ -63,7 +64,7 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
             .get("author")
             .and_then(|value| value.as_str())
             .map(str::to_string),
-        installed: is_agent_installed(agent_name, agent_home),
+        installed,
         home: Some(agent_home.to_path_buf()),
         created_at: wizard
             .and_then(|wizard| wizard.get("lastRunAt"))
@@ -78,7 +79,7 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
     }))
 }
 
-fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
+pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real();
     is_agent_installed_with(agent_home, &probe)
 }

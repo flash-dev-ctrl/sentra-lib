@@ -61,10 +61,11 @@ impl ErasedAsset for MetaAsset {
 impl Asset<Option<MetaData>> for MetaAsset {
     fn get_data(&self) -> SentraResult<Option<MetaData>> {
         let home = self.core.agent_home();
-        if !dir_exists(home) {
+        let agent_name = self.core.agent_name();
+        let installed = is_agent_installed(agent_name, home);
+        if !dir_exists(home) && !installed {
             return Ok(None);
         }
-        let agent_name = self.core.agent_name();
         Ok(Some(MetaData {
             id: Some(agent_name.to_string()),
             name: agent_name.to_string(),
@@ -74,7 +75,7 @@ impl Asset<Option<MetaData>> for MetaAsset {
             ),
             version: None,
             author: Some("OpenAI".to_string()),
-            installed: is_agent_installed(agent_name, home),
+            installed,
             home: Some(home.to_path_buf()),
             created_at: None,
             updated_at: None,
@@ -82,7 +83,7 @@ impl Asset<Option<MetaData>> for MetaAsset {
     }
 }
 
-fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
+pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real();
     is_agent_installed_with(agent_name, agent_home, &probe)
 }

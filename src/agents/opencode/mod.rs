@@ -19,6 +19,10 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
     )
 }
 
+pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
+    meta::is_agent_installed(agent_name, agent_home)
+}
+
 pub(crate) fn data_home(agent_home: &Path) -> PathBuf {
     user_home(agent_home)
         .join(".local")

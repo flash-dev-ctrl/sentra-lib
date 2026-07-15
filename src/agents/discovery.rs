@@ -50,17 +50,25 @@ pub fn discover_agents(user_home: impl AsRef<Path>) -> Vec<Agent> {
 pub(crate) fn discover_entry_agents(user_home: &Path, entries: &[AgentEntry]) -> Vec<Agent> {
     let mut results = Vec::new();
     for entry in entries {
+        let mut installed_home = None;
         for segments in entry.homes {
             let mut home = user_home.to_path_buf();
             for segment in segments.iter() {
                 home.push(segment);
             }
-            if fs::metadata(&home)
+            let home_exists = fs::metadata(&home)
                 .map(|meta| meta.is_dir())
-                .unwrap_or(false)
-            {
+                .unwrap_or(false);
+            if home_exists {
                 results.push(Agent::new(entry, home));
+            } else if installed_home.is_none() && (entry.is_installed)(entry.name, &home) {
+                installed_home = Some(home);
             }
+        }
+        if !results.iter().any(|agent| agent.name() == entry.name)
+            && let Some(home) = installed_home
+        {
+            results.push(Agent::new(entry, home));
         }
     }
     results

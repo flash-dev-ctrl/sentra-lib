@@ -163,6 +163,24 @@ fn codex_and_opencode_meta_report_detected_install_markers() {
 }
 
 #[test]
+fn discovery_returns_installed_agent_without_initialized_home() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin_dir = dir.path().join(".local").join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+    fs::write(bin_dir.join(test_binary_name("codex")), "").unwrap();
+
+    let expected_home = dir.path().join(".codex");
+    assert!(!expected_home.exists());
+
+    let agents = discover_agents(dir.path());
+    let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+
+    assert_eq!(codex.home(), expected_home.as_path());
+    let meta = asset_data(codex, AssetType::Meta);
+    assert_eq!(meta[0].data["installed"], true);
+}
+
+#[test]
 fn module_discovery_returns_agents_that_own_asset_factories() {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join(".codex")).unwrap();

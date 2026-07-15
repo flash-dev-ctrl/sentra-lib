@@ -23,6 +23,10 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
     results
 }
 
+pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
+    meta::is_agent_installed(agent_name, agent_home)
+}
+
 pub(crate) fn asset_for_type(
     agent_name: &str,
     agent_home: &std::path::Path,
