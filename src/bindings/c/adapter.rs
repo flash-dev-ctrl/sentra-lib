@@ -646,7 +646,11 @@ status = "ACTIVE"
             .find(|a| a.asset_type == AssetType::Plugin)
             .unwrap();
         let plugin_items = plugin_asset.data.as_array().unwrap();
-        assert!(plugin_items.iter().any(|item| item["name"] == "demo-plugin"));
+        assert!(
+            plugin_items
+                .iter()
+                .any(|item| item["name"] == "demo-plugin")
+        );
     }
 
     #[test]

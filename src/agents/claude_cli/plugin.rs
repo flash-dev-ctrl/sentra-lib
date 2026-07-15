@@ -3,9 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
-use crate::interfaces::{
-    Asset, AssetType, PluginData, PluginInstallSource, PluginSourceKind,
-};
+use crate::interfaces::{Asset, AssetType, PluginData, PluginInstallSource, PluginSourceKind};
 use crate::utils::{dir_exists, is_directory, read_json_file};
 
 #[derive(Debug, Clone)]
@@ -150,12 +148,10 @@ fn plugin_from_manifest(
         .unwrap_or_else(|| "plugin".to_string());
     let version = string_field(manifest, "version").or(context.fallback_version);
     let reference = match context.kind {
-        PluginSourceKind::Marketplace => marketplace_reference(
-            &name,
-            version.as_deref(),
-            context.marketplace.as_deref(),
-        )
-        .unwrap_or_else(|| plugin_root.display().to_string()),
+        PluginSourceKind::Marketplace => {
+            marketplace_reference(&name, version.as_deref(), context.marketplace.as_deref())
+                .unwrap_or_else(|| plugin_root.display().to_string())
+        }
         PluginSourceKind::LocalPath => plugin_root.display().to_string(),
         _ => plugin_root.display().to_string(),
     };

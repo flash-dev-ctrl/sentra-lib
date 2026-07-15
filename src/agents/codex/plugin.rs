@@ -3,9 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
-use crate::interfaces::{
-    Asset, AssetType, PluginData, PluginInstallSource, PluginSourceKind,
-};
+use crate::interfaces::{Asset, AssetType, PluginData, PluginInstallSource, PluginSourceKind};
 use crate::utils::{dir_exists, is_directory, read_json_file};
 
 #[derive(Debug, Clone)]

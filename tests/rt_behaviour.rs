@@ -3,8 +3,8 @@ use std::fs;
 use sentra_lib::agents::discover_agents;
 use sentra_lib::collect_skills_from_dir;
 use sentra_lib::interfaces::{
-    AssetType, CronData, CronType, McpData, McpType, MetaData, ProviderData, ProviderModel,
-    PluginData, PluginInstallSource, PluginSourceKind, SkillData,
+    AssetType, CronData, CronType, McpData, McpType, MetaData, PluginData, PluginInstallSource,
+    PluginSourceKind, ProviderData, ProviderModel, SkillData,
 };
 use sentra_lib::protocol::WireProtocol;
 
@@ -476,10 +476,22 @@ fn codex_plugin_asset_reads_cache_manifest_without_raw_secrets() {
     assert_eq!(plugin["author"], "Alice");
     assert_eq!(plugin["enabled"], true);
     assert_eq!(plugin["installSource"]["kind"], "marketplace");
-    assert_eq!(plugin["installSource"]["reference"], "vendor/codex-demo@1.2.3");
+    assert_eq!(
+        plugin["installSource"]["reference"],
+        "vendor/codex-demo@1.2.3"
+    );
     assert_eq!(plugin["installSource"]["marketplace"], "vendor");
-    assert!(plugin["capabilities"].as_array().unwrap().contains(&serde_json::json!("skills")));
-    assert!(!serde_json::to_string(plugin).unwrap().contains("sk-should-not-leak"));
+    assert!(
+        plugin["capabilities"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("skills"))
+    );
+    assert!(
+        !serde_json::to_string(plugin)
+            .unwrap()
+            .contains("sk-should-not-leak")
+    );
 }
 
 #[test]
@@ -1417,7 +1429,11 @@ fn opencode_plugin_asset_reads_config_and_local_plugin_files() {
     let legacy_home = dir.path().join(".opencode");
     fs::create_dir_all(config_home.join("plugins")).unwrap();
     fs::create_dir_all(&legacy_home).unwrap();
-    fs::write(config_home.join("plugins").join("local.ts"), "export default {}").unwrap();
+    fs::write(
+        config_home.join("plugins").join("local.ts"),
+        "export default {}",
+    )
+    .unwrap();
     let config = r#"{
       "plugin": [
         "superpowers@git+https://github.com/obra/superpowers.git",
@@ -1472,7 +1488,11 @@ fn opencode_plugin_asset_reads_config_and_local_plugin_files() {
             .replace('\\', "/")
             .ends_with(".config/opencode/plugins/local.ts")
     );
-    assert!(!serde_json::to_string(items).unwrap().contains("sk-opencode-plugin-test-secret"));
+    assert!(
+        !serde_json::to_string(items)
+            .unwrap()
+            .contains("sk-opencode-plugin-test-secret")
+    );
 }
 
 #[test]

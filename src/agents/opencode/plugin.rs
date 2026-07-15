@@ -2,9 +2,7 @@ use std::collections::HashSet;
 
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
-use crate::interfaces::{
-    Asset, AssetType, PluginData, PluginInstallSource, PluginSourceKind,
-};
+use crate::interfaces::{Asset, AssetType, PluginData, PluginInstallSource, PluginSourceKind};
 use crate::utils::{dir_exists, is_directory, read_json_file};
 
 #[derive(Debug, Clone)]
@@ -50,7 +48,10 @@ fn collect_config_plugins(
             continue;
         };
         for item in items {
-            let Some(reference) = item.as_str().map(str::trim).filter(|value| !value.is_empty())
+            let Some(reference) = item
+                .as_str()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
             else {
                 continue;
             };
@@ -114,11 +115,7 @@ fn collect_local_plugins(agent_home: &std::path::Path, plugins: &mut Vec<PluginD
     }
 }
 
-fn plugin_files(
-    dir: &std::path::Path,
-    max_depth: usize,
-    depth: usize,
-) -> Vec<std::path::PathBuf> {
+fn plugin_files(dir: &std::path::Path, max_depth: usize, depth: usize) -> Vec<std::path::PathBuf> {
     if depth > max_depth || !dir_exists(dir) {
         return Vec::new();
     }
@@ -164,10 +161,7 @@ fn looks_like_local_path(reference: &str) -> bool {
         || reference.starts_with('/')
         || reference.starts_with('~')
         || reference.contains('\\')
-        || reference
-            .chars()
-            .nth(1)
-            .is_some_and(|ch| ch == ':')
+        || reference.chars().nth(1).is_some_and(|ch| ch == ':')
 }
 
 fn plugin_name_from_reference(reference: &str) -> String {
