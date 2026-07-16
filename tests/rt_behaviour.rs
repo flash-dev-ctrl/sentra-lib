@@ -4,7 +4,7 @@ use sentra_lib::agents::discover_agents;
 use sentra_lib::collect_skills_from_dir;
 use sentra_lib::interfaces::{
     AssetType, CronData, CronType, McpData, McpType, MetaData, PluginData, PluginInstallSource,
-    PluginSourceKind, ProviderData, ProviderModel, SkillData,
+    PluginSourceKind, ProcessData, ProviderData, ProviderModel, SkillData,
 };
 use sentra_lib::protocol::WireProtocol;
 
@@ -71,6 +71,45 @@ fn schema_round_trips_meta_installed_status() {
 
     let legacy: MetaData = serde_json::from_str(r#"{"name":"Codex"}"#).unwrap();
     assert!(!legacy.installed);
+}
+
+#[test]
+fn schema_round_trips_process_data() {
+    let mut env = std::collections::BTreeMap::new();
+    env.insert("PATH".to_string(), "/usr/bin".to_string());
+    env.insert("OPENAI_API_KEY".to_string(), "sk-****7890".to_string());
+
+    let process = ProcessData {
+        pid: 42,
+        name: "codex".to_string(),
+        cmdline: vec!["codex".to_string(), "--sandbox".to_string()],
+        started_at: 1_700_000_000,
+        run_time_seconds: 3_661,
+        path: Some("/usr/local/bin/codex".into()),
+        env,
+    };
+
+    let json = serde_json::to_value(&process).unwrap();
+    assert_eq!(json["pid"], 42);
+    assert_eq!(json["name"], "codex");
+    assert_eq!(json["cmdline"][0], "codex");
+    assert_eq!(json["startedAt"], 1_700_000_000);
+    assert_eq!(json["runTimeSeconds"], 3_661);
+    assert_eq!(json["env"]["OPENAI_API_KEY"], "sk-****7890");
+
+    let decoded: ProcessData = serde_json::from_value(json).unwrap();
+    assert_eq!(decoded.pid, 42);
+    assert_eq!(decoded.started_at, 1_700_000_000);
+    assert_eq!(decoded.run_time_seconds, 3_661);
+    assert_eq!(
+        decoded.env.get("PATH").map(String::as_str),
+        Some("/usr/bin")
+    );
+
+    let legacy: ProcessData =
+        serde_json::from_str(r#"{"pid":7,"name":"codex","cmdline":["codex"]}"#).unwrap();
+    assert_eq!(legacy.started_at, 0);
+    assert_eq!(legacy.run_time_seconds, 0);
 }
 
 #[test]

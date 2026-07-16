@@ -1,5 +1,5 @@
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -18,6 +18,7 @@ pub enum AssetType {
     Cron,
     Provider,
     Plugin,
+    Process,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -581,6 +582,20 @@ pub struct MemoryData {
     pub format: Option<FileFormat>,
     #[serde(default)]
     pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ProcessData {
+    pub pid: u32,
+    pub name: String,
+    pub cmdline: Vec<String>,
+    #[serde(rename = "startedAt", default)]
+    pub started_at: u64,
+    #[serde(rename = "runTimeSeconds", default)]
+    pub run_time_seconds: u64,
+    pub path: Option<PathBuf>,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
