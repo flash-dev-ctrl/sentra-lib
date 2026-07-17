@@ -1,50 +1,56 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Process",
-    "description": "运行中的智能体进程结构，适用于常见桌面和服务器操作系统。",
+    "description": "运行中的智能体进程资产结构。",
     "type": "object",
     "required": [
         "pid",
-        "command"
+        "name",
+        "cmdline",
+        "startedAt",
+        "runTimeSeconds"
     ],
     "additionalProperties": true,
     "properties": {
-        "user": {
-            "type": [
-                "string",
-                "null"
-            ],
-            "description": "运行该进程的操作系统用户。"
-        },
         "pid": {
             "type": "integer",
             "description": "进程标识。",
-            "minimum": 1
+            "minimum": 0
         },
-        "start": {
+        "name": {
+            "type": "string",
+            "description": "进程可执行名称。"
+        },
+        "cmdline": {
+            "type": "array",
+            "description": "进程命令行参数列表。",
+            "items": {
+                "type": "string"
+            }
+        },
+        "startedAt": {
+            "type": "integer",
+            "description": "进程启动时间，Unix 秒级时间戳。",
+            "minimum": 0
+        },
+        "runTimeSeconds": {
+            "type": "integer",
+            "description": "进程已运行时长，单位为秒。",
+            "minimum": 0
+        },
+        "path": {
             "type": [
                 "string",
                 "null"
             ],
-            "description": "进程启动时间，格式依赖操作系统。"
+            "description": "进程可执行文件路径，允许为空。"
         },
-        "command": {
-            "type": "string",
-            "description": "包含参数的完整命令行。"
-        },
-        "cpu": {
-            "type": [
-                "number",
-                "null"
-            ],
-            "description": "处理器使用率百分比，允许为空。"
-        },
-        "mem": {
-            "type": [
-                "number",
-                "null"
-            ],
-            "description": "内存使用率百分比，允许为空。"
+        "env": {
+            "type": "object",
+            "description": "进程环境变量映射，敏感值应已脱敏。",
+            "additionalProperties": {
+                "type": "string"
+            }
         }
     }
 }

@@ -1,3 +1,5 @@
+#[cfg(windows)]
+use std::ffi::OsString;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -33,10 +35,7 @@ fn user_homes_under(base_dir: impl AsRef<Path>) -> Vec<UserHome> {
 pub fn list_local_users() -> Vec<UserHome> {
     #[cfg(windows)]
     {
-        let users_root = std::env::var_os("USERPROFILE")
-            .and_then(|profile| PathBuf::from(profile).parent().map(Path::to_path_buf))
-            .unwrap_or_else(|| PathBuf::from(r"C:\Users"));
-        return user_homes_under(users_root);
+        return user_homes_under(windows_users_root(std::env::var_os("SystemDrive")));
     }
 
     #[cfg(target_os = "macos")]
@@ -59,6 +58,19 @@ pub fn list_local_users() -> Vec<UserHome> {
 
     #[allow(unreachable_code)]
     Vec::new()
+}
+
+#[cfg(windows)]
+fn windows_users_root(system_drive: Option<OsString>) -> PathBuf {
+    let Some(system_drive) = system_drive.filter(|value| !value.is_empty()) else {
+        return PathBuf::from(r"C:\Users");
+    };
+
+    let mut root = PathBuf::from(system_drive);
+    if !root.has_root() {
+        root.push(r"\");
+    }
+    root.join("Users")
 }
 
 pub fn list_users() -> Vec<UserHome> {
@@ -168,6 +180,24 @@ mod tests {
         let temp = tempfile::tempdir().expect("create temp dir");
 
         assert!(user_homes_under(temp.path().join("missing")).is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_users_root_uses_system_drive() {
+        assert_eq!(
+            windows_users_root(Some(OsString::from("D:"))),
+            PathBuf::from(r"D:\Users"),
+        );
+        assert_eq!(
+            windows_users_root(Some(OsString::from(r"D:\"))),
+            PathBuf::from(r"D:\Users"),
+        );
+        assert_eq!(windows_users_root(None), PathBuf::from(r"C:\Users"));
+        assert_eq!(
+            windows_users_root(Some(OsString::from(""))),
+            PathBuf::from(r"C:\Users"),
+        );
     }
 
     #[test]

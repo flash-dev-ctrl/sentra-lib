@@ -4,6 +4,7 @@ mod entries;
 mod install;
 mod install_status;
 mod object;
+mod process;
 
 mod claude_app;
 mod claude_cli;

@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::interfaces::{AssetType, ErasedAsset};
 
 mod meta;
+mod process;
 mod provider;
 mod skill;
 
@@ -17,6 +18,10 @@ pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     meta::is_agent_installed(agent_name, agent_home)
 }
 
+pub(crate) fn process_data() -> Vec<crate::interfaces::ProcessData> {
+    process::process_data()
+}
+
 pub(crate) fn asset_for_type(
     agent_name: &str,
     agent_home: &std::path::Path,
@@ -29,6 +34,11 @@ pub(crate) fn asset_for_type(
             agent_name, agent_home,
         ))],
         AssetType::Plugin => Vec::new(),
+        AssetType::Process => vec![Box::new(crate::agents::process::ProcessAsset::new(
+            agent_name,
+            agent_home,
+            process::matches_process,
+        ))],
         _ => Vec::new(),
     }
 }

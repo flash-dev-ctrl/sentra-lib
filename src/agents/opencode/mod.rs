@@ -7,6 +7,7 @@ mod install;
 mod mcp;
 mod meta;
 mod plugin;
+mod process;
 mod provider;
 mod skill;
 
@@ -21,6 +22,10 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
 
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     meta::is_agent_installed(agent_name, agent_home)
+}
+
+pub(crate) fn process_data() -> Vec<crate::interfaces::ProcessData> {
+    process::process_data()
 }
 
 pub(crate) fn data_home(agent_home: &Path) -> PathBuf {
@@ -85,5 +90,10 @@ pub(crate) fn asset_for_type(
             agent_name, agent_home,
         ))],
         AssetType::Plugin => vec![Box::new(plugin::PluginAsset::new(agent_name, agent_home))],
+        AssetType::Process => vec![Box::new(crate::agents::process::ProcessAsset::new(
+            agent_name,
+            agent_home,
+            process::matches_process,
+        ))],
     }
 }
