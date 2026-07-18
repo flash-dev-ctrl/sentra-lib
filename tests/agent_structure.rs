@@ -44,6 +44,21 @@ fn rust_agents_mirror_typescript_agent_object_files() {
     }
     assert_agent_files(
         &src,
+        "kimi_code",
+        &[
+            "mod.rs",
+            "meta.rs",
+            "install.rs",
+            "skill.rs",
+            "mcp.rs",
+            "memory.rs",
+            "provider.rs",
+            "plugin.rs",
+            "process.rs",
+        ],
+    );
+    assert_agent_files(
+        &src,
         "opencode",
         &["mod.rs", "meta.rs", "skill.rs", "mcp.rs", "provider.rs"],
     );
@@ -72,6 +87,7 @@ fn each_agent_module_owns_discovery() {
         "codex",
         "general",
         "hermes",
+        "kimi_code",
         "openclaw",
         "opencode",
         "pi",
@@ -100,6 +116,7 @@ fn agent_asset_modules_are_not_public() {
         "codex",
         "general",
         "hermes",
+        "kimi_code",
         "openclaw",
         "opencode",
         "pi",
@@ -162,6 +179,7 @@ fn agent_module_wrappers_do_not_expose_asset_mutator_shortcuts() {
         "codex",
         "general",
         "hermes",
+        "kimi_code",
         "openclaw",
         "opencode",
         "pi",
@@ -219,6 +237,7 @@ fn agent_modules_do_not_define_redundant_typed_wrappers() {
         "codex",
         "general",
         "hermes",
+        "kimi_code",
         "openclaw",
         "opencode",
         "sentra",
@@ -248,6 +267,7 @@ fn agent_entries_are_defined_in_shared_entries_file() {
         "CODEX_AGENT_ENTRY",
         "GENERAL_AGENT_ENTRIES",
         "HERMES_AGENT_ENTRY",
+        "KIMI_CODE_AGENT_ENTRY",
         "OPENCLAW_AGENT_ENTRY",
         "OPENCODE_AGENT_ENTRY",
         "PI_AGENT_ENTRY",
@@ -287,6 +307,7 @@ fn agent_modules_reference_entry_registry_directly() {
         ("claude_cli", "CLAUDE_CLI_AGENT_ENTRY"),
         ("codex", "CODEX_AGENT_ENTRY"),
         ("hermes", "HERMES_AGENT_ENTRY"),
+        ("kimi_code", "KIMI_CODE_AGENT_ENTRY"),
         ("openclaw", "OPENCLAW_AGENT_ENTRY"),
         ("opencode", "OPENCODE_AGENT_ENTRY"),
         ("pi", "PI_AGENT_ENTRY"),
@@ -381,6 +402,16 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
             &["meta.rs", "mcp.rs", "memory.rs", "cron.rs", "provider.rs"],
         );
     }
+    assert_asset_logic_is_colocated(
+        &root.join("src").join("agents").join("kimi_code"),
+        &[
+            "fn meta_data",
+            "fn mcp_data",
+            "fn memory_data",
+            "fn provider_data",
+        ],
+        &["meta.rs", "mcp.rs", "memory.rs", "provider.rs"],
+    );
     assert_asset_logic_is_colocated(
         &root.join("src").join("agents").join("opencode"),
         &["fn meta_data", "fn mcp_data", "fn provider_data"],

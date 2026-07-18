@@ -1721,6 +1721,386 @@ fn opencode_does_not_expose_memory_assets() {
 }
 
 #[test]
+fn kimi_code_discovers_default_home() {
+    let dir = tempfile::tempdir().unwrap();
+    let default_home = dir.path().join(".kimi-code");
+    fs::create_dir_all(&default_home).unwrap();
+
+    let agents = discover_agents(dir.path());
+
+    let kimi_homes = agents
+        .iter()
+        .filter(|agent| agent.name() == "kimi-code")
+        .map(|agent| agent.home().to_path_buf())
+        .collect::<Vec<_>>();
+
+    assert_eq!(kimi_homes, vec![default_home.clone()]);
+    let kimi = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-code" && agent.home() == default_home)
+        .unwrap();
+    assert_eq!(kimi.title(), "Kimi Code");
+    assert!(kimi.get_assets(AssetType::Cron).unwrap().is_empty());
+    assert_eq!(kimi.get_assets(AssetType::Process).unwrap().len(), 1);
+}
+
+#[test]
+fn kimi_code_provider_parses_config_and_masks_secrets() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".kimi-code");
+    fs::create_dir_all(home.join("credentials")).unwrap();
+    fs::write(
+        home.join("config.toml"),
+        r#"
+default_model = "kimi-code/kimi-for-coding"
+
+[providers."managed:kimi-code"]
+type = "kimi"
+base_url = "https://api.kimi.com/coding/v1"
+api_key = "sk-kimi-secret"
+
+[models."kimi-code/kimi-for-coding"]
+provider = "managed:kimi-code"
+model = "kimi-k2-0711-preview"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        home.join("credentials").join("oauth.json"),
+        r#"{"access_token":"oauth-kimi-secret"}"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let kimi = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-code")
+        .unwrap();
+    let providers = asset_data(kimi, AssetType::Provider);
+    let provider = &providers[0].data[0];
+    let serialized = providers[0].data.to_string();
+
+    assert_eq!(provider["providerId"], "kimi");
+    assert_eq!(provider["rawProviderId"], "managed:kimi-code");
+    assert_eq!(provider["baseUrl"], "https://api.kimi.com/coding/v1");
+    assert_eq!(provider["endpointVariant"], "kimi-code");
+    assert_eq!(provider["protocol"], "chat_completions");
+    assert_eq!(provider["activationStatus"], "active");
+    assert_eq!(provider["models"][0]["id"], "kimi-k2-0711-preview");
+    assert_eq!(provider["models"][0]["name"], "kimi-code/kimi-for-coding");
+    assert!(provider["apiKey"].as_str().unwrap().contains("****"));
+    assert!(!serialized.contains("sk-kimi-secret"));
+    assert!(!serialized.contains("oauth-kimi-secret"));
+}
+
+#[test]
+fn kimi_code_provider_set_data_writes_config_toml() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".kimi-code");
+    fs::create_dir_all(&home).unwrap();
+
+    let agents = discover_agents(dir.path());
+    let kimi = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-code")
+        .unwrap();
+    let provider_asset = kimi
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let result = provider_asset
+        .set_provider_data(ProviderData {
+            name: "Kimi Code".to_string(),
+            raw_provider_id: Some("managed:kimi-code".to_string()),
+            base_url: Some("https://api.kimi.com/coding/v1".to_string()),
+            api_key: Some("sk-kimi-set-secret".to_string()),
+            enabled: true,
+            models: vec![ProviderModel {
+                id: "kimi-k2-0711-preview".to_string(),
+                name: Some("Kimi K2".to_string()),
+                enabled: true,
+            }],
+            protocol: Some(WireProtocol::Responses),
+            ..ProviderData::default()
+        })
+        .unwrap();
+
+    assert!(result.changed);
+    let config: toml::Value =
+        toml::from_str(&fs::read_to_string(home.join("config.toml")).unwrap()).unwrap();
+    assert_eq!(
+        config["default_model"].as_str(),
+        Some("kimi-code/kimi-k2-0711-preview")
+    );
+    assert_eq!(
+        config["providers"]["managed:kimi-code"]["type"].as_str(),
+        Some("openai_responses")
+    );
+    assert_eq!(
+        config["providers"]["managed:kimi-code"]["base_url"].as_str(),
+        Some("https://api.kimi.com/coding/v1")
+    );
+    assert_eq!(
+        config["providers"]["managed:kimi-code"]["api_key"].as_str(),
+        Some("sk-kimi-set-secret")
+    );
+    assert_eq!(
+        config["models"]["kimi-code/kimi-k2-0711-preview"]["provider"].as_str(),
+        Some("managed:kimi-code")
+    );
+    assert_eq!(
+        config["models"]["kimi-code/kimi-k2-0711-preview"]["model"].as_str(),
+        Some("kimi-k2-0711-preview")
+    );
+}
+
+#[test]
+fn kimi_code_provider_delete_removes_provider_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".kimi-code");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("config.toml"),
+        r#"
+default_model = "kimi-code/kimi-old"
+
+[providers."managed:kimi-code"]
+type = "kimi"
+base_url = "https://api.kimi.com/coding/v1"
+api_key = "sk-old"
+
+[providers.other]
+type = "anthropic"
+base_url = "https://anthropic.example.test"
+api_key = "sk-other"
+
+[models."kimi-code/kimi-old"]
+provider = "managed:kimi-code"
+model = "kimi-old"
+
+[models."kimi-code/claude"]
+provider = "other"
+model = "claude"
+"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let kimi = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-code")
+        .unwrap();
+    let provider_asset = kimi
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let result = provider_asset
+        .del_provider_data(&ProviderData {
+            name: "Kimi Code".to_string(),
+            base_url: Some("https://api.kimi.com/coding/v1".to_string()),
+            ..ProviderData::default()
+        })
+        .unwrap();
+
+    assert!(result.changed);
+    let config: toml::Value =
+        toml::from_str(&fs::read_to_string(home.join("config.toml")).unwrap()).unwrap();
+    assert!(config.get("default_model").is_none());
+    assert!(config["providers"].get("managed:kimi-code").is_none());
+    assert!(config["models"].get("kimi-code/kimi-old").is_none());
+    assert_eq!(
+        config["providers"]["other"]["type"].as_str(),
+        Some("anthropic")
+    );
+    assert_eq!(
+        config["models"]["kimi-code/claude"]["provider"].as_str(),
+        Some("other")
+    );
+}
+
+#[test]
+fn kimi_code_mcp_maps_http_sse_stdio_and_plugin_servers() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".kimi-code");
+    let plugin_root = home.join("plugins").join("managed").join("demo");
+    fs::create_dir_all(&plugin_root).unwrap();
+    fs::write(
+        home.join("mcp.json"),
+        r#"{
+          "mcpServers": {
+            "http-server": {"url": "https://mcp.example.test/mcp"},
+            "sse-server": {"url": "https://mcp.example.test/sse", "transport": "sse"},
+            "local-server": {"command": "node", "args": ["server.js"], "env": {"TOKEN": "test"}}
+          }
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        plugin_root.join("kimi.plugin.json"),
+        r#"{
+          "name": "demo-plugin",
+          "mcpServers": {
+            "plugin-server": {"command": ["python", "server.py"]}
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let kimi = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-code")
+        .unwrap();
+    let mcps = asset_data(kimi, AssetType::Mcp);
+    let items = mcps[0].data.as_array().unwrap();
+    let http = items
+        .iter()
+        .find(|item| item["name"] == "http-server")
+        .unwrap();
+    let sse = items
+        .iter()
+        .find(|item| item["name"] == "sse-server")
+        .unwrap();
+    let local = items
+        .iter()
+        .find(|item| item["name"] == "local-server")
+        .unwrap();
+    let plugin = items
+        .iter()
+        .find(|item| item["name"] == "plugin-server")
+        .unwrap();
+
+    assert_eq!(http["type"], "http");
+    assert_eq!(sse["type"], "sse");
+    assert_eq!(local["type"], "stdio");
+    assert_eq!(local["command"], "node");
+    assert_eq!(local["args"][0], "server.js");
+    assert_eq!(local["env"]["TOKEN"], "test");
+    assert_eq!(plugin["type"], "stdio");
+    assert_eq!(plugin["command"], "python");
+    assert_eq!(plugin["args"][0], "server.py");
+}
+
+#[test]
+fn kimi_code_collects_skills_plugins_and_memory_without_credentials() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".kimi-code");
+    let local_skill = home.join("skills").join("local");
+    let global_skill = dir.path().join(".agents").join("skills").join("global");
+    let plugin_root = home
+        .join("plugins")
+        .join("managed")
+        .join("vendor")
+        .join("plugin");
+    let plugin_skill = plugin_root.join("skills").join("plugin-skill");
+    fs::create_dir_all(&local_skill).unwrap();
+    fs::create_dir_all(&global_skill).unwrap();
+    fs::create_dir_all(&plugin_skill).unwrap();
+    fs::create_dir_all(home.join("credentials")).unwrap();
+    fs::create_dir_all(home.join("bin")).unwrap();
+    fs::create_dir_all(home.join("updates")).unwrap();
+    fs::create_dir_all(home.join("logs")).unwrap();
+    fs::create_dir_all(home.join("sessions").join("2026")).unwrap();
+    fs::write(local_skill.join("SKILL.md"), "---\nname: local\n---\nbody").unwrap();
+    fs::write(
+        global_skill.join("SKILL.md"),
+        "---\nname: global\n---\nbody",
+    )
+    .unwrap();
+    fs::write(
+        plugin_skill.join("SKILL.md"),
+        "---\nname: plugin-skill\n---\nbody",
+    )
+    .unwrap();
+    fs::write(
+        plugin_root.join("kimi.plugin.json"),
+        r#"{
+          "name": "demo-plugin",
+          "version": "1.2.3",
+          "author": {"name": "Kimi Team"},
+          "apiKey": "sk-plugin-secret",
+          "interface": {"displayName": "Demo Plugin", "shortDescription": "Demo"},
+          "skills": "skills",
+          "commands": []
+        }"#,
+    )
+    .unwrap();
+    fs::write(home.join("config.toml"), "default_model = \"kimi\"\n").unwrap();
+    fs::write(home.join("tui.toml"), "theme = \"dark\"\n").unwrap();
+    fs::write(home.join("AGENTS.md"), "User instructions").unwrap();
+    fs::write(home.join("mcp.json"), r#"{"mcpServers":{}}"#).unwrap();
+    fs::create_dir_all(home.join("plugins")).unwrap();
+    fs::write(home.join("plugins").join("installed.json"), "{}").unwrap();
+    fs::write(home.join("session_index.jsonl"), "{}\n").unwrap();
+    fs::write(home.join("logs").join("kimi-code.log"), "log").unwrap();
+    fs::write(
+        home.join("sessions").join("2026").join("thread.jsonl"),
+        "{}\n",
+    )
+    .unwrap();
+    fs::write(
+        home.join("credentials").join("oauth.json"),
+        r#"{"access_token":"oauth-kimi-secret"}"#,
+    )
+    .unwrap();
+    fs::write(home.join("bin").join("tool.json"), "{}").unwrap();
+    fs::write(home.join("updates").join("update.json"), "{}").unwrap();
+
+    let agents = discover_agents(dir.path());
+    let kimi = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-code")
+        .unwrap();
+    let skills = asset_data(kimi, AssetType::Skill);
+    let skill_items = skills[0].data.as_array().unwrap();
+    assert!(skill_items.iter().any(|item| item["name"] == "local"));
+    assert!(skill_items.iter().any(|item| item["name"] == "global"));
+    let plugin_skill = skill_items
+        .iter()
+        .find(|item| item["name"] == "plugin-skill")
+        .unwrap();
+    assert_eq!(plugin_skill["source"], "demo-plugin");
+    assert_eq!(plugin_skill["author"], "Kimi Team");
+    assert_eq!(plugin_skill["version"], "1.2.3");
+
+    let plugins = asset_data(kimi, AssetType::Plugin);
+    let plugin = &plugins[0].data[0];
+    let plugin_json = plugins[0].data.to_string();
+    assert_eq!(plugin["name"], "demo-plugin");
+    assert_eq!(plugin["displayName"], "Demo Plugin");
+    assert_eq!(plugin["enabled"], true);
+    assert_eq!(plugin["installSource"]["kind"], "local_path");
+    assert!(
+        plugin["capabilities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item == "skills")
+    );
+    assert!(!plugin_json.contains("sk-plugin-secret"));
+
+    let memories = asset_data(kimi, AssetType::Memory);
+    let memory_json = memories[0].data.to_string();
+    let memory_names = memories[0]
+        .data
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["name"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert!(memory_names.contains(&"config.toml".to_string()));
+    assert!(memory_names.contains(&"kimi.plugin.json".to_string()));
+    assert!(memory_names.contains(&"thread.jsonl".to_string()));
+    assert!(!memory_names.contains(&"oauth.json".to_string()));
+    assert!(!memory_json.contains("credentials"));
+    assert!(!memory_json.contains("oauth-kimi-secret"));
+}
+
+#[test]
 fn hermes_provider_reads_modern_model_and_auth_configuration() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".hermes");
