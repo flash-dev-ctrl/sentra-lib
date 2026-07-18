@@ -10,6 +10,7 @@ use crate::{SentraError, SentraResult};
 pub(crate) enum InstallableAgent {
     Codex,
     ClaudeCli,
+    KimiCode,
     OpenCode,
     Pi,
 }
@@ -19,6 +20,7 @@ impl InstallableAgent {
         match self {
             Self::Codex => "codex",
             Self::ClaudeCli => "claude-cli",
+            Self::KimiCode => "kimi-code",
             Self::OpenCode => "opencode",
             Self::Pi => "pi",
         }
@@ -28,6 +30,7 @@ impl InstallableAgent {
         match self {
             Self::Codex => "codex",
             Self::ClaudeCli => "claude",
+            Self::KimiCode => "kimi",
             Self::OpenCode => "opencode",
             Self::Pi => "pi",
         }
@@ -296,6 +299,9 @@ fn install_plans_for_platform(
         InstallableAgent::ClaudeCli => {
             crate::agents::claude_cli::install_plans_for_platform(platform, action)
         }
+        InstallableAgent::KimiCode => {
+            crate::agents::kimi_code::install_plans_for_platform(platform, action)
+        }
         InstallableAgent::OpenCode => {
             crate::agents::opencode::install_plans_for_platform(platform, action)
         }
@@ -321,6 +327,9 @@ fn uninstall_plan_for_platform(
         }
         InstallableAgent::ClaudeCli => {
             crate::agents::claude_cli::uninstall_plan_for_platform(platform, options)
+        }
+        InstallableAgent::KimiCode => {
+            crate::agents::kimi_code::uninstall_plan_for_platform(platform, options)
         }
         InstallableAgent::OpenCode => {
             crate::agents::opencode::uninstall_plan_for_platform(platform, options)

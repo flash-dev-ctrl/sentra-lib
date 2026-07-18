@@ -11,6 +11,7 @@ mod claude_cli;
 mod codex;
 mod general;
 mod hermes;
+mod kimi_code;
 mod openclaw;
 mod opencode;
 mod pi;
@@ -26,6 +27,7 @@ fn installable_agent(
     match agent {
         "codex" => Ok(install::InstallableAgent::Codex),
         "claude" | "claude-cli" => Ok(install::InstallableAgent::ClaudeCli),
+        "kimi-code" => Ok(install::InstallableAgent::KimiCode),
         "opencode" => Ok(install::InstallableAgent::OpenCode),
         "pi" => Ok(install::InstallableAgent::Pi),
         other => Err(crate::SentraError::Message(format!(
@@ -89,6 +91,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn kimi_code_is_installable() {
+        assert_eq!(
+            installable_agent("kimi-code", "installable").unwrap(),
+            install::InstallableAgent::KimiCode
+        );
+    }
 
     #[test]
     fn pi_is_installable() {

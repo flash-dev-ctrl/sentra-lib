@@ -4,6 +4,35 @@ use std::sync::OnceLock;
 use crate::interfaces::{ProviderData, ProviderModel, ProviderType};
 use crate::utils::protocol::WireProtocol;
 
+const PROVIDER_CATALOG_JSON: &str = r#"[
+  {"id":"abacus","name":"Abacus","baseUrl":"https://routellm.abacus.ai/v1"},
+  {"id":"anthropic","name":"Anthropic","baseUrl":"https://api.anthropic.com"},
+  {"id":"openai","name":"OpenAI","baseUrl":"https://api.openai.com/v1"},
+  {"id":"azure-openai","name":"Azure OpenAI","baseUrl":""},
+  {"id":"openrouter","name":"OpenRouter","baseUrl":"https://openrouter.ai/api/v1"},
+  {"id":"kimi","name":"Kimi","baseUrl":"https://api.moonshot.cn/v1"},
+  {"id":"kimi-for-coding","name":"Kimi For Coding","baseUrl":"https://api.kimi.com/coding/v1"},
+  {"id":"kimi_coding","name":"Kimi For Coding","baseUrl":"https://api.kimi.com/coding/v1"},
+  {"id":"moonshotai","name":"Moonshot AI","baseUrl":"https://api.moonshot.ai/v1"},
+  {"id":"moonshotai-cn","name":"Moonshot AI (China)","baseUrl":"https://api.moonshot.cn/v1"},
+  {"id":"deepseek","name":"DeepSeek","baseUrl":"https://api.deepseek.com"},
+  {"id":"groq","name":"Groq","baseUrl":"https://api.groq.com/openai/v1"},
+  {"id":"minimax","name":"MiniMax","baseUrl":"https://api.minimax.io/anthropic/v1"},
+  {"id":"minimax-cn","name":"MiniMax","baseUrl":"https://api.minimaxi.com/anthropic/v1"},
+  {"id":"mistral","name":"Mistral AI","baseUrl":"https://api.mistral.ai/v1"},
+  {"id":"xai","name":"xAI","baseUrl":"https://api.x.ai/v1"},
+  {"id":"opencode","name":"OpenCode Zen","baseUrl":"https://opencode.ai/zen/v1"},
+  {"id":"opencode-go","name":"OpenCode Go","baseUrl":"https://opencode.ai/zen/go/v1"},
+  {"id":"opencode_go","name":"OpenCode Go","baseUrl":"https://opencode.ai/zen/go/v1"},
+  {"id":"google","name":"Google AI","baseUrl":""},
+  {"id":"cerebras","name":"Cerebras","baseUrl":""},
+  {"id":"nvidia","name":"NVIDIA","baseUrl":"https://integrate.api.nvidia.com/v1"},
+  {"id":"cloudflare","name":"Cloudflare AI","baseUrl":""},
+  {"id":"vercel-ai-gateway","name":"Vercel AI Gateway","baseUrl":""},
+  {"id":"zai","name":"Z.AI","baseUrl":""},
+  {"id":"ant-ling","name":"Ant Ling","baseUrl":""}
+]"#;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderActivationStatus {
@@ -104,6 +133,21 @@ struct ProviderCatalogFile {
     providers: Vec<ProviderDefinition>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum EmbeddedProviderCatalog {
+    Structured(ProviderCatalogFile),
+    Simple(Vec<ProviderCatalogEntry>),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderCatalogEntry {
+    id: String,
+    name: String,
+    base_url: String,
+}
+
 #[derive(Debug)]
 pub struct ProviderRegistry {
     schema_version: u32,
@@ -122,8 +166,9 @@ impl ProviderRegistry {
     pub fn builtin() -> &'static Self {
         static REGISTRY: OnceLock<ProviderRegistry> = OnceLock::new();
         REGISTRY.get_or_init(|| {
-            let catalog: ProviderCatalogFile = serde_json::from_str(include_str!("catalog.json"))
+            let catalog: EmbeddedProviderCatalog = serde_json::from_str(PROVIDER_CATALOG_JSON)
                 .expect("embedded provider catalog must be valid");
+            let catalog = catalog.into_catalog_file();
             let registry = ProviderRegistry {
                 schema_version: catalog.schema_version,
                 revision: catalog.revision,
@@ -460,6 +505,205 @@ impl ProviderRegistry {
             }
         }
         None
+    }
+}
+
+impl EmbeddedProviderCatalog {
+    fn into_catalog_file(self) -> ProviderCatalogFile {
+        match self {
+            Self::Structured(catalog) => catalog,
+            Self::Simple(entries) => {
+                let mut providers = entries
+                    .into_iter()
+                    .filter(simple_catalog_entry_is_registry_provider)
+                    .filter(|entry| !entry.id.trim().is_empty())
+                    .map(ProviderDefinition::from)
+                    .collect::<Vec<_>>();
+                patch_builtin_aliases(&mut providers);
+                ProviderCatalogFile {
+                    schema_version: 1,
+                    revision: "providers.json".to_string(),
+                    providers,
+                }
+            }
+        }
+    }
+}
+
+fn simple_catalog_entry_is_registry_provider(entry: &ProviderCatalogEntry) -> bool {
+    !matches!(
+        normalized_id(&entry.id).as_str(),
+        "kimi-for-coding"
+            | "kimi-coding"
+            | "moonshotai"
+            | "moonshotai-cn"
+            | "opencode-go"
+            | "minimax-cn"
+            | "minimax-cn-coding-plan"
+            | "minimax-coding-plan"
+            | "minimax-en"
+    )
+}
+
+impl From<ProviderCatalogEntry> for ProviderDefinition {
+    fn from(entry: ProviderCatalogEntry) -> Self {
+        let base_url = entry.base_url.trim().to_string();
+        let endpoints = if base_url.is_empty() {
+            Vec::new()
+        } else {
+            vec![ProviderEndpoint {
+                id: "default".to_string(),
+                base_url,
+                protocol: default_protocol_for_provider(&entry.id),
+                environment_keys: Vec::new(),
+            }]
+        };
+        Self {
+            id: entry.id,
+            display_name: entry.name,
+            aliases: Vec::new(),
+            environment_keys: Vec::new(),
+            default_endpoint: (!endpoints.is_empty()).then(|| "default".to_string()),
+            endpoints,
+            agent_aliases: Vec::new(),
+        }
+    }
+}
+
+fn patch_builtin_aliases(providers: &mut [ProviderDefinition]) {
+    if let Some(provider) = find_provider_mut(providers, "kimi") {
+        add_alias(provider, "moonshot");
+        provider.default_endpoint = Some("moonshot".to_string());
+        upsert_endpoint(
+            provider,
+            "moonshot",
+            "https://api.moonshot.ai/v1",
+            WireProtocol::ChatCompletions,
+        );
+        upsert_endpoint(
+            provider,
+            "kimi-code",
+            "https://api.kimi.com/coding/v1",
+            WireProtocol::ChatCompletions,
+        );
+        upsert_agent_alias(provider, "kimi-code", "kimi", "moonshot");
+        upsert_agent_alias(provider, "kimi-code", "kimi-code", "kimi-code");
+        upsert_agent_alias(provider, "kimi-code", "managed:kimi-code", "kimi-code");
+    }
+
+    if let Some(provider) = find_provider_mut(providers, "minimax") {
+        add_alias(provider, "minimax-ai");
+        provider.default_endpoint = Some("global-anthropic".to_string());
+        upsert_endpoint(
+            provider,
+            "global-anthropic",
+            "https://api.minimax.io/anthropic",
+            WireProtocol::AnthropicMessages,
+        );
+        upsert_endpoint(
+            provider,
+            "cn-anthropic",
+            "https://api.minimaxi.com/anthropic",
+            WireProtocol::AnthropicMessages,
+        );
+        upsert_agent_alias(provider, "pi", "minimax-cn", "cn-anthropic");
+        upsert_agent_alias(provider, "openclaw", "minimax-cn", "cn-anthropic");
+        upsert_agent_alias(provider, "hermes", "minimax-cn", "cn-anthropic");
+    }
+
+    if let Some(provider) = find_provider_mut(providers, "opencode") {
+        provider.display_name = "OpenCode".to_string();
+        provider.default_endpoint = Some("zen".to_string());
+        upsert_endpoint(
+            provider,
+            "zen",
+            "https://opencode.ai/zen/v1",
+            WireProtocol::ChatCompletions,
+        );
+        upsert_endpoint(
+            provider,
+            "go",
+            "https://opencode.ai/zen/go/v1",
+            WireProtocol::ChatCompletions,
+        );
+        upsert_endpoint(
+            provider,
+            "go-anthropic",
+            "https://opencode.ai/zen/go",
+            WireProtocol::AnthropicMessages,
+        );
+        upsert_agent_alias(provider, "pi", "opencode-go", "go");
+        upsert_agent_alias(provider, "opencode", "opencode-go", "go");
+        upsert_agent_alias(provider, "openclaw", "opencode", "zen");
+        upsert_agent_alias(provider, "openclaw", "opencode-zen", "zen");
+        upsert_agent_alias(provider, "openclaw", "opencode-go", "go");
+        upsert_agent_alias(provider, "hermes", "opencode", "zen");
+        upsert_agent_alias(provider, "hermes", "opencode-zen", "zen");
+        upsert_agent_alias(provider, "hermes", "opencode-go", "go");
+    }
+}
+
+fn find_provider_mut<'a>(
+    providers: &'a mut [ProviderDefinition],
+    id: &str,
+) -> Option<&'a mut ProviderDefinition> {
+    providers
+        .iter_mut()
+        .find(|provider| normalized_id(&provider.id) == normalized_id(id))
+}
+
+fn add_alias(provider: &mut ProviderDefinition, alias: &str) {
+    if !provider
+        .aliases
+        .iter()
+        .any(|value| normalized_id(value) == normalized_id(alias))
+    {
+        provider.aliases.push(alias.to_string());
+    }
+}
+
+fn upsert_endpoint(
+    provider: &mut ProviderDefinition,
+    id: &str,
+    base_url: &str,
+    protocol: WireProtocol,
+) {
+    if let Some(endpoint) = provider
+        .endpoints
+        .iter_mut()
+        .find(|endpoint| endpoint.id == id)
+    {
+        endpoint.base_url = base_url.to_string();
+        endpoint.protocol = protocol;
+    } else {
+        provider.endpoints.push(ProviderEndpoint {
+            id: id.to_string(),
+            base_url: base_url.to_string(),
+            protocol,
+            environment_keys: Vec::new(),
+        });
+    }
+}
+
+fn upsert_agent_alias(provider: &mut ProviderDefinition, agent: &str, alias: &str, endpoint: &str) {
+    if provider.agent_aliases.iter().any(|item| {
+        normalized_id(&item.agent) == normalized_id(agent)
+            && normalized_id(&item.alias) == normalized_id(alias)
+    }) {
+        return;
+    }
+    provider.agent_aliases.push(ProviderAgentAlias {
+        agent: agent.to_string(),
+        alias: alias.to_string(),
+        endpoint: Some(endpoint.to_string()),
+        environment_keys: Vec::new(),
+    });
+}
+
+fn default_protocol_for_provider(id: &str) -> WireProtocol {
+    match normalized_id(id).as_str() {
+        "anthropic" => WireProtocol::AnthropicMessages,
+        _ => WireProtocol::ChatCompletions,
     }
 }
 

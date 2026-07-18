@@ -68,6 +68,16 @@ pub(crate) const HERMES_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
+pub(crate) const KIMI_CODE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "kimi-code",
+    title: Some("Kimi Code"),
+    homes: &[&[".kimi-code"]],
+    asset_for_type: crate::agents::kimi_code::asset_for_type,
+    is_installed: crate::agents::kimi_code::is_agent_installed,
+    process_provider: crate::agents::kimi_code::process_data,
+    process_home_env_vars: &["KIMI_CODE_HOME"],
+};
+
 pub(crate) const OPENCLAW_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "openclaw",
     title: Some("OpenClaw"),
@@ -188,6 +198,7 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         CLAUDE_CLI_AGENT_ENTRY.clone(),
         CLAUDE_APP_AGENT_ENTRY.clone(),
         HERMES_AGENT_ENTRY.clone(),
+        KIMI_CODE_AGENT_ENTRY.clone(),
         OPENCLAW_AGENT_ENTRY.clone(),
         OPENCODE_AGENT_ENTRY.clone(),
         PI_AGENT_ENTRY.clone(),
@@ -226,6 +237,7 @@ mod tests {
             &CLAUDE_CLI_AGENT_ENTRY,
             &CLAUDE_APP_AGENT_ENTRY,
             &HERMES_AGENT_ENTRY,
+            &KIMI_CODE_AGENT_ENTRY,
             &OPENCLAW_AGENT_ENTRY,
             &OPENCODE_AGENT_ENTRY,
             &PI_AGENT_ENTRY,
