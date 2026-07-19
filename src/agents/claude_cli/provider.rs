@@ -68,12 +68,12 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
             settings["env"]["ANTHROPIC_BASE_URL"] = json!(base_url);
         }
         if let Some(api_key) = value.api_key {
-            settings["env"]["ANTHROPIC_AUTH_TOKEN"] = json!(api_key);
+            settings["env"]["ANTHROPIC_API_KEY"] = json!(api_key);
             if let Some(env) = settings
                 .get_mut("env")
                 .and_then(|value| value.as_object_mut())
             {
-                env.remove("ANTHROPIC_API_KEY");
+                env.remove("ANTHROPIC_AUTH_TOKEN");
             }
         }
         if let Some(model) = value.models.first() {
@@ -128,7 +128,8 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
         }
         if let Some(api_key) = &item.api_key {
             let configured = env
-                .get("ANTHROPIC_AUTH_TOKEN")
+                .get("ANTHROPIC_API_KEY")
+                .or_else(|| env.get("ANTHROPIC_AUTH_TOKEN"))
                 .and_then(|value| value.as_str());
             if configured != Some(api_key) {
                 return Ok(AssetMutationResult::unchanged(
@@ -166,7 +167,10 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
         .and_then(|value| value.as_str())
     {
         let api_key = env
-            .and_then(|env| env.get("ANTHROPIC_AUTH_TOKEN"))
+            .and_then(|env| {
+                env.get("ANTHROPIC_API_KEY")
+                    .or_else(|| env.get("ANTHROPIC_AUTH_TOKEN"))
+            })
             .and_then(|value| value.as_str())
             .map(str::to_string);
         let mut seen = std::collections::HashSet::new();
