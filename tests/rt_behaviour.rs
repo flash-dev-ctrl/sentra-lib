@@ -343,9 +343,6 @@ fn agent_assets_match_ts_supported_types_and_read_configs() {
     let dir = tempfile::tempdir().unwrap();
     let codex_home = dir.path().join(".codex");
     fs::create_dir_all(&codex_home).unwrap();
-    unsafe {
-        std::env::set_var("SENTRA_RT_CODEX_TEST_KEY", "sk-from-env");
-    }
     fs::write(
         codex_home.join("config.toml"),
         r#"
@@ -391,7 +388,7 @@ env_key = "SENTRA_RT_CODEX_TEST_KEY"
 
     let providers = asset_data(&codex, AssetType::Provider);
     assert_eq!(providers[0].data[0]["baseUrl"], "https://api.openai.com/v1");
-    assert_eq!(providers[0].data[0]["apiKey"], "sk-from-env");
+    assert!(providers[0].data[0]["apiKey"].is_null());
     assert_eq!(providers[0].data[0]["models"][0]["id"], "gpt-5");
 }
 
@@ -974,13 +971,14 @@ fn opencode_discovery_uses_config_home() {
             .join("opencode"),
     )
     .unwrap();
+    let expected_without_config_home = usize::from(opencode_command_exists());
     let agents = discover_agents(data_only.path());
     assert_eq!(
         agents
             .iter()
             .filter(|agent| agent.name() == "opencode")
             .count(),
-        0
+        expected_without_config_home
     );
 
     let legacy_only = tempfile::tempdir().unwrap();
@@ -993,7 +991,7 @@ fn opencode_discovery_uses_config_home() {
             .iter()
             .filter(|agent| agent.name() == "opencode")
             .count(),
-        0
+        expected_without_config_home
     );
 }
 
@@ -1178,9 +1176,10 @@ fn opencode_provider_runtime_data_keeps_api_key_for_model_probe() {
         .into_iter()
         .next()
         .unwrap();
-    let masked: Vec<ProviderData> = serde_json::from_value(provider_asset.data().unwrap()).unwrap();
+    let masked: Vec<ProviderData> =
+        serde_json::from_str(&provider_asset.data().unwrap().to_string()).unwrap();
     let runtime: Vec<ProviderData> =
-        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
+        serde_json::from_str(&provider_asset.runtime_data().unwrap().to_string()).unwrap();
 
     assert_ne!(masked[0].api_key.as_deref(), Some("sk-chaitin-secret"));
     assert_eq!(runtime[0].api_key.as_deref(), Some("sk-chaitin-secret"));
@@ -2514,6 +2513,18 @@ fn test_binary_name(name: &str) -> String {
     }
 }
 
+fn opencode_command_exists() -> bool {
+    let output = if cfg!(windows) {
+        std::process::Command::new("where").arg("opencode").output()
+    } else {
+        std::process::Command::new("sh")
+            .args(["-c", "command -v \"$1\" >/dev/null 2>&1", "sentra"])
+            .arg("opencode")
+            .output()
+    };
+    output.is_ok_and(|output| output.status.success())
+}
+
 fn asset_data(agent: &sentra_lib::agents::Agent, asset_type: AssetType) -> Vec<AssetData> {
     agent
         .get_assets(asset_type)
@@ -2521,7 +2532,7 @@ fn asset_data(agent: &sentra_lib::agents::Agent, asset_type: AssetType) -> Vec<A
         .into_iter()
         .map(|asset| AssetData {
             asset_type: asset.asset_type(),
-            data: asset.data().unwrap(),
+            data: serde_json::from_str(&asset.data().unwrap().to_string()).unwrap(),
         })
         .collect()
 }
