@@ -6,10 +6,6 @@ use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderData, ProviderModel,
     ProviderProbeRequest,
 };
-use crate::providers::{
-    ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
-    protocol_for_api,
-};
 use crate::utils::protocol::{WireProtocol, default_model_probe_prompt};
 use crate::utils::read_json_file;
 
@@ -91,43 +87,40 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
         for (id, raw) in raw_providers {
             let raw = raw.as_object();
             let provider_id = id.as_str();
-            let api = raw.and_then(|raw| raw.get("api").and_then(Value::as_str));
-            let activation = provider_activation(default_provider.as_deref(), provider_id);
+            let enabled = provider_enabled(default_provider.as_deref(), provider_id);
             let mut models = provider_models(raw.and_then(|raw| raw.get("models")));
-            if activation == ProviderActivationStatus::Active
-                && let Some(model) = default_model.as_deref()
-            {
+            if enabled && let Some(model) = default_model.as_deref() {
                 ensure_model(&mut models, model, true);
             }
 
-            let mut candidate = ProviderCandidate::new("pi");
-            candidate.agent_provider_id = Some(provider_id.to_string());
-            candidate.display_name = Some(
-                raw.and_then(|raw| {
+            let name = raw
+                .and_then(|raw| {
                     raw.get("name")
                         .or_else(|| raw.get("displayName"))
                         .and_then(Value::as_str)
                 })
                 .unwrap_or(provider_id)
-                .to_string(),
-            );
-            candidate.configured_base_url = raw.and_then(base_url);
-            candidate.protocol_hint = api.and_then(protocol_for_api);
-            candidate.protocol_source = candidate
-                .protocol_hint
-                .map(|_| ProviderFieldSource::Configured);
-            candidate.api_key = raw
-                .and_then(|raw| {
-                    raw.get("apiKey")
-                        .or_else(|| raw.get("api_key"))
-                        .and_then(Value::as_str)
-                        .and_then(|value| resolve_config_string(value, None))
-                })
-                .or_else(|| auth_key(auth_providers, provider_id))
-                .or_else(|| env_api_key(provider_id));
-            candidate.activation = activation;
-            candidate.models = models;
-            providers.push(ProviderRegistry::builtin().resolve(candidate));
+                .to_string();
+            providers.push(ProviderData {
+                name,
+                base_url: raw
+                    .and_then(base_url)
+                    .or_else(|| pi_builtin_base_url(provider_id).map(str::to_string)),
+                api_key: raw
+                    .and_then(|raw| {
+                        raw.get("apiKey")
+                            .or_else(|| raw.get("api_key"))
+                            .and_then(Value::as_str)
+                            .and_then(literal_config_string)
+                    })
+                    .or_else(|| auth_key(auth_providers, provider_id)),
+                enabled,
+                models,
+                protocol: raw
+                    .and_then(|raw| raw.get("protocol").and_then(Value::as_str))
+                    .and_then(|value| value.parse().ok()),
+                ..ProviderData::default()
+            });
             provider_ids.push(provider_id.to_string());
         }
 
@@ -138,7 +131,7 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                 provider_id,
                 default_model.as_deref(),
                 auth_providers,
-                ProviderActivationStatus::Active,
+                true,
             ));
             provider_ids.push(provider_id.to_string());
         }
@@ -151,7 +144,7 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
             provider_id,
             default_model.as_deref(),
             auth_providers,
-            ProviderActivationStatus::Active,
+            true,
         ));
         provider_ids.push(provider_id.to_string());
     }
@@ -165,7 +158,7 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                 provider_id,
                 None,
                 Some(auth_providers),
-                provider_activation(default_provider.as_deref(), provider_id),
+                provider_enabled(default_provider.as_deref(), provider_id),
             ));
             provider_ids.push(provider_id.to_string());
         }
@@ -237,29 +230,69 @@ fn fallback_provider(
     provider_id: &str,
     default_model: Option<&str>,
     auth_providers: Option<&serde_json::Map<String, Value>>,
-    activation: ProviderActivationStatus,
+    enabled: bool,
 ) -> ProviderData {
-    let mut candidate = ProviderCandidate::new("pi");
-    candidate.agent_provider_id = Some(provider_id.to_string());
-    candidate.display_name = Some(provider_id.to_string());
-    candidate.api_key = auth_key(auth_providers, provider_id).or_else(|| env_api_key(provider_id));
-    candidate.activation = activation;
-    candidate.models = default_model
-        .map(|id| vec![model(id, Some(id), true)])
-        .unwrap_or_default();
-    ProviderRegistry::builtin().resolve(candidate)
+    ProviderData {
+        name: provider_id.to_string(),
+        base_url: pi_builtin_base_url(provider_id).map(str::to_string),
+        api_key: auth_key(auth_providers, provider_id),
+        enabled,
+        models: default_model
+            .map(|id| vec![model(id, Some(id), true)])
+            .unwrap_or_default(),
+        protocol: None,
+        ..ProviderData::default()
+    }
 }
 
-fn provider_activation(
-    default_provider: Option<&str>,
-    provider_id: &str,
-) -> ProviderActivationStatus {
+fn provider_enabled(default_provider: Option<&str>, provider_id: &str) -> bool {
     match default_provider {
-        Some(default_provider) if default_provider == provider_id => {
-            ProviderActivationStatus::Active
-        }
-        Some(_) => ProviderActivationStatus::Inactive,
-        None => ProviderActivationStatus::Unknown,
+        Some(default_provider) => default_provider == provider_id,
+        None => true,
+    }
+}
+
+fn pi_builtin_base_url(provider_id: &str) -> Option<&'static str> {
+    match provider_id
+        .trim()
+        .to_ascii_lowercase()
+        .replace('_', "-")
+        .as_str()
+    {
+        "abacus" => Some("https://routellm.abacus.ai/v1"),
+        "ant-ling" => Some("https://api.ant-ling.com/v1"),
+        "anthropic" => Some("https://api.anthropic.com"),
+        "cerebras" => Some("https://api.cerebras.ai/v1"),
+        "deepseek" => Some("https://api.deepseek.com"),
+        "fireworks" => Some("https://api.fireworks.ai/inference"),
+        "github-copilot" => Some("https://api.individual.githubcopilot.com"),
+        "google" => Some("https://generativelanguage.googleapis.com/v1beta"),
+        "groq" => Some("https://api.groq.com/openai/v1"),
+        "huggingface" => Some("https://router.huggingface.co/v1"),
+        "kimi" => Some("https://api.moonshot.cn/v1"),
+        "kimi-coding" | "kimi-for-coding" => Some("https://api.kimi.com/coding/v1"),
+        "minimax" => Some("https://api.minimax.io/anthropic/v1"),
+        "minimax-cn" => Some("https://api.minimaxi.com/anthropic/v1"),
+        "mistral" => Some("https://api.mistral.ai/v1"),
+        "moonshotai" => Some("https://api.moonshot.ai/v1"),
+        "moonshotai-cn" => Some("https://api.moonshot.cn/v1"),
+        "nvidia" => Some("https://integrate.api.nvidia.com/v1"),
+        "openai" => Some("https://api.openai.com/v1"),
+        "openai-codex" => Some("https://chatgpt.com/backend-api"),
+        "opencode" => Some("https://opencode.ai/zen/v1"),
+        "opencode-go" => Some("https://opencode.ai/zen/go/v1"),
+        "openrouter" => Some("https://openrouter.ai/api/v1"),
+        "radius" => Some("https://radius.pi.dev"),
+        "together" => Some("https://api.together.ai/v1"),
+        "vercel-ai-gateway" => Some("https://ai-gateway.vercel.sh"),
+        "xai" => Some("https://api.x.ai/v1"),
+        "xiaomi" => Some("https://api.xiaomimimo.com/v1"),
+        "xiaomi-token-plan-ams" => Some("https://token-plan-ams.xiaomimimo.com/v1"),
+        "xiaomi-token-plan-cn" => Some("https://token-plan-cn.xiaomimimo.com/v1"),
+        "xiaomi-token-plan-sgp" => Some("https://token-plan-sgp.xiaomimimo.com/v1"),
+        "zai" => Some("https://api.z.ai/api/coding/paas/v4"),
+        "zai-coding-cn" => Some("https://open.bigmodel.cn/api/coding/paas/v4"),
+        _ => None,
     }
 }
 
@@ -289,94 +322,84 @@ fn auth_key(
 ) -> Option<String> {
     let value = providers?.get(provider_id)?;
     if let Some(key) = value.as_str() {
-        return resolve_config_string(key, None);
+        return literal_config_string(key);
     }
     let raw = value.as_object()?;
-    let scoped_env = raw.get("env").and_then(Value::as_object);
     raw.get("apiKey")
         .or_else(|| raw.get("api_key"))
         .or_else(|| raw.get("key"))
         .or_else(|| raw.get("token"))
         .and_then(Value::as_str)
-        .and_then(|value| resolve_config_string(value, scoped_env))
+        .and_then(literal_config_string)
 }
 
-fn resolve_config_string(
-    value: &str,
-    scoped_env: Option<&serde_json::Map<String, Value>>,
-) -> Option<String> {
-    if value.starts_with('!') {
-        return None;
-    }
+fn literal_config_string(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty() && !value.starts_with('!')).then(|| value.to_string())
+}
 
-    let mut resolved = String::new();
-    let mut chars = value.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch != '$' {
-            resolved.push(ch);
-            continue;
+#[cfg(test)]
+mod tests {
+    use super::pi_builtin_base_url;
+
+    #[test]
+    fn pi_builtin_base_urls_cover_static_catalog() {
+        for (provider_id, base_url) in [
+            ("abacus", "https://routellm.abacus.ai/v1"),
+            ("ant-ling", "https://api.ant-ling.com/v1"),
+            ("anthropic", "https://api.anthropic.com"),
+            ("cerebras", "https://api.cerebras.ai/v1"),
+            ("deepseek", "https://api.deepseek.com"),
+            ("fireworks", "https://api.fireworks.ai/inference"),
+            ("github-copilot", "https://api.individual.githubcopilot.com"),
+            ("google", "https://generativelanguage.googleapis.com/v1beta"),
+            ("groq", "https://api.groq.com/openai/v1"),
+            ("huggingface", "https://router.huggingface.co/v1"),
+            ("kimi", "https://api.moonshot.cn/v1"),
+            ("kimi-coding", "https://api.kimi.com/coding/v1"),
+            ("kimi-for-coding", "https://api.kimi.com/coding/v1"),
+            ("minimax", "https://api.minimax.io/anthropic/v1"),
+            ("minimax-cn", "https://api.minimaxi.com/anthropic/v1"),
+            ("mistral", "https://api.mistral.ai/v1"),
+            ("moonshotai", "https://api.moonshot.ai/v1"),
+            ("moonshotai-cn", "https://api.moonshot.cn/v1"),
+            ("nvidia", "https://integrate.api.nvidia.com/v1"),
+            ("openai", "https://api.openai.com/v1"),
+            ("openai-codex", "https://chatgpt.com/backend-api"),
+            ("opencode", "https://opencode.ai/zen/v1"),
+            ("opencode-go", "https://opencode.ai/zen/go/v1"),
+            ("openrouter", "https://openrouter.ai/api/v1"),
+            ("radius", "https://radius.pi.dev"),
+            ("together", "https://api.together.ai/v1"),
+            ("vercel-ai-gateway", "https://ai-gateway.vercel.sh"),
+            ("xai", "https://api.x.ai/v1"),
+            ("xiaomi", "https://api.xiaomimimo.com/v1"),
+            (
+                "xiaomi-token-plan-ams",
+                "https://token-plan-ams.xiaomimimo.com/v1",
+            ),
+            (
+                "xiaomi-token-plan-cn",
+                "https://token-plan-cn.xiaomimimo.com/v1",
+            ),
+            (
+                "xiaomi-token-plan-sgp",
+                "https://token-plan-sgp.xiaomimimo.com/v1",
+            ),
+            ("zai", "https://api.z.ai/api/coding/paas/v4"),
+            (
+                "zai-coding-cn",
+                "https://open.bigmodel.cn/api/coding/paas/v4",
+            ),
+        ] {
+            assert_eq!(pi_builtin_base_url(provider_id), Some(base_url));
         }
 
-        match chars.peek().copied() {
-            Some('$') => {
-                chars.next();
-                resolved.push('$');
-            }
-            Some('!') => {
-                chars.next();
-                resolved.push('!');
-            }
-            Some('{') => {
-                chars.next();
-                let mut name = String::new();
-                for next in chars.by_ref() {
-                    if next == '}' {
-                        break;
-                    }
-                    name.push(next);
-                }
-                resolved.push_str(&env_value(&name, scoped_env)?);
-            }
-            Some(next) if is_env_start(next) => {
-                let mut name = String::new();
-                while let Some(next) = chars.peek().copied() {
-                    if !is_env_part(next) {
-                        break;
-                    }
-                    name.push(next);
-                    chars.next();
-                }
-                resolved.push_str(&env_value(&name, scoped_env)?);
-            }
-            _ => resolved.push('$'),
-        }
+        assert_eq!(
+            pi_builtin_base_url("opencode_go"),
+            pi_builtin_base_url("opencode-go")
+        );
+        assert_eq!(pi_builtin_base_url("azure-openai-responses"), None);
+        assert_eq!(pi_builtin_base_url("cloudflare-ai-gateway"), None);
     }
-    Some(resolved)
-}
-
-fn env_value(name: &str, scoped_env: Option<&serde_json::Map<String, Value>>) -> Option<String> {
-    scoped_env
-        .and_then(|env| env.get(name))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .or_else(|| std::env::var(name).ok())
-}
-
-fn is_env_start(ch: char) -> bool {
-    ch == '_' || ch.is_ascii_alphabetic()
-}
-
-fn is_env_part(ch: char) -> bool {
-    ch == '_' || ch.is_ascii_alphanumeric()
-}
-
-fn env_api_key(provider_id: &str) -> Option<String> {
-    for key in ProviderRegistry::builtin().environment_keys("pi", provider_id) {
-        if let Ok(value) = std::env::var(key)
-            && !value.is_empty()
-        {
-            return Some(value);
-        }
-    }
-    None
 }

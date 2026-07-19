@@ -6,9 +6,6 @@ use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderAccount, ProviderData,
     ProviderModel, ProviderProbeRequest, ProviderType,
 };
-use crate::providers::{
-    ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
-};
 use crate::utils::protocol::WireProtocol;
 use crate::utils::{backup_file, read_json_file, write_json_file};
 
@@ -210,16 +207,15 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                 enabled: true,
             });
         }
-        let mut candidate = ProviderCandidate::new("claude-cli");
-        candidate.display_name =
-            Some(host_from_url(base_url).unwrap_or_else(|| "Anthropic".to_string()));
-        candidate.configured_base_url = Some(base_url.to_string());
-        candidate.protocol_hint = Some(WireProtocol::AnthropicMessages);
-        candidate.protocol_source = Some(ProviderFieldSource::Inferred);
-        candidate.api_key = api_key;
-        candidate.activation = ProviderActivationStatus::Active;
-        candidate.models = models;
-        providers.push(ProviderRegistry::builtin().resolve(candidate));
+        providers.push(ProviderData {
+            name: host_from_url(base_url).unwrap_or_else(|| "Anthropic".to_string()),
+            base_url: Some(base_url.to_string()),
+            api_key,
+            enabled: true,
+            models,
+            protocol: None,
+            ..ProviderData::default()
+        });
     }
     if let Some(account) = credentials_account_provider(agent_home, env)? {
         providers.push(account);

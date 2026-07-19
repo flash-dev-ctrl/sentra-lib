@@ -3,10 +3,6 @@ use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderData, ProviderModel,
     ProviderProbeRequest, ProviderType,
 };
-use crate::providers::{
-    ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
-    protocol_for_api,
-};
 use crate::utils::protocol::{WireProtocol, build_model_probe_request};
 use crate::utils::{backup_file, mask_secret, read_text_file, write_text_file};
 use crate::{SentraError, SentraResult};
@@ -265,34 +261,7 @@ fn provider_data(
     let mut results = Vec::new();
     for (provider_id, raw) in providers {
         let raw = raw.as_table();
-        let provider_type = string_field(raw, &["type"]);
-        let protocol = provider_type
-            .as_deref()
-            .and_then(protocol_for_provider_type);
-        let mut candidate = ProviderCandidate::new("kimi-code");
-        candidate.agent_provider_id = Some(provider_id.clone());
-        candidate.display_name = string_field(raw, &["name", "display_name", "displayName"])
-            .or_else(|| Some(provider_id.clone()));
-        candidate.configured_base_url =
-            string_field(raw, &["base_url", "baseURL", "baseUrl", "url"])
-                .or_else(|| env_string(raw, &["KIMI_BASE_URL", "OPENAI_BASE_URL", "BASE_URL"]));
-        candidate.protocol_hint = protocol;
-        candidate.protocol_source = protocol.map(|_| ProviderFieldSource::Configured);
-        candidate.api_key = string_field(raw, &["api_key", "apiKey", "key", "token"])
-            .or_else(|| {
-                env_string(
-                    raw,
-                    &[
-                        "KIMI_API_KEY",
-                        "OPENAI_API_KEY",
-                        "ANTHROPIC_API_KEY",
-                        "API_KEY",
-                    ],
-                )
-            })
-            .and_then(|value| maybe_mask_secret(value, mask_secrets));
-        candidate.activation = provider_activation(active_provider.as_deref(), &provider_id);
-        candidate.models = models
+        let mut provider_models = models
             .iter()
             .filter(|model| model.provider == provider_id)
             .map(|model| ProviderModel {
@@ -300,18 +269,28 @@ fn provider_data(
                 name: Some(model.alias.clone()),
                 enabled: true,
             })
-            .collect();
-        if candidate.models.is_empty()
+            .collect::<Vec<_>>();
+        if provider_models.is_empty()
             && let Some(default_model) = default_model.as_deref()
             && active_provider.as_deref() == Some(&provider_id)
         {
-            candidate.models.push(ProviderModel {
+            provider_models.push(ProviderModel {
                 id: default_model.to_string(),
                 name: Some(default_model.to_string()),
                 enabled: true,
             });
         }
-        results.push(ProviderRegistry::builtin().resolve(candidate));
+        results.push(ProviderData {
+            name: string_field(raw, &["name", "display_name", "displayName"])
+                .unwrap_or_else(|| provider_id.clone()),
+            base_url: string_field(raw, &["base_url", "baseURL", "baseUrl", "url"]),
+            api_key: string_field(raw, &["api_key", "apiKey", "key", "token"])
+                .and_then(|value| maybe_mask_secret(value, mask_secrets)),
+            enabled: provider_enabled(active_provider.as_deref(), &provider_id),
+            models: provider_models,
+            protocol: None,
+            ..ProviderData::default()
+        });
     }
     Ok(results)
 }
@@ -342,25 +321,10 @@ fn model_map(raw: Option<&toml::Value>) -> Vec<ConfigModel> {
         .collect()
 }
 
-fn provider_activation(
-    active_provider: Option<&str>,
-    provider_id: &str,
-) -> ProviderActivationStatus {
+fn provider_enabled(active_provider: Option<&str>, provider_id: &str) -> bool {
     match active_provider {
-        Some(active) if active == provider_id => ProviderActivationStatus::Active,
-        Some(_) => ProviderActivationStatus::Inactive,
-        None => ProviderActivationStatus::Unknown,
-    }
-}
-
-fn protocol_for_provider_type(value: &str) -> Option<WireProtocol> {
-    match value {
-        "kimi" | "openai" | "chat_completions" | "openai_chat" => {
-            Some(WireProtocol::ChatCompletions)
-        }
-        "openai_responses" => Some(WireProtocol::Responses),
-        "anthropic" => Some(WireProtocol::AnthropicMessages),
-        other => protocol_for_api(other),
+        Some(active) => active == provider_id,
+        None => true,
     }
 }
 
@@ -458,15 +422,6 @@ fn string_field(raw: Option<&toml::Table>, keys: &[&str]) -> Option<String> {
     let raw = raw?;
     keys.iter()
         .find_map(|key| raw.get(*key).and_then(toml::Value::as_str))
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-}
-
-fn env_string(raw: Option<&toml::Table>, keys: &[&str]) -> Option<String> {
-    let env = raw?.get("env").and_then(toml::Value::as_table)?;
-    keys.iter()
-        .find_map(|key| env.get(*key).and_then(toml::Value::as_str))
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
