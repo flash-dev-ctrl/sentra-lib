@@ -6,16 +6,28 @@ mod install_status;
 mod object;
 mod process;
 
+mod antigravity;
 mod claude_app;
 mod claude_cli;
+mod codebuddy;
+mod coder;
 mod codex;
+mod cursor;
 mod general;
 mod hermes;
 mod kimi_code;
+mod kiro;
+mod lingcode;
+mod marvis;
 mod openclaw;
 mod opencode;
 mod pi;
+mod qoder;
+mod qoderwork;
 mod sentra;
+mod trae;
+mod vscode;
+mod workbuddy;
 
 pub use base::Agent;
 pub use discovery::discover_agents;

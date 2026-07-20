@@ -45,6 +45,18 @@ pub fn discover_agents(user_home: impl AsRef<Path>) -> Vec<Agent> {
     results.extend(crate::agents::opencode::discover_agents(user_home));
     results.extend(crate::agents::pi::discover_agents(user_home));
     results.extend(crate::agents::sentra::discover_agents(user_home));
+    results.extend(crate::agents::antigravity::discover_agents(user_home));
+    results.extend(crate::agents::codebuddy::discover_agents(user_home));
+    results.extend(crate::agents::coder::discover_agents(user_home));
+    results.extend(crate::agents::cursor::discover_agents(user_home));
+    results.extend(crate::agents::kiro::discover_agents(user_home));
+    results.extend(crate::agents::lingcode::discover_agents(user_home));
+    results.extend(crate::agents::marvis::discover_agents(user_home));
+    results.extend(crate::agents::qoder::discover_agents(user_home));
+    results.extend(crate::agents::qoderwork::discover_agents(user_home));
+    results.extend(crate::agents::trae::discover_agents(user_home));
+    results.extend(crate::agents::vscode::discover_agents(user_home));
+    results.extend(crate::agents::workbuddy::discover_agents(user_home));
     results.extend(crate::agents::general::discover_agents(user_home));
     results
 }

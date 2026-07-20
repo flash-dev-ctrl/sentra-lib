@@ -118,6 +118,138 @@ pub(crate) const SENTRA_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
+pub(crate) const ANTIGRAVITY_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "antigravity",
+    title: Some("Antigravity"),
+    homes: &[&[".gemini", "antigravity-cli"]],
+    asset_for_type: crate::agents::antigravity::asset_for_type,
+    is_installed: crate::agents::antigravity::is_agent_installed,
+    process_provider: crate::agents::antigravity::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const CODEBUDDY_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codebuddy",
+    title: Some("CodeBuddy"),
+    homes: &[&[".codebuddy"]],
+    asset_for_type: crate::agents::codebuddy::asset_for_type,
+    is_installed: crate::agents::codebuddy::is_agent_installed,
+    process_provider: crate::agents::codebuddy::process_data,
+    process_home_env_vars: &["CODEBUDDY_CONFIG_DIR"],
+};
+
+pub(crate) const CODER_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "coder",
+    title: Some("Coder"),
+    homes: &[&[".config", "coderv2"]],
+    asset_for_type: crate::agents::coder::asset_for_type,
+    is_installed: crate::agents::coder::is_agent_installed,
+    process_provider: crate::agents::coder::process_data,
+    process_home_env_vars: &["CODER_CONFIG_DIR"],
+};
+
+pub(crate) const CURSOR_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "cursor",
+    title: Some("Cursor"),
+    homes: &[&[".cursor"]],
+    asset_for_type: crate::agents::cursor::asset_for_type,
+    is_installed: crate::agents::cursor::is_agent_installed,
+    process_provider: crate::agents::cursor::process_data,
+    process_home_env_vars: &["CURSOR_CONFIG_DIR"],
+};
+
+pub(crate) const KIRO_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "kiro",
+    title: Some("Kiro"),
+    homes: &[&[".kiro"]],
+    asset_for_type: crate::agents::kiro::asset_for_type,
+    is_installed: crate::agents::kiro::is_agent_installed,
+    process_provider: crate::agents::kiro::process_data,
+    process_home_env_vars: &["KIRO_HOME"],
+};
+
+pub(crate) const LINGCODE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "lingcode",
+    title: Some("LingCode"),
+    homes: &[&[".lingcode"]],
+    asset_for_type: crate::agents::lingcode::asset_for_type,
+    is_installed: crate::agents::lingcode::is_agent_installed,
+    process_provider: crate::agents::lingcode::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const MARVIS_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "marvis",
+    title: Some("MarvisX"),
+    homes: &[&[".marvis"]],
+    asset_for_type: crate::agents::marvis::asset_for_type,
+    is_installed: crate::agents::marvis::is_agent_installed,
+    process_provider: crate::agents::marvis::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const QODER_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "qoder",
+    title: Some("Qoder"),
+    homes: &[&[".qoder"]],
+    asset_for_type: crate::agents::qoder::asset_for_type,
+    is_installed: crate::agents::qoder::is_agent_installed,
+    process_provider: crate::agents::qoder::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const QODER_CN_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "qoder-cn",
+    title: Some("Qoder CN"),
+    homes: &[&[".qoder-cn"]],
+    asset_for_type: crate::agents::qoder::asset_for_type,
+    is_installed: crate::agents::qoder::is_agent_installed,
+    process_provider: crate::agents::qoder::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const QODER_AGENT_ENTRIES: &[AgentEntry] = &[QODER_AGENT_ENTRY, QODER_CN_AGENT_ENTRY];
+
+pub(crate) const QODERWORK_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "qoderwork",
+    title: Some("QoderWork"),
+    homes: &[&[".qoderwork"]],
+    asset_for_type: crate::agents::qoderwork::asset_for_type,
+    is_installed: crate::agents::qoderwork::is_agent_installed,
+    process_provider: crate::agents::qoderwork::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const TRAE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "trae",
+    title: Some("Trae"),
+    homes: &[&[".trae"]],
+    asset_for_type: crate::agents::trae::asset_for_type,
+    is_installed: crate::agents::trae::is_agent_installed,
+    process_provider: crate::agents::trae::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const VSCODE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "vscode",
+    title: Some("VS Code"),
+    homes: &[&[".vscode"]],
+    asset_for_type: crate::agents::vscode::asset_for_type,
+    is_installed: crate::agents::vscode::is_agent_installed,
+    process_provider: crate::agents::vscode::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const WORKBUDDY_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "workbuddy",
+    title: Some("WorkBuddy"),
+    homes: &[&[".workbuddy"]],
+    asset_for_type: crate::agents::workbuddy::asset_for_type,
+    is_installed: crate::agents::workbuddy::is_agent_installed,
+    process_provider: crate::agents::workbuddy::process_data,
+    process_home_env_vars: &[],
+};
+
 pub(crate) const HERMES_SYSTEM_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "hermes",
     title: Some("Hermes"),
@@ -144,14 +276,12 @@ pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
     general("augment", &[&[".augment"]]),
     general("bob", &[&[".bob"]]),
     general("codearts-agent", &[&[".codeartsdoer"]]),
-    general("codebuddy", &[&[".codebuddy"]]),
     general("codemaker", &[&[".codemaker"]]),
     general("codestudio", &[&[".codestudio"]]),
     general("command-code", &[&[".commandcode"]]),
     general("continue", &[&[".continue"]]),
     general("cortex", &[&[".snowflake", "cortex"]]),
     general("crush", &[&[".config", "crush"]]),
-    general("cursor", &[&[".cursor"]]),
     general("deepagents", &[&[".deepagents", "agent"]]),
     general("devin", &[&[".devin"]]),
     general("droid", &[&[".factory"]]),
@@ -164,9 +294,7 @@ pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
     general("jazz", &[&[".jazz"]]),
     general("junie", &[&[".junie"]]),
     general("kilo", &[&[".kilocode"]]),
-    general("kiro-cli", &[&[".kiro"]]),
     general("kode", &[&[".kode"]]),
-    general("lingma", &[&[".lingma"]]),
     general("mcpjam", &[&[".mcpjam"]]),
     general("mistral-vibe", &[&[".vibe"]]),
     general("moxby", &[&[".moxby"]]),
@@ -175,8 +303,6 @@ pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
     general("ona", &[&[".ona"]]),
     general("openhands", &[&[".openhands"]]),
     general("pochi", &[&[".pochi"]]),
-    general("qoder", &[&[".qoder"]]),
-    general("qoder-cn", &[&[".qoder-cn"]]),
     general("qwen-code", &[&[".qwen"]]),
     general("reasonix", &[&[".reasonix"]]),
     general("rovodev", &[&[".rovodev"]]),
@@ -184,7 +310,6 @@ pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
     general("tabnine-cli", &[&[".tabnine", "agent"]]),
     general("terramind", &[&[".terramind"]]),
     general("tinycloud", &[&[".tinycloud"]]),
-    general("trae", &[&[".trae"]]),
     general("trae-cn", &[&[".trae-cn"]]),
     general("windsurf", &[&[".codeium", "windsurf"]]),
     general("zencoder", &[&[".zencoder"]]),
@@ -203,6 +328,19 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         OPENCODE_AGENT_ENTRY.clone(),
         PI_AGENT_ENTRY.clone(),
         HERMES_SYSTEM_AGENT_ENTRY.clone(),
+        ANTIGRAVITY_AGENT_ENTRY.clone(),
+        CODEBUDDY_AGENT_ENTRY.clone(),
+        CODER_AGENT_ENTRY.clone(),
+        CURSOR_AGENT_ENTRY.clone(),
+        KIRO_AGENT_ENTRY.clone(),
+        LINGCODE_AGENT_ENTRY.clone(),
+        MARVIS_AGENT_ENTRY.clone(),
+        QODER_AGENT_ENTRY.clone(),
+        QODER_CN_AGENT_ENTRY.clone(),
+        QODERWORK_AGENT_ENTRY.clone(),
+        TRAE_AGENT_ENTRY.clone(),
+        VSCODE_AGENT_ENTRY.clone(),
+        WORKBUDDY_AGENT_ENTRY.clone(),
     ];
     entries.extend_from_slice(GENERAL_AGENT_ENTRIES);
     entries
@@ -242,6 +380,19 @@ mod tests {
             &OPENCODE_AGENT_ENTRY,
             &PI_AGENT_ENTRY,
             &SENTRA_AGENT_ENTRY,
+            &ANTIGRAVITY_AGENT_ENTRY,
+            &CODEBUDDY_AGENT_ENTRY,
+            &CODER_AGENT_ENTRY,
+            &CURSOR_AGENT_ENTRY,
+            &KIRO_AGENT_ENTRY,
+            &LINGCODE_AGENT_ENTRY,
+            &MARVIS_AGENT_ENTRY,
+            &QODER_AGENT_ENTRY,
+            &QODER_CN_AGENT_ENTRY,
+            &QODERWORK_AGENT_ENTRY,
+            &TRAE_AGENT_ENTRY,
+            &VSCODE_AGENT_ENTRY,
+            &WORKBUDDY_AGENT_ENTRY,
         ] {
             let assets =
                 (entry.asset_for_type)(entry.name, Path::new("agent-home"), AssetType::Process);
