@@ -6,9 +6,6 @@ use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderData, ProviderModel,
     ProviderProbeRequest,
 };
-use crate::providers::{
-    ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
-};
 use crate::utils::protocol::WireProtocol;
 use crate::utils::{backup_file, read_json_file, write_json_file};
 
@@ -158,18 +155,18 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                 .collect()
         })
         .unwrap_or_default();
-    let mut candidate = ProviderCandidate::new("claude-app");
-    candidate.display_name = Some("Anthropic".to_string());
-    candidate.configured_base_url = Some(base_url.to_string());
-    candidate.protocol_hint = Some(WireProtocol::AnthropicMessages);
-    candidate.protocol_source = Some(ProviderFieldSource::Inferred);
-    candidate.api_key = config
-        .get("inferenceGatewayApiKey")
-        .and_then(|value| value.as_str())
-        .map(str::to_string);
-    candidate.activation = ProviderActivationStatus::Active;
-    candidate.models = models;
-    Ok(vec![ProviderRegistry::builtin().resolve(candidate)])
+    Ok(vec![ProviderData {
+        name: "Anthropic".to_string(),
+        base_url: Some(base_url.to_string()),
+        api_key: config
+            .get("inferenceGatewayApiKey")
+            .and_then(|value| value.as_str())
+            .map(str::to_string),
+        enabled: true,
+        models,
+        protocol: None,
+        ..ProviderData::default()
+    }])
 }
 
 fn find_config_file(agent_home: &std::path::Path) -> SentraResult<Option<std::path::PathBuf>> {

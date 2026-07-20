@@ -549,26 +549,12 @@ pub struct ProviderData {
     pub raw_provider_id: Option<String>,
     #[serde(rename = "baseUrl")]
     pub base_url: Option<String>,
-    #[serde(rename = "baseUrlSource", skip_serializing_if = "Option::is_none")]
-    pub base_url_source: Option<crate::providers::ProviderFieldSource>,
     #[serde(rename = "apiKey")]
     pub api_key: Option<String>,
     pub enabled: bool,
     #[serde(default)]
-    #[serde(rename = "activationStatus")]
-    pub activation_status: crate::providers::ProviderActivationStatus,
-    #[serde(default)]
     pub models: Vec<ProviderModel>,
     pub protocol: Option<crate::utils::protocol::WireProtocol>,
-    #[serde(rename = "protocolSource", skip_serializing_if = "Option::is_none")]
-    pub protocol_source: Option<crate::providers::ProviderFieldSource>,
-    #[serde(rename = "endpointVariant", skip_serializing_if = "Option::is_none")]
-    pub endpoint_variant: Option<String>,
-    #[serde(default)]
-    #[serde(rename = "resolutionStatus")]
-    pub resolution_status: crate::providers::ProviderResolutionStatus,
-    #[serde(rename = "resolutionReason", skip_serializing_if = "Option::is_none")]
-    pub resolution_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account: Option<ProviderAccount>,
 }

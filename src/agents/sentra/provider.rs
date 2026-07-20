@@ -5,9 +5,6 @@ use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderData, ProviderModel,
     ProviderProbeRequest,
 };
-use crate::providers::{
-    ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
-};
 use crate::utils::protocol::{WireProtocol, default_model_probe_prompt, parse_wire_protocol};
 use crate::utils::{backup_file, read_text_file, write_json_file};
 
@@ -63,24 +60,22 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
         ) else {
             return Ok(Vec::new());
         };
-        let mut candidate = ProviderCandidate::new("sentra");
-        candidate.display_name = Some(provider_name(api));
-        candidate.configured_base_url = Some(api.to_string());
-        candidate.api_key = Some(key.to_string());
-        candidate.activation = ProviderActivationStatus::Active;
-        candidate.protocol_hint = llm
-            .get("protocol")
-            .and_then(|value| value.as_str())
-            .and_then(|value| parse_wire_protocol(value).ok());
-        candidate.protocol_source = candidate
-            .protocol_hint
-            .map(|_| ProviderFieldSource::Configured);
-        candidate.models = vec![ProviderModel {
-            id: model.to_string(),
-            name: Some(model.to_string()),
+        Ok(vec![ProviderData {
+            name: provider_name(api),
+            base_url: Some(api.to_string()),
+            api_key: Some(key.to_string()),
             enabled: true,
-        }];
-        Ok(vec![ProviderRegistry::builtin().resolve(candidate)])
+            protocol: llm
+                .get("protocol")
+                .and_then(|value| value.as_str())
+                .and_then(|value| parse_wire_protocol(value).ok()),
+            models: vec![ProviderModel {
+                id: model.to_string(),
+                name: Some(model.to_string()),
+                enabled: true,
+            }],
+            ..ProviderData::default()
+        }])
     }
 
     fn set_data(&self, value: ProviderData) -> SentraResult<AssetMutationResult> {

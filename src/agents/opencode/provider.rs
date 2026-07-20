@@ -8,10 +8,6 @@ use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderData, ProviderModel,
     ProviderProbeRequest, ProviderType,
 };
-use crate::providers::{
-    ProviderActivationStatus, ProviderCandidate, ProviderFieldSource, ProviderRegistry,
-    protocol_for_api,
-};
 use crate::utils::protocol::{WireProtocol, build_model_probe_request};
 use crate::utils::{backup_file, mask_secret, read_json_file, write_json_file};
 
@@ -272,68 +268,36 @@ fn provider_data(
             let explicit_enabled = raw
                 .and_then(|raw| raw.get("enabled"))
                 .and_then(Value::as_bool);
-            let configured_protocol = raw
-                .and_then(|raw| {
-                    raw.get("api")
-                        .or_else(|| raw.get("protocol"))
-                        .and_then(Value::as_str)
-                })
+            let protocol = raw
+                .and_then(|raw| raw.get("protocol").and_then(Value::as_str))
                 .or_else(|| {
-                    options.and_then(|options| {
-                        options
-                            .get("api")
-                            .or_else(|| options.get("protocol"))
-                            .and_then(Value::as_str)
-                    })
+                    options.and_then(|options| options.get("protocol").and_then(Value::as_str))
                 })
-                .and_then(parse_protocol);
-            let inferred_protocol =
-                configured_protocol.or_else(|| npm_protocol(raw.and_then(|raw| raw.get("npm"))));
-
-            let mut candidate = ProviderCandidate::new("opencode");
-            candidate.agent_provider_id = Some(provider_id.clone());
-            candidate.display_name = Some(
-                raw.and_then(|raw| {
+                .and_then(|value| value.parse().ok());
+            let name = raw
+                .and_then(|raw| {
                     raw.get("name")
                         .or_else(|| raw.get("displayName"))
                         .and_then(Value::as_str)
                 })
                 .unwrap_or(provider_id)
-                .to_string(),
-            );
-            candidate.configured_base_url = base_url(raw, options);
-            candidate.protocol_hint = inferred_protocol;
-            candidate.protocol_source = inferred_protocol.map(|_| {
-                if configured_protocol.is_some() {
-                    ProviderFieldSource::Configured
-                } else {
-                    ProviderFieldSource::Inferred
-                }
+                .to_string();
+            results.push(ProviderData {
+                name,
+                base_url: base_url(raw, options),
+                api_key: configured_api_key(raw, options, mask_secrets)
+                    .or_else(|| auth_keys.get(provider_id).cloned()),
+                enabled: provider_enabled(
+                    active_model_ref.map(|(provider, _)| provider),
+                    provider_id,
+                    explicit_enabled,
+                ),
+                models,
+                protocol,
+                ..ProviderData::default()
             });
-            candidate.api_key = configured_api_key(raw, options, mask_secrets)
-                .or_else(|| auth_keys.get(provider_id).cloned())
-                .or_else(|| environment_api_key(provider_id, mask_secrets));
-            candidate.activation = provider_activation(
-                active_model_ref.map(|(provider, _)| provider),
-                provider_id,
-                explicit_enabled,
-            );
-            candidate.models = models;
-            results.push(ProviderRegistry::builtin().resolve(candidate));
             provider_ids.push(provider_id.clone());
         }
-    }
-
-    for (provider_id, api_key) in auth_keys {
-        if provider_ids.iter().any(|id| id == &provider_id) {
-            continue;
-        }
-        let mut candidate = ProviderCandidate::new("opencode");
-        candidate.agent_provider_id = Some(provider_id.clone());
-        candidate.display_name = Some(provider_id.clone());
-        candidate.api_key = Some(api_key);
-        candidate.activation = ProviderActivationStatus::Unknown;
-        results.push(ProviderRegistry::builtin().resolve(candidate));
     }
 
     Ok(results)
@@ -534,34 +498,14 @@ fn string_field(raw: Option<&serde_json::Map<String, Value>>, keys: &[&str]) -> 
         .map(str::to_string)
 }
 
-fn parse_protocol(value: &str) -> Option<WireProtocol> {
-    protocol_for_api(value).or_else(|| value.parse().ok())
-}
-
-fn npm_protocol(raw: Option<&Value>) -> Option<WireProtocol> {
-    let value = raw.and_then(Value::as_str)?.to_ascii_lowercase();
-    if value.contains("anthropic") {
-        Some(WireProtocol::AnthropicMessages)
-    } else if value.contains("openai-compatible") || value.contains("openai") {
-        Some(WireProtocol::ChatCompletions)
-    } else {
-        None
-    }
-}
-
-fn provider_activation(
+fn provider_enabled(
     active_provider: Option<&str>,
     provider_id: &str,
     explicit_enabled: Option<bool>,
-) -> ProviderActivationStatus {
+) -> bool {
     match active_provider {
-        Some(active) if active == provider_id => ProviderActivationStatus::Active,
-        Some(_) => ProviderActivationStatus::Inactive,
-        None => match explicit_enabled {
-            Some(true) => ProviderActivationStatus::Active,
-            Some(false) => ProviderActivationStatus::Inactive,
-            None => ProviderActivationStatus::Unknown,
-        },
+        Some(active) => active == provider_id,
+        None => explicit_enabled.unwrap_or(true),
     }
 }
 
@@ -629,29 +573,7 @@ fn resolve_secret(value: &str) -> Option<String> {
     if value.trim().is_empty() || value.starts_with('!') {
         return None;
     }
-    if let Some(name) = value
-        .strip_prefix("${")
-        .and_then(|value| value.strip_suffix('}'))
-    {
-        return std::env::var(name).ok().filter(|value| !value.is_empty());
-    }
-    if let Some(name) = value.strip_prefix('$')
-        && !name.is_empty()
-        && name
-            .chars()
-            .all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
-    {
-        return std::env::var(name).ok().filter(|value| !value.is_empty());
-    }
     Some(value.to_string())
-}
-
-fn environment_api_key(provider_id: &str, mask_secrets: bool) -> Option<String> {
-    ProviderRegistry::builtin()
-        .environment_keys("opencode", provider_id)
-        .into_iter()
-        .find_map(|key| std::env::var(key).ok().filter(|value| !value.is_empty()))
-        .and_then(|value| maybe_mask_secret(value, mask_secrets))
 }
 
 fn maybe_mask_secret(value: String, mask_secrets: bool) -> Option<String> {

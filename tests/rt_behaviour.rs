@@ -220,7 +220,7 @@ fn discovery_returns_installed_agent_without_initialized_home() {
 }
 
 #[test]
-fn discovery_returns_codex_desktop_app_without_cli_or_initialized_home() {
+fn discovery_returns_codex_desktop_app_entry_without_initialized_home() {
     let dir = tempfile::tempdir().unwrap();
     let app_home = dir.path().join("Applications").join("ChatGPT.app");
     fs::create_dir_all(&app_home).unwrap();
@@ -229,9 +229,13 @@ fn discovery_returns_codex_desktop_app_without_cli_or_initialized_home() {
     assert!(!expected_home.exists());
 
     let agents = discover_agents(dir.path());
-    let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+    let codex = agents
+        .iter()
+        .find(|agent| agent.name() == "codex-app")
+        .unwrap();
 
     assert_eq!(codex.home(), expected_home.as_path());
+    assert_eq!(codex.title(), "Codex App");
     let meta = asset_data(codex, AssetType::Meta);
     assert_eq!(meta[0].data["installed"], true);
 }
@@ -293,12 +297,12 @@ base_url = "https://api.openai.com/v1"
     )
     .unwrap();
 
-    let cursor_home = dir.path().join(".cursor");
-    let cursor_skill = cursor_home.join("cursor-skill");
-    fs::create_dir_all(&cursor_skill).unwrap();
+    let devin_home = dir.path().join(".devin");
+    let devin_skill = devin_home.join("devin-skill");
+    fs::create_dir_all(&devin_skill).unwrap();
     fs::write(
-        cursor_skill.join("SKILL.md"),
-        "---\nname: cursor-skill\n---\nbody",
+        devin_skill.join("SKILL.md"),
+        "---\nname: devin-skill\n---\nbody",
     )
     .unwrap();
 
@@ -308,10 +312,7 @@ base_url = "https://api.openai.com/v1"
         .iter()
         .find(|agent| agent.name() == "sentra")
         .unwrap();
-    let cursor_agent = agents
-        .iter()
-        .find(|agent| agent.name() == "cursor")
-        .unwrap();
+    let devin_agent = agents.iter().find(|agent| agent.name() == "devin").unwrap();
 
     let codex_skills = asset_data(codex_agent, AssetType::Skill);
     assert_eq!(codex_skills[0].asset_type, AssetType::Skill);
@@ -328,10 +329,10 @@ base_url = "https://api.openai.com/v1"
         AssetType::Provider
     );
 
-    let cursor_skills = asset_data(cursor_agent, AssetType::Skill);
-    assert_eq!(cursor_skills[0].data[0]["name"], "cursor-skill");
+    let devin_skills = asset_data(devin_agent, AssetType::Skill);
+    assert_eq!(devin_skills[0].data[0]["name"], "devin-skill");
     assert!(
-        cursor_agent
+        devin_agent
             .get_assets(AssetType::Provider)
             .unwrap()
             .is_empty()
@@ -343,9 +344,6 @@ fn agent_assets_match_ts_supported_types_and_read_configs() {
     let dir = tempfile::tempdir().unwrap();
     let codex_home = dir.path().join(".codex");
     fs::create_dir_all(&codex_home).unwrap();
-    unsafe {
-        std::env::set_var("SENTRA_RT_CODEX_TEST_KEY", "sk-from-env");
-    }
     fs::write(
         codex_home.join("config.toml"),
         r#"
@@ -391,7 +389,7 @@ env_key = "SENTRA_RT_CODEX_TEST_KEY"
 
     let providers = asset_data(&codex, AssetType::Provider);
     assert_eq!(providers[0].data[0]["baseUrl"], "https://api.openai.com/v1");
-    assert_eq!(providers[0].data[0]["apiKey"], "sk-from-env");
+    assert!(providers[0].data[0]["apiKey"].is_null());
     assert_eq!(providers[0].data[0]["models"][0]["id"], "gpt-5");
 }
 
@@ -680,15 +678,12 @@ fn malformed_skill_frontmatter_does_not_break_asset_listing() {
 #[test]
 fn general_exposes_only_ts_supported_skill_asset() {
     let dir = tempfile::tempdir().unwrap();
-    fs::create_dir_all(dir.path().join(".cursor")).unwrap();
+    fs::create_dir_all(dir.path().join(".devin")).unwrap();
 
     let agents = discover_agents(dir.path());
-    let cursor = agents
-        .iter()
-        .find(|agent| agent.name() == "cursor")
-        .unwrap();
-    assert_eq!(cursor.get_assets(AssetType::Skill).unwrap().len(), 1);
-    assert!(cursor.get_assets(AssetType::Mcp).unwrap().is_empty());
+    let devin = agents.iter().find(|agent| agent.name() == "devin").unwrap();
+    assert_eq!(devin.get_assets(AssetType::Skill).unwrap().len(), 1);
+    assert!(devin.get_assets(AssetType::Mcp).unwrap().is_empty());
 }
 
 #[test]
@@ -708,9 +703,6 @@ fn pi_agent_is_discovered_and_reads_llm_provider_config() {
         r#"{"providers":{"svip":{"name":"SVIP Gateway","api":"openai-responses","baseURL":"https://svip.example.com/v1","apiKey":"$SENTRA_PI_TEST_KEY","models":[{"id":"svip/gpt-5.5","name":"SVIP GPT 5.5"}]}}}"#,
     )
     .unwrap();
-    unsafe {
-        std::env::set_var("SENTRA_PI_TEST_KEY", "sk-pi");
-    }
 
     let agents = discover_agents(dir.path());
     let pi = agents.iter().find(|agent| agent.name() == "pi").unwrap();
@@ -725,9 +717,9 @@ fn pi_agent_is_discovered_and_reads_llm_provider_config() {
     let provider = &providers[0].data[0];
     assert_eq!(provider["name"], "SVIP Gateway");
     assert_eq!(provider["baseUrl"], "https://svip.example.com/v1");
-    assert_eq!(provider["apiKey"], "sk-pi");
+    assert_eq!(provider["apiKey"], "$SENTRA_PI_TEST_KEY");
     assert_eq!(provider["enabled"], true);
-    assert_eq!(provider["protocol"], "responses");
+    assert!(provider["protocol"].is_null());
     assert_eq!(provider["models"][0]["id"], "svip/gpt-5.5");
 }
 
@@ -759,11 +751,11 @@ fn pi_provider_reads_auth_without_executing_command_keys() {
 
     assert_eq!(provider["baseUrl"], "https://cmd.example.com/v1");
     assert!(provider["apiKey"].is_null());
-    assert_eq!(provider["protocol"], "chat_completions");
+    assert!(provider["protocol"].is_null());
 }
 
 #[test]
-fn pi_provider_uses_builtin_opencode_go_defaults_without_models_config() {
+fn pi_provider_uses_builtin_base_url_without_models_config() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".pi").join("agent");
     fs::create_dir_all(&home).unwrap();
@@ -787,14 +779,7 @@ fn pi_provider_uses_builtin_opencode_go_defaults_without_models_config() {
     assert_eq!(provider["baseUrl"], "https://opencode.ai/zen/go/v1");
     assert_eq!(provider["apiKey"], "sk-opencode");
     assert_eq!(provider["enabled"], true);
-    assert_eq!(provider["providerId"], "opencode");
-    assert_eq!(provider["providerDisplayName"], "OpenCode");
-    assert_eq!(provider["rawProviderId"], "opencode-go");
-    assert_eq!(provider["endpointVariant"], "go");
-    assert_eq!(provider["baseUrlSource"], "catalog");
-    assert_eq!(provider["activationStatus"], "active");
-    assert_eq!(provider["resolutionStatus"], "known");
-    assert_eq!(provider["protocol"], "chat_completions");
+    assert!(provider["protocol"].is_null());
     assert_eq!(provider["models"][0]["id"], "deepseek-v4-flash");
 }
 
@@ -841,17 +826,16 @@ fn pi_provider_lists_inactive_auth_providers_without_models_config() {
     assert_eq!(opencode_go["baseUrl"], "https://opencode.ai/zen/go/v1");
     assert_eq!(opencode_go["apiKey"], "sk-opencode");
     assert_eq!(minimax_cn["enabled"], false);
-    assert_eq!(minimax_cn["baseUrl"], "https://api.minimaxi.com/anthropic");
+    assert_eq!(
+        minimax_cn["baseUrl"],
+        "https://api.minimaxi.com/anthropic/v1"
+    );
     assert_eq!(minimax_cn["apiKey"], "sk-minimax-cn");
-    assert_eq!(minimax_cn["providerId"], "minimax");
-    assert_eq!(minimax_cn["rawProviderId"], "minimax-cn");
-    assert_eq!(minimax_cn["endpointVariant"], "cn-anthropic");
-    assert_eq!(minimax_cn["resolutionStatus"], "known");
-    assert_eq!(minimax_cn["protocol"], "anthropic_messages");
+    assert!(minimax_cn["protocol"].is_null());
 }
 
 #[test]
-fn pi_provider_marks_activation_unknown_without_default_provider() {
+fn pi_provider_enables_auth_provider_without_default_provider() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".pi").join("agent");
     fs::create_dir_all(&home).unwrap();
@@ -866,13 +850,13 @@ fn pi_provider_marks_activation_unknown_without_default_provider() {
     let providers = asset_data(pi, AssetType::Provider);
     let provider = &providers[0].data[0];
 
-    assert_eq!(provider["rawProviderId"], "deepseek");
-    assert_eq!(provider["activationStatus"], "unknown");
-    assert_eq!(provider["resolutionStatus"], "known");
+    assert_eq!(provider["name"], "deepseek");
+    assert_eq!(provider["enabled"], true);
+    assert_eq!(provider["baseUrl"], "https://api.deepseek.com");
 }
 
 #[test]
-fn openclaw_provider_uses_catalog_and_marks_unresolved_entries() {
+fn openclaw_provider_reads_configured_entries_without_catalog_defaults() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".openclaw");
     fs::create_dir_all(&home).unwrap();
@@ -891,30 +875,26 @@ fn openclaw_provider_uses_catalog_and_marks_unresolved_entries() {
     let items = providers[0].data.as_array().unwrap();
     let deepseek = items
         .iter()
-        .find(|provider| provider["rawProviderId"] == "deepseek")
+        .find(|provider| provider["name"] == "deepseek")
         .unwrap();
     let future = items
         .iter()
-        .find(|provider| provider["rawProviderId"] == "future-provider")
+        .find(|provider| provider["name"] == "future-provider")
         .unwrap();
     let custom = items
         .iter()
-        .find(|provider| provider["rawProviderId"] == "corp-gateway")
+        .find(|provider| provider["name"] == "corp-gateway")
         .unwrap();
 
-    assert_eq!(deepseek["providerId"], "deepseek");
-    assert_eq!(deepseek["baseUrl"], "https://api.deepseek.com");
-    assert_eq!(deepseek["baseUrlSource"], "catalog");
-    assert_eq!(deepseek["resolutionStatus"], "known");
-    assert_eq!(deepseek["activationStatus"], "unknown");
-    assert_eq!(future["resolutionStatus"], "unknown");
+    assert!(deepseek["baseUrl"].is_null());
+    assert_eq!(deepseek["enabled"], true);
+    assert!(deepseek["apiKey"].as_str().unwrap().contains("****"));
     assert!(future["baseUrl"].is_null());
-    assert_eq!(custom["resolutionStatus"], "custom");
-    assert_eq!(custom["baseUrlSource"], "configured");
+    assert_eq!(custom["baseUrl"], "https://llm.example.test/v1");
 }
 
 #[test]
-fn openclaw_provider_is_inferred_from_default_model_without_provider_table() {
+fn openclaw_provider_does_not_infer_from_default_model_without_provider_table() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".openclaw");
     fs::create_dir_all(&home).unwrap();
@@ -944,29 +924,11 @@ fn openclaw_provider_is_inferred_from_default_model_without_provider_table() {
         .unwrap();
     let providers = asset_data(openclaw, AssetType::Provider);
     let items = providers[0].data.as_array().unwrap();
-    let opencode_go = items
-        .iter()
-        .find(|provider| provider["rawProviderId"] == "opencode-go")
-        .unwrap();
-    let minimax_cn = items
-        .iter()
-        .find(|provider| provider["rawProviderId"] == "minimax-cn")
-        .unwrap();
-
-    assert_eq!(opencode_go["providerId"], "opencode");
-    assert_eq!(opencode_go["baseUrl"], "https://opencode.ai/zen/go/v1");
-    assert_eq!(opencode_go["endpointVariant"], "go");
-    assert_eq!(opencode_go["protocol"], "chat_completions");
-    assert_eq!(opencode_go["protocolSource"], "inferred");
-    assert_eq!(opencode_go["activationStatus"], "active");
-    assert_eq!(opencode_go["models"][0]["id"], "kimi-k2.6");
-    assert_eq!(minimax_cn["providerId"], "minimax");
-    assert_eq!(minimax_cn["baseUrl"], "https://api.minimaxi.com/anthropic");
-    assert_eq!(minimax_cn["activationStatus"], "inactive");
+    assert!(items.is_empty());
 }
 
 #[test]
-fn openclaw_opencode_go_uses_anthropic_endpoint_for_minimax_models() {
+fn openclaw_provider_does_not_infer_opencode_go_endpoint_from_model_name() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".openclaw");
     fs::create_dir_all(&home).unwrap();
@@ -982,12 +944,7 @@ fn openclaw_opencode_go_uses_anthropic_endpoint_for_minimax_models() {
         .find(|agent| agent.name() == "openclaw")
         .unwrap();
     let providers = asset_data(openclaw, AssetType::Provider);
-    let provider = &providers[0].data[0];
-
-    assert_eq!(provider["baseUrl"], "https://opencode.ai/zen/go");
-    assert_eq!(provider["endpointVariant"], "go-anthropic");
-    assert_eq!(provider["protocol"], "anthropic_messages");
-    assert_eq!(provider["activationStatus"], "active");
+    assert!(providers[0].data.as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -1012,13 +969,14 @@ fn opencode_discovery_uses_config_home() {
             .join("opencode"),
     )
     .unwrap();
+    let expected_without_config_home = usize::from(opencode_command_exists());
     let agents = discover_agents(data_only.path());
     assert_eq!(
         agents
             .iter()
             .filter(|agent| agent.name() == "opencode")
             .count(),
-        0
+        expected_without_config_home
     );
 
     let legacy_only = tempfile::tempdir().unwrap();
@@ -1031,7 +989,7 @@ fn opencode_discovery_uses_config_home() {
             .iter()
             .filter(|agent| agent.name() == "opencode")
             .count(),
-        0
+        expected_without_config_home
     );
 }
 
@@ -1072,19 +1030,15 @@ fn opencode_provider_reads_chaitin_gateway_and_masks_api_key() {
     let providers = asset_data(opencode, AssetType::Provider);
     let provider = &providers[0].data[0];
 
-    assert_eq!(provider["rawProviderId"], "chaitin");
     assert_eq!(provider["name"], "Baizhi Gateway");
     assert_eq!(
         provider["baseUrl"],
         "https://ai-api-gateway.app.baizhi.cloud/api/openai"
     );
-    assert_eq!(provider["baseUrlSource"], "configured");
     assert_eq!(provider["models"][0]["id"], "dev/gpt-5.4");
     assert_eq!(provider["models"][0]["name"], "Dev GPT-5.4");
-    assert_eq!(provider["activationStatus"], "active");
-    assert_eq!(provider["protocol"], "chat_completions");
-    assert_eq!(provider["protocolSource"], "inferred");
-    assert_eq!(provider["resolutionStatus"], "custom");
+    assert_eq!(provider["enabled"], true);
+    assert!(provider["protocol"].is_null());
     assert!(provider["apiKey"].as_str().unwrap().contains("****"));
     assert_ne!(provider["apiKey"], "sk-chaitin-secret");
 }
@@ -1123,14 +1077,13 @@ fn opencode_provider_reads_legacy_dot_opencode_config() {
     let provider = &providers[0].data[0];
 
     assert_eq!(opencode.home(), dir.path().join(".config").join("opencode"));
-    assert_eq!(provider["rawProviderId"], "chaitin");
     assert_eq!(
         provider["baseUrl"],
         "https://ai-api-gateway.app.baizhi.cloud/api/openai"
     );
     assert_eq!(provider["models"][0]["id"], "dev/gpt-5.4");
-    assert_eq!(provider["activationStatus"], "active");
-    assert_eq!(provider["protocol"], "chat_completions");
+    assert_eq!(provider["enabled"], true);
+    assert!(provider["protocol"].is_null());
     assert!(provider["apiKey"].as_str().unwrap().contains("****"));
     assert_ne!(provider["apiKey"], "sk-legacy-secret");
 }
@@ -1165,7 +1118,7 @@ fn opencode_provider_prefers_legacy_dot_opencode_model_config() {
     assert_eq!(provider["baseUrl"], "https://legacy.example.test/v1");
     assert_eq!(provider["models"][0]["id"], "legacy-model");
     assert_eq!(provider["models"][0]["name"], "Legacy Model");
-    assert_eq!(provider["activationStatus"], "active");
+    assert_eq!(provider["enabled"], true);
 }
 
 #[test]
@@ -1196,7 +1149,7 @@ fn opencode_provider_can_read_masked_api_key_from_auth_json() {
 
     assert!(provider["apiKey"].as_str().unwrap().contains("****"));
     assert_ne!(provider["apiKey"], "sk-auth-secret");
-    assert_eq!(provider["activationStatus"], "unknown");
+    assert_eq!(provider["enabled"], true);
 }
 
 #[test]
@@ -1221,9 +1174,10 @@ fn opencode_provider_runtime_data_keeps_api_key_for_model_probe() {
         .into_iter()
         .next()
         .unwrap();
-    let masked: Vec<ProviderData> = serde_json::from_value(provider_asset.data().unwrap()).unwrap();
+    let masked: Vec<ProviderData> =
+        serde_json::from_str(&provider_asset.data().unwrap().to_string()).unwrap();
     let runtime: Vec<ProviderData> =
-        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
+        serde_json::from_str(&provider_asset.runtime_data().unwrap().to_string()).unwrap();
 
     assert_ne!(masked[0].api_key.as_deref(), Some("sk-chaitin-secret"));
     assert_eq!(runtime[0].api_key.as_deref(), Some("sk-chaitin-secret"));
@@ -1291,8 +1245,8 @@ fn opencode_provider_set_data_writes_provider_config() {
 
     let providers = asset_data(opencode, AssetType::Provider);
     let provider = &providers[0].data[0];
-    assert_eq!(provider["rawProviderId"], "chaitin");
-    assert_eq!(provider["activationStatus"], "active");
+    assert_eq!(provider["name"], "Baizhi Gateway");
+    assert_eq!(provider["enabled"], true);
     assert!(provider["apiKey"].as_str().unwrap().contains("****"));
     assert_ne!(provider["apiKey"], "sk-chaitin-secret");
 }
@@ -1780,12 +1734,9 @@ model = "kimi-k2-0711-preview"
     let provider = &providers[0].data[0];
     let serialized = providers[0].data.to_string();
 
-    assert_eq!(provider["providerId"], "kimi");
-    assert_eq!(provider["rawProviderId"], "managed:kimi-code");
     assert_eq!(provider["baseUrl"], "https://api.kimi.com/coding/v1");
-    assert_eq!(provider["endpointVariant"], "kimi-code");
-    assert_eq!(provider["protocol"], "chat_completions");
-    assert_eq!(provider["activationStatus"], "active");
+    assert_eq!(provider["enabled"], true);
+    assert!(provider["protocol"].is_null());
     assert_eq!(provider["models"][0]["id"], "kimi-k2-0711-preview");
     assert_eq!(provider["models"][0]["name"], "kimi-code/kimi-for-coding");
     assert!(provider["apiKey"].as_str().unwrap().contains("****"));
@@ -2125,16 +2076,14 @@ fn hermes_provider_reads_modern_model_and_auth_configuration() {
     let items = providers[0].data.as_array().unwrap();
     let provider = items
         .iter()
-        .find(|provider| provider["rawProviderId"] == "minimax-cn")
+        .find(|provider| provider["name"] == "minimax-cn")
         .unwrap();
 
-    assert_eq!(provider["providerId"], "minimax");
-    assert_eq!(provider["baseUrl"], "https://api.minimaxi.com/anthropic");
-    assert_eq!(provider["protocol"], "anthropic_messages");
-    assert_eq!(provider["activationStatus"], "active");
+    assert!(provider["baseUrl"].is_null());
+    assert!(provider["protocol"].is_null());
+    assert_eq!(provider["enabled"], true);
     assert_eq!(provider["models"][0]["id"], "MiniMax-M2.7");
-    assert!(provider["apiKey"].as_str().is_some());
-    assert_ne!(provider["apiKey"], "secret-minimax-key");
+    assert!(provider["apiKey"].is_null());
 }
 
 #[test]
@@ -2155,23 +2104,11 @@ fn hermes_provider_can_be_discovered_from_auth_without_config_yaml() {
         .unwrap();
     let providers = asset_data(hermes, AssetType::Provider);
     let items = providers[0].data.as_array().unwrap();
-    let deepseek = items
-        .iter()
-        .find(|provider| provider["rawProviderId"] == "deepseek")
-        .unwrap();
-    let opencode_go = items
-        .iter()
-        .find(|provider| provider["rawProviderId"] == "opencode-go")
-        .unwrap();
-
-    assert_eq!(deepseek["baseUrl"], "https://api.deepseek.com/v1");
-    assert_eq!(deepseek["activationStatus"], "active");
-    assert_eq!(opencode_go["baseUrl"], "https://opencode.ai/zen/go/v1");
-    assert_eq!(opencode_go["activationStatus"], "inactive");
+    assert!(items.is_empty());
 }
 
 #[test]
-fn codex_provider_without_base_url_is_enriched_from_catalog() {
+fn codex_provider_without_base_url_is_not_enriched_from_catalog() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".codex");
     fs::create_dir_all(&home).unwrap();
@@ -2189,13 +2126,7 @@ name = "DeepSeek"
     let agents = discover_agents(dir.path());
     let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
     let providers = asset_data(codex, AssetType::Provider);
-    let provider = &providers[0].data[0];
-
-    assert_eq!(provider["providerId"], "deepseek");
-    assert_eq!(provider["baseUrl"], "https://api.deepseek.com");
-    assert_eq!(provider["baseUrlSource"], "catalog");
-    assert_eq!(provider["activationStatus"], "active");
-    assert_eq!(provider["resolutionStatus"], "known");
+    assert!(providers[0].data.as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -2525,9 +2456,8 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
         cli_provider[0].data[0]["models"][0]["id"],
         "claude-sonnet-4"
     );
-    assert_eq!(cli_provider[0].data[0]["resolutionStatus"], "custom");
-    assert_eq!(cli_provider[0].data[0]["activationStatus"], "active");
-    assert_eq!(cli_provider[0].data[0]["protocol"], "anthropic_messages");
+    assert_eq!(cli_provider[0].data[0]["enabled"], true);
+    assert!(cli_provider[0].data[0]["protocol"].is_null());
     let cli_cron = asset_data(claude_cli, AssetType::Cron);
     assert_eq!(cli_cron[0].data[0]["schedule"], "0 9 * * *");
 
@@ -2541,8 +2471,7 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
         "https://gateway.example.com"
     );
     assert_eq!(app_provider[0].data[0]["models"][0]["name"], "Opus");
-    assert_eq!(app_provider[0].data[0]["resolutionStatus"], "custom");
-    assert_eq!(app_provider[0].data[0]["activationStatus"], "active");
+    assert_eq!(app_provider[0].data[0]["enabled"], true);
     let app_cron = asset_data(claude_app, AssetType::Cron);
     assert_eq!(app_cron[0].data[0]["name"], "scheduled skill");
     assert_eq!(app_cron[0].data[0]["prompt"], "Run from Claude App");
@@ -2557,8 +2486,7 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     let hermes_provider = asset_data(hermes, AssetType::Provider);
     assert_eq!(hermes_provider[0].data[0]["models"][0]["id"], "hermes-4");
     assert_eq!(hermes_provider[0].data[0]["apiKey"], "sk****12");
-    assert_eq!(hermes_provider[0].data[0]["resolutionStatus"], "custom");
-    assert_eq!(hermes_provider[0].data[0]["activationStatus"], "unknown");
+    assert_eq!(hermes_provider[0].data[0]["enabled"], true);
     let hermes_cron = asset_data(hermes, AssetType::Cron);
     assert_eq!(hermes_cron[0].data[0]["type"], "every");
     assert_eq!(hermes_cron[0].data[0]["schedule"], "15m");
@@ -2570,8 +2498,7 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     let openclaw_provider = asset_data(openclaw, AssetType::Provider);
     assert_eq!(openclaw_provider[0].data[0]["models"][0]["id"], "oc-1");
     assert_eq!(openclaw_provider[0].data[0]["apiKey"], "sk****12");
-    assert_eq!(openclaw_provider[0].data[0]["resolutionStatus"], "custom");
-    assert_eq!(openclaw_provider[0].data[0]["activationStatus"], "unknown");
+    assert_eq!(openclaw_provider[0].data[0]["enabled"], true);
     let openclaw_cron = asset_data(openclaw, AssetType::Cron);
     assert_eq!(openclaw_cron[0].data[0]["cwds"][0], "/workspace");
 }
@@ -2584,6 +2511,18 @@ fn test_binary_name(name: &str) -> String {
     }
 }
 
+fn opencode_command_exists() -> bool {
+    let output = if cfg!(windows) {
+        std::process::Command::new("where").arg("opencode").output()
+    } else {
+        std::process::Command::new("sh")
+            .args(["-c", "command -v \"$1\" >/dev/null 2>&1", "sentra"])
+            .arg("opencode")
+            .output()
+    };
+    output.is_ok_and(|output| output.status.success())
+}
+
 fn asset_data(agent: &sentra_lib::agents::Agent, asset_type: AssetType) -> Vec<AssetData> {
     agent
         .get_assets(asset_type)
@@ -2591,7 +2530,7 @@ fn asset_data(agent: &sentra_lib::agents::Agent, asset_type: AssetType) -> Vec<A
         .into_iter()
         .map(|asset| AssetData {
             asset_type: asset.asset_type(),
-            data: asset.data().unwrap(),
+            data: serde_json::from_str(&asset.data().unwrap().to_string()).unwrap(),
         })
         .collect()
 }
