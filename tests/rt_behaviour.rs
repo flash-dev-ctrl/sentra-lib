@@ -220,7 +220,7 @@ fn discovery_returns_installed_agent_without_initialized_home() {
 }
 
 #[test]
-fn discovery_returns_codex_desktop_app_without_cli_or_initialized_home() {
+fn discovery_returns_codex_desktop_app_entry_without_initialized_home() {
     let dir = tempfile::tempdir().unwrap();
     let app_home = dir.path().join("Applications").join("ChatGPT.app");
     fs::create_dir_all(&app_home).unwrap();
@@ -229,9 +229,13 @@ fn discovery_returns_codex_desktop_app_without_cli_or_initialized_home() {
     assert!(!expected_home.exists());
 
     let agents = discover_agents(dir.path());
-    let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+    let codex = agents
+        .iter()
+        .find(|agent| agent.name() == "codex-app")
+        .unwrap();
 
     assert_eq!(codex.home(), expected_home.as_path());
+    assert_eq!(codex.title(), "Codex App");
     let meta = asset_data(codex, AssetType::Meta);
     assert_eq!(meta[0].data["installed"], true);
 }

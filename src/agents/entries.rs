@@ -33,6 +33,16 @@ pub(crate) const CODEX_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &["CODEX_HOME"],
 };
 
+pub(crate) const CODEX_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codex-app",
+    title: Some("Codex App"),
+    homes: &[&[".codex"]],
+    asset_for_type: crate::agents::codex::asset_for_type,
+    is_installed: crate::agents::codex::is_agent_installed,
+    process_provider: crate::agents::codex::app_process_data,
+    process_home_env_vars: &[],
+};
+
 pub(crate) const CLAUDE_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "claude-cli",
     title: Some("Claude Code"),
@@ -320,6 +330,7 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
     let mut entries = vec![
         SENTRA_AGENT_ENTRY.clone(),
         CODEX_AGENT_ENTRY.clone(),
+        CODEX_APP_AGENT_ENTRY.clone(),
         CLAUDE_CLI_AGENT_ENTRY.clone(),
         CLAUDE_APP_AGENT_ENTRY.clone(),
         HERMES_AGENT_ENTRY.clone(),
@@ -372,6 +383,7 @@ mod tests {
     fn concrete_agent_entries_route_process_assets() {
         for entry in [
             &CODEX_AGENT_ENTRY,
+            &CODEX_APP_AGENT_ENTRY,
             &CLAUDE_CLI_AGENT_ENTRY,
             &CLAUDE_APP_AGENT_ENTRY,
             &HERMES_AGENT_ENTRY,

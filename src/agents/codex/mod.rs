@@ -15,10 +15,17 @@ mod skill;
 pub(crate) use install::{install_plans_for_platform, uninstall_plan_for_platform};
 
 pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    crate::agents::discovery::discover_entry_agents(
-        user_home.as_ref(),
+    let user_home = user_home.as_ref();
+    let mut agents = crate::agents::discovery::discover_entry_agents(
+        user_home,
         std::slice::from_ref(&crate::agents::entries::CODEX_AGENT_ENTRY),
-    )
+    );
+    let app_entry = &crate::agents::entries::CODEX_APP_AGENT_ENTRY;
+    let app_home = user_home.join(".codex");
+    if (app_entry.is_installed)(app_entry.name, &app_home) {
+        agents.push(crate::agents::Agent::new(app_entry, app_home));
+    }
+    agents
 }
 
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
@@ -27,6 +34,10 @@ pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
 
 pub(crate) fn process_data() -> Vec<crate::interfaces::ProcessData> {
     process::process_data()
+}
+
+pub(crate) fn app_process_data() -> Vec<crate::interfaces::ProcessData> {
+    process::app_process_data()
 }
 
 pub(crate) fn asset_for_type(
@@ -47,7 +58,7 @@ pub(crate) fn asset_for_type(
         AssetType::Process => vec![Box::new(crate::agents::process::ProcessAsset::new(
             agent_name,
             agent_home,
-            process::matches_process,
+            process::matcher(agent_name),
         ))],
     }
 }

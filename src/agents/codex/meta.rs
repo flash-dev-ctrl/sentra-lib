@@ -85,17 +85,24 @@ impl Asset<Option<MetaData>> for MetaAsset {
 
 pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real();
-    is_agent_installed_with(agent_name, agent_home, &probe)
+    if agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name {
+        is_codex_app_installed_with(agent_home, &probe)
+    } else {
+        is_codex_cli_installed_with(agent_name, agent_home, &probe)
+    }
 }
 
-fn is_agent_installed_with(
+fn is_codex_cli_installed_with(
     agent_name: &str,
     agent_home: &Path,
     probe: &InstallStatusProbe,
 ) -> bool {
     any_command_exists_with(&[agent_name], probe)
         || any_existing_file_with(codex_install_paths(agent_name, agent_home), probe)
-        || any_existing_file_with(codex_app_executable_paths(agent_home), probe)
+}
+
+fn is_codex_app_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
+    any_existing_file_with(codex_app_executable_paths(agent_home), probe)
         || any_existing_dir_with(codex_app_bundle_paths(agent_home), probe)
 }
 
@@ -173,7 +180,7 @@ fn windows_app_roots(user_home: &Path) -> Vec<PathBuf> {
 mod tests {
     use std::path::Path;
 
-    use crate::agents::codex::meta::is_agent_installed_with;
+    use crate::agents::codex::meta::{is_codex_app_installed_with, is_codex_cli_installed_with};
     use crate::agents::install_status::InstallStatusProbe;
 
     #[test]
@@ -186,18 +193,19 @@ mod tests {
             path_never_exists,
         );
 
-        assert!(is_agent_installed_with("codex", &codex_home, &probe));
+        assert!(is_codex_cli_installed_with("codex", &codex_home, &probe));
     }
 
     #[test]
-    fn install_probe_accepts_codex_desktop_app_bundle() {
+    fn install_probes_separate_cli_and_desktop_app() {
         let dir = tempfile::tempdir().unwrap();
         let codex_home = dir.path().join(".codex");
         let app_home = dir.path().join("Applications").join("ChatGPT.app");
         std::fs::create_dir_all(&app_home).unwrap();
         let probe = InstallStatusProbe::test(command_never_exists, path_never_exists, path_is_dir);
 
-        assert!(is_agent_installed_with("codex", &codex_home, &probe));
+        assert!(!is_codex_cli_installed_with("codex", &codex_home, &probe));
+        assert!(is_codex_app_installed_with(&codex_home, &probe));
     }
 
     fn only_codex_command_exists(binary: &str) -> bool {

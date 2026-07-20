@@ -456,6 +456,7 @@ fn agent_entries_are_defined_in_shared_entries_file() {
     for symbol in [
         "CLAUDE_APP_AGENT_ENTRY",
         "CLAUDE_CLI_AGENT_ENTRY",
+        "CODEX_APP_AGENT_ENTRY",
         "CODEX_AGENT_ENTRY",
         "ANTIGRAVITY_AGENT_ENTRY",
         "CODEBUDDY_AGENT_ENTRY",
