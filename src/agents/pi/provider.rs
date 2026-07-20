@@ -340,7 +340,7 @@ fn literal_config_string(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::pi_builtin_base_url;
+    use crate::agents::pi::provider::pi_builtin_base_url;
 
     #[test]
     fn pi_builtin_base_urls_cover_static_catalog() {
