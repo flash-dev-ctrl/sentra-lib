@@ -2,6 +2,7 @@ use std::path::Path;
 
 use crate::agents::process::{
     ProcessInfo, is_binary_name, matches_binary_names, path_has_component,
+    process_has_ide_extension,
 };
 use crate::interfaces::ProcessData;
 
@@ -18,7 +19,9 @@ const CODEX_DESKTOP_PATH_COMPONENTS: &[&str] = &[
 ];
 
 pub(super) fn matcher(agent_name: &str) -> crate::agents::process::ProcessMatcher {
-    if agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name {
+    if agent_name == crate::agents::entries::CODEX_IDE_AGENT_ENTRY.name {
+        matches_ide_process
+    } else if agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name {
         matches_app_process
     } else {
         matches_cli_process
@@ -33,13 +36,23 @@ pub(crate) fn app_process_data() -> Vec<ProcessData> {
     crate::agents::process::process_data(matches_app_process)
 }
 
+pub(crate) fn ide_process_data() -> Vec<ProcessData> {
+    crate::agents::process::process_data(matches_ide_process)
+}
+
 fn matches_cli_process(process: &ProcessInfo<'_>) -> bool {
     matches_binary_names(process, CODEX_BINARY_NAMES)
         && !process.path.is_some_and(is_codex_desktop_path)
+        && !process_has_ide_extension(process, crate::agents::codex::CODEX_IDE_EXTENSION_ID)
 }
 
 fn matches_app_process(process: &ProcessInfo<'_>) -> bool {
     process.path.is_some_and(is_codex_desktop_path)
+}
+
+fn matches_ide_process(process: &ProcessInfo<'_>) -> bool {
+    matches_binary_names(process, CODEX_BINARY_NAMES)
+        && process_has_ide_extension(process, crate::agents::codex::CODEX_IDE_EXTENSION_ID)
 }
 
 fn is_codex_desktop_path(path: &Path) -> bool {
@@ -124,6 +137,22 @@ mod tests {
         assert_process_match("codex-app", false, "codex.exe", &[], Some(&cli_path));
         assert_process_match("codex", false, "Codex", &[], Some(&app_path));
         assert_process_match("codex-app", true, "Codex", &[], Some(&app_path));
+    }
+
+    #[test]
+    fn separates_codex_ide_extension_bundle_from_cli_and_desktop_app() {
+        let ide_path = Path::new("Users")
+            .join("me")
+            .join(".devin")
+            .join("extensions")
+            .join("openai.chatgpt-1.2.3-win32-x64")
+            .join("bin")
+            .join("windows-x86_64")
+            .join("codex.exe");
+
+        assert_process_match("codex-ide", true, "codex.exe", &[], Some(&ide_path));
+        assert_process_match("codex", false, "codex.exe", &[], Some(&ide_path));
+        assert_process_match("codex-app", false, "codex.exe", &[], Some(&ide_path));
     }
 
     fn assert_process_match(

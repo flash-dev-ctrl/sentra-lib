@@ -90,6 +90,24 @@ pub(crate) fn discover_entry_agents(user_home: &Path, entries: &[AgentEntry]) ->
     results
 }
 
+pub(crate) fn discover_installed_entry_agents(
+    user_home: &Path,
+    entries: &[&AgentEntry],
+) -> Vec<Agent> {
+    let mut results = Vec::new();
+    for entry in entries {
+        let entry = *entry;
+        for segments in entry.homes {
+            let home = entry_home(user_home, segments);
+            if (entry.is_installed)(entry.name, &home) {
+                push_agent_if_missing(&mut results, entry, home);
+                break;
+            }
+        }
+    }
+    results
+}
+
 fn entry_home(user_home: &Path, segments: &[&str]) -> PathBuf {
     let mut home = user_home.to_path_buf();
     for segment in segments.iter() {

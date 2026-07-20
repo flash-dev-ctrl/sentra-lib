@@ -115,6 +115,32 @@ pub(crate) fn path_has_component(path: &Path, components: &[&str]) -> bool {
     })
 }
 
+pub(crate) fn process_has_ide_extension(process: &ProcessInfo<'_>, extension_id: &str) -> bool {
+    process
+        .path
+        .is_some_and(|path| value_has_ide_extension(path.to_string_lossy().as_ref(), extension_id))
+        || process
+            .cmdline
+            .first()
+            .is_some_and(|command| value_has_ide_extension(command, extension_id))
+}
+
+fn value_has_ide_extension(value: &str, extension_id: &str) -> bool {
+    let extension_id = extension_id.to_ascii_lowercase();
+    let components = value
+        .trim_matches(['"', '\''])
+        .split(['/', '\\'])
+        .map(str::to_ascii_lowercase)
+        .collect::<Vec<_>>();
+    components.windows(2).any(|pair| {
+        pair[0] == "extensions"
+            && (pair[1] == extension_id
+                || pair[1]
+                    .strip_prefix(&extension_id)
+                    .is_some_and(|suffix| suffix.starts_with('-')))
+    })
+}
+
 fn command_basename(command: &str) -> &str {
     command.rsplit(['/', '\\']).next().unwrap_or(command)
 }
@@ -219,6 +245,29 @@ mod tests {
 
         assert!(path_has_component(&chatgpt_path, &["openai", "chatgpt"]));
         assert!(!path_has_component(&temp_path, &["openai"]));
+    }
+
+    #[test]
+    fn matches_versioned_ide_extension_paths_exactly() {
+        let path = Path::new("Users")
+            .join("me")
+            .join(".devin")
+            .join("extensions")
+            .join("openai.chatgpt-1.2.3-win32-x64")
+            .join("bin")
+            .join("codex.exe");
+        let cmdline = vec![
+            r#"C:\Users\me\.vscode\extensions\Anthropic.claude-code-2.0\claude.exe"#.to_string(),
+        ];
+        let process = ProcessInfo {
+            name: "codex.exe",
+            cmdline: &cmdline,
+            path: Some(&path),
+        };
+
+        assert!(process_has_ide_extension(&process, "openai.chatgpt"));
+        assert!(process_has_ide_extension(&process, "anthropic.claude-code"));
+        assert!(!process_has_ide_extension(&process, "openai.chat"));
     }
 
     #[test]
