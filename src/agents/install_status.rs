@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -38,6 +39,31 @@ pub(crate) fn is_named_cli_agent_installed_with(
 ) -> bool {
     any_command_exists_with(&[agent_name], probe)
         || any_existing_file_with(named_cli_install_paths(agent_name, agent_home), probe)
+}
+
+pub(crate) fn is_ide_extension_installed(agent_home: &Path, extension_id: &str) -> bool {
+    // ponytail: default one-level indexes cover VS Code forks; add explicit roots when
+    // custom --extensions-dir support is required.
+    fs::read_dir(hidden_home_parent(agent_home))
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path().join("extensions").join("extensions.json"))
+        .any(|path| extension_index_contains(&path, extension_id))
+}
+
+fn extension_index_contains(path: &Path, extension_id: &str) -> bool {
+    let Ok(Some(index)) = crate::utils::read_json_file(path) else {
+        return false;
+    };
+    index.as_array().is_some_and(|entries| {
+        entries.iter().any(|entry| {
+            entry
+                .pointer("/identifier/id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|id| id.eq_ignore_ascii_case(extension_id))
+        })
+    })
 }
 
 pub(crate) fn any_command_exists_with(binary_names: &[&str], probe: &InstallStatusProbe) -> bool {
@@ -166,6 +192,51 @@ mod tests {
             "devin",
             &agent_home,
             &probe
+        ));
+    }
+
+    #[test]
+    fn ide_extension_probe_scans_any_vscode_family_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent_home = dir.path().join(".codex");
+        for (ide, extension_id) in [
+            (".vscode", "openai.chatgpt-helper"),
+            (".devin", "OPENAI.CHATGPT"),
+            (".cursor", "openai.chatgpt"),
+        ] {
+            let extension_dir = dir.path().join(ide).join("extensions");
+            std::fs::create_dir_all(&extension_dir).unwrap();
+            std::fs::write(
+                extension_dir.join("extensions.json"),
+                serde_json::to_vec(&serde_json::json!([{
+                    "identifier": { "id": extension_id }
+                }]))
+                .unwrap(),
+            )
+            .unwrap();
+        }
+
+        assert!(is_ide_extension_installed(&agent_home, "openai.chatgpt"));
+        assert!(!is_ide_extension_installed(&agent_home, "openai.chat"));
+    }
+
+    #[test]
+    fn ide_extension_probe_ignores_missing_and_malformed_indexes() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent_home = dir.path().join(".claude");
+
+        assert!(!is_ide_extension_installed(
+            &agent_home,
+            "anthropic.claude-code"
+        ));
+
+        let extension_dir = dir.path().join(".trae").join("extensions");
+        std::fs::create_dir_all(&extension_dir).unwrap();
+        std::fs::write(extension_dir.join("extensions.json"), "not-json").unwrap();
+
+        assert!(!is_ide_extension_installed(
+            &agent_home,
+            "anthropic.claude-code"
         ));
     }
 

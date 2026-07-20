@@ -43,6 +43,16 @@ pub(crate) const CODEX_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
+pub(crate) const CODEX_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codex-ide",
+    title: Some("Codex IDE Extension"),
+    homes: &[&[".codex"]],
+    asset_for_type: crate::agents::codex::asset_for_type,
+    is_installed: crate::agents::codex::is_agent_installed,
+    process_provider: crate::agents::codex::ide_process_data,
+    process_home_env_vars: &[],
+};
+
 pub(crate) const CLAUDE_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "claude-cli",
     title: Some("Claude Code"),
@@ -50,6 +60,16 @@ pub(crate) const CLAUDE_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
     asset_for_type: crate::agents::claude_cli::asset_for_type,
     is_installed: crate::agents::claude_cli::is_agent_installed,
     process_provider: crate::agents::claude_cli::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const CLAUDE_CODE_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "claude-code-ide",
+    title: Some("Claude Code IDE Extension"),
+    homes: &[&[".claude"]],
+    asset_for_type: crate::agents::claude_cli::asset_for_type,
+    is_installed: crate::agents::claude_cli::is_agent_installed,
+    process_provider: crate::agents::claude_cli::ide_process_data,
     process_home_env_vars: &[],
 };
 
@@ -331,7 +351,9 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         SENTRA_AGENT_ENTRY.clone(),
         CODEX_AGENT_ENTRY.clone(),
         CODEX_APP_AGENT_ENTRY.clone(),
+        CODEX_IDE_AGENT_ENTRY.clone(),
         CLAUDE_CLI_AGENT_ENTRY.clone(),
+        CLAUDE_CODE_IDE_AGENT_ENTRY.clone(),
         CLAUDE_APP_AGENT_ENTRY.clone(),
         HERMES_AGENT_ENTRY.clone(),
         KIMI_CODE_AGENT_ENTRY.clone(),
@@ -384,7 +406,9 @@ mod tests {
         for entry in [
             &CODEX_AGENT_ENTRY,
             &CODEX_APP_AGENT_ENTRY,
+            &CODEX_IDE_AGENT_ENTRY,
             &CLAUDE_CLI_AGENT_ENTRY,
+            &CLAUDE_CODE_IDE_AGENT_ENTRY,
             &CLAUDE_APP_AGENT_ENTRY,
             &HERMES_AGENT_ENTRY,
             &KIMI_CODE_AGENT_ENTRY,

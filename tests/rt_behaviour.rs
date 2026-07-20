@@ -241,6 +241,39 @@ fn discovery_returns_codex_desktop_app_entry_without_initialized_home() {
 }
 
 #[test]
+fn discovery_returns_ide_extension_entries_from_vscode_family_indexes() {
+    let dir = tempfile::tempdir().unwrap();
+    write_ide_extension_index(dir.path(), ".vscode", &["openai.chatgpt-helper"]);
+    write_ide_extension_index(dir.path(), ".devin", &["OPENAI.CHATGPT"]);
+    write_ide_extension_index(dir.path(), ".cursor", &["openai.chatgpt"]);
+    write_ide_extension_index(dir.path(), ".trae", &["anthropic.claude-code"]);
+
+    assert!(!dir.path().join(".codex").exists());
+    assert!(!dir.path().join(".claude").exists());
+
+    let agents = discover_agents(dir.path());
+    for (name, title, home) in [
+        ("codex-ide", "Codex IDE Extension", ".codex"),
+        ("claude-code-ide", "Claude Code IDE Extension", ".claude"),
+    ] {
+        let matches = agents
+            .iter()
+            .filter(|agent| agent.name() == name)
+            .collect::<Vec<_>>();
+        assert_eq!(matches.len(), 1, "{name}");
+        let agent = matches[0];
+        assert_eq!(agent.title(), title);
+        assert_eq!(agent.home(), dir.path().join(home));
+        assert_eq!(
+            asset_data(agent, AssetType::Meta)[0].data["installed"],
+            true
+        );
+        assert_eq!(agent.get_assets(AssetType::Process).unwrap().len(), 1);
+        assert!(agent.get_assets(AssetType::Skill).unwrap().is_empty());
+    }
+}
+
+#[test]
 fn module_discovery_returns_agents_that_own_asset_factories() {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join(".codex")).unwrap();
@@ -2509,6 +2542,20 @@ fn test_binary_name(name: &str) -> String {
     } else {
         name.to_string()
     }
+}
+
+fn write_ide_extension_index(user_home: &std::path::Path, ide: &str, ids: &[&str]) {
+    let extension_dir = user_home.join(ide).join("extensions");
+    fs::create_dir_all(&extension_dir).unwrap();
+    let entries = ids
+        .iter()
+        .map(|id| serde_json::json!({ "identifier": { "id": id } }))
+        .collect::<Vec<_>>();
+    fs::write(
+        extension_dir.join("extensions.json"),
+        serde_json::to_vec(&entries).unwrap(),
+    )
+    .unwrap();
 }
 
 fn opencode_command_exists() -> bool {

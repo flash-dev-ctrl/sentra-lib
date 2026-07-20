@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::SentraResult;
 use crate::agents::install_status::{
     InstallStatusProbe, any_command_exists_with, any_existing_dir_with, any_existing_file_with,
-    binary_paths, env_path, hidden_home_parent,
+    binary_paths, env_path, hidden_home_parent, is_ide_extension_installed,
 };
 use crate::agents::object::AssetCore;
 use crate::interfaces::{Asset, AssetType, ErasedAsset, MetaData};
@@ -84,6 +84,12 @@ impl Asset<Option<MetaData>> for MetaAsset {
 }
 
 pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
+    if agent_name == crate::agents::entries::CODEX_IDE_AGENT_ENTRY.name {
+        return is_ide_extension_installed(
+            agent_home,
+            crate::agents::codex::CODEX_IDE_EXTENSION_ID,
+        );
+    }
     let probe = InstallStatusProbe::real();
     if agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name {
         is_codex_app_installed_with(agent_home, &probe)
