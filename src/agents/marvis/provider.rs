@@ -1,10 +1,10 @@
-use crate::agents::object::{impl_erased_asset, AssetCore};
+use crate::SentraResult;
+use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{
     Asset, AssetMutationResult, AssetType, ProviderData, ProviderProbeRequest,
 };
-use crate::utils::protocol::{build_model_probe_request, WireProtocol};
+use crate::utils::protocol::{WireProtocol, build_model_probe_request};
 use crate::utils::{mask_secret, read_text_file};
-use crate::SentraResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -61,7 +61,10 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     }
 }
 
-fn provider_data(agent_home: &std::path::Path, mask_secrets: bool) -> SentraResult<Vec<ProviderData>> {
+fn provider_data(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
     let mut out = Vec::new();
     let cwd = std::env::current_dir().unwrap_or_default();
     for settings in [

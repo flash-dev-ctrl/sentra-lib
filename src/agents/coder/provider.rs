@@ -1,10 +1,10 @@
-use crate::agents::object::{impl_erased_asset, AssetCore};
+use crate::SentraResult;
+use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderAccount, ProviderData,
     ProviderType,
 };
 use crate::utils::read_json_file;
-use crate::SentraResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {

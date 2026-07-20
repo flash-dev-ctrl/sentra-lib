@@ -1,12 +1,12 @@
 use serde_json::Value;
 
-use crate::agents::object::{impl_erased_asset, AssetCore};
+use crate::SentraResult;
+use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{
     Asset, AssetMutationResult, AssetType, ProviderData, ProviderModel, ProviderProbeRequest,
 };
-use crate::utils::protocol::{build_model_probe_request, WireProtocol};
+use crate::utils::protocol::{WireProtocol, build_model_probe_request};
 use crate::utils::{mask_secret, read_json_file};
-use crate::SentraResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -67,7 +67,10 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     }
 }
 
-fn provider_data(agent_home: &std::path::Path, mask_secrets: bool) -> SentraResult<Vec<ProviderData>> {
+fn provider_data(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
     let Some(config) = read_json_file(agent_home.join("settings.json"))? else {
         return Ok(Vec::new());
     };

@@ -9,7 +9,10 @@ pub(super) struct ProviderAsset {
 }
 
 impl ProviderAsset {
-    pub(super) fn new(agent_name: impl Into<String>, agent_home: impl Into<std::path::PathBuf>) -> Self {
+    pub(super) fn new(
+        agent_name: impl Into<String>,
+        agent_home: impl Into<std::path::PathBuf>,
+    ) -> Self {
         Self {
             core: AssetCore::new(agent_name, agent_home),
         }
@@ -34,7 +37,10 @@ impl Asset<Vec<ProviderData>> for ProviderAsset {
 }
 
 fn provider_data(config: &serde_yaml::Value) -> Vec<ProviderData> {
-    let Some(providers) = config.get("model_providers").and_then(|value| value.as_mapping()) else {
+    let Some(providers) = config
+        .get("model_providers")
+        .and_then(|value| value.as_mapping())
+    else {
         return Vec::new();
     };
     providers

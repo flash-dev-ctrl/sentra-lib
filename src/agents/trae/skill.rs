@@ -9,7 +9,10 @@ pub(super) struct SkillAsset {
 }
 
 impl SkillAsset {
-    pub(super) fn new(agent_name: impl Into<String>, agent_home: impl Into<std::path::PathBuf>) -> Self {
+    pub(super) fn new(
+        agent_name: impl Into<String>,
+        agent_home: impl Into<std::path::PathBuf>,
+    ) -> Self {
         Self {
             core: AssetCore::new(agent_name, agent_home),
         }

@@ -297,12 +297,12 @@ base_url = "https://api.openai.com/v1"
     )
     .unwrap();
 
-    let cursor_home = dir.path().join(".cursor");
-    let cursor_skill = cursor_home.join("cursor-skill");
-    fs::create_dir_all(&cursor_skill).unwrap();
+    let devin_home = dir.path().join(".devin");
+    let devin_skill = devin_home.join("devin-skill");
+    fs::create_dir_all(&devin_skill).unwrap();
     fs::write(
-        cursor_skill.join("SKILL.md"),
-        "---\nname: cursor-skill\n---\nbody",
+        devin_skill.join("SKILL.md"),
+        "---\nname: devin-skill\n---\nbody",
     )
     .unwrap();
 
@@ -312,10 +312,7 @@ base_url = "https://api.openai.com/v1"
         .iter()
         .find(|agent| agent.name() == "sentra")
         .unwrap();
-    let cursor_agent = agents
-        .iter()
-        .find(|agent| agent.name() == "cursor")
-        .unwrap();
+    let devin_agent = agents.iter().find(|agent| agent.name() == "devin").unwrap();
 
     let codex_skills = asset_data(codex_agent, AssetType::Skill);
     assert_eq!(codex_skills[0].asset_type, AssetType::Skill);
@@ -332,10 +329,10 @@ base_url = "https://api.openai.com/v1"
         AssetType::Provider
     );
 
-    let cursor_skills = asset_data(cursor_agent, AssetType::Skill);
-    assert_eq!(cursor_skills[0].data[0]["name"], "cursor-skill");
+    let devin_skills = asset_data(devin_agent, AssetType::Skill);
+    assert_eq!(devin_skills[0].data[0]["name"], "devin-skill");
     assert!(
-        cursor_agent
+        devin_agent
             .get_assets(AssetType::Provider)
             .unwrap()
             .is_empty()
@@ -681,15 +678,12 @@ fn malformed_skill_frontmatter_does_not_break_asset_listing() {
 #[test]
 fn general_exposes_only_ts_supported_skill_asset() {
     let dir = tempfile::tempdir().unwrap();
-    fs::create_dir_all(dir.path().join(".cursor")).unwrap();
+    fs::create_dir_all(dir.path().join(".devin")).unwrap();
 
     let agents = discover_agents(dir.path());
-    let cursor = agents
-        .iter()
-        .find(|agent| agent.name() == "cursor")
-        .unwrap();
-    assert_eq!(cursor.get_assets(AssetType::Skill).unwrap().len(), 1);
-    assert!(cursor.get_assets(AssetType::Mcp).unwrap().is_empty());
+    let devin = agents.iter().find(|agent| agent.name() == "devin").unwrap();
+    assert_eq!(devin.get_assets(AssetType::Skill).unwrap().len(), 1);
+    assert!(devin.get_assets(AssetType::Mcp).unwrap().is_empty());
 }
 
 #[test]

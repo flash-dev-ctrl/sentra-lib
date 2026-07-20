@@ -34,7 +34,9 @@ impl Asset<Option<MetaData>> for MetaAsset {
         Ok(Some(MetaData {
             id: Some("trae".to_string()),
             name: "Trae".to_string(),
-            description: Some("Trae IDE and trae-agent CLI local configuration and assets.".to_string()),
+            description: Some(
+                "Trae IDE and trae-agent CLI local configuration and assets.".to_string(),
+            ),
             author: Some("ByteDance".to_string()),
             installed,
             home: Some(home.to_path_buf()),
@@ -51,7 +53,10 @@ pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
 }
 
 fn install_paths(agent_home: &Path) -> Vec<PathBuf> {
-    let mut paths = binary_paths(hidden_home_parent(agent_home).join(".local").join("bin"), "trae-cli");
+    let mut paths = binary_paths(
+        hidden_home_parent(agent_home).join(".local").join("bin"),
+        "trae-cli",
+    );
     if let Some(local_app_data) = env_path("LOCALAPPDATA") {
         paths.extend(binary_paths(
             local_app_data.join("Programs").join("Trae"),
@@ -63,7 +68,9 @@ fn install_paths(agent_home: &Path) -> Vec<PathBuf> {
 
 fn app_paths(agent_home: &Path) -> Vec<PathBuf> {
     vec![
-        hidden_home_parent(agent_home).join("Applications").join("Trae.app"),
+        hidden_home_parent(agent_home)
+            .join("Applications")
+            .join("Trae.app"),
         PathBuf::from("/Applications/Trae.app"),
     ]
 }

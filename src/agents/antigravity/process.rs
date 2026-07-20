@@ -1,4 +1,4 @@
-use crate::agents::process::{matches_binary_names, path_has_component, ProcessInfo};
+use crate::agents::process::{ProcessInfo, matches_binary_names, path_has_component};
 use crate::interfaces::ProcessData;
 
 pub(crate) fn process_data() -> Vec<ProcessData> {

@@ -1,9 +1,9 @@
 use serde_json::Value;
 
-use crate::agents::object::{impl_erased_asset, AssetCore};
+use crate::SentraResult;
+use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, McpData};
 use crate::utils::{mask_secret, parse_mcp_servers, read_json_file};
-use crate::SentraResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct McpAsset {
@@ -41,7 +41,10 @@ impl Asset<Vec<McpData>> for McpAsset {
                 ));
             }
         }
-        for path in [cwd.join(".mcp.json"), global_config_file(self.core.agent_home())] {
+        for path in [
+            cwd.join(".mcp.json"),
+            global_config_file(self.core.agent_home()),
+        ] {
             let Some(config) = read_json_file(path)? else {
                 continue;
             };
@@ -57,10 +60,10 @@ impl Asset<Vec<McpData>> for McpAsset {
 }
 
 fn global_config_file(agent_home: &std::path::Path) -> std::path::PathBuf {
-    agent_home
-        .parent()
-        .unwrap_or(agent_home)
-        .join(format!("{}.json", agent_home.file_name().unwrap_or_default().to_string_lossy()))
+    agent_home.parent().unwrap_or(agent_home).join(format!(
+        "{}.json",
+        agent_home.file_name().unwrap_or_default().to_string_lossy()
+    ))
 }
 
 fn parse_servers(raw: Option<&Value>) -> Vec<McpData> {

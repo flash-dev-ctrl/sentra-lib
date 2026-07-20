@@ -1,7 +1,7 @@
-use crate::agents::object::{impl_erased_asset, AssetCore};
+use crate::SentraResult;
+use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MemoryData};
 use crate::utils::collect_memory_paths;
-use crate::SentraResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct MemoryAsset {

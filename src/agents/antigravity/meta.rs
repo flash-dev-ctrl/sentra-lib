@@ -1,13 +1,13 @@
 use std::path::{Path, PathBuf};
 
+use crate::SentraResult;
 use crate::agents::install_status::{
-    any_command_exists_with, any_existing_dir_with, any_existing_file_with, binary_paths,
-    hidden_home_parent, InstallStatusProbe,
+    InstallStatusProbe, any_command_exists_with, any_existing_dir_with, any_existing_file_with,
+    binary_paths, hidden_home_parent,
 };
-use crate::agents::object::{impl_erased_asset, AssetCore};
+use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::dir_exists;
-use crate::SentraResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct MetaAsset {

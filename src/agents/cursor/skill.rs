@@ -1,8 +1,8 @@
+use crate::SentraResult;
 use crate::agents::install_status::hidden_home_parent;
-use crate::agents::object::{impl_erased_asset, AssetCore};
+use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, SkillData};
 use crate::utils::collect_skills_from_dir;
-use crate::SentraResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct SkillAsset {

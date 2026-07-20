@@ -1,10 +1,10 @@
 use std::path::Path;
 
-use crate::agents::install_status::{is_named_cli_agent_installed_with, InstallStatusProbe};
-use crate::agents::object::{impl_erased_asset, AssetCore};
+use crate::SentraResult;
+use crate::agents::install_status::{InstallStatusProbe, is_named_cli_agent_installed_with};
+use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::dir_exists;
-use crate::SentraResult;
 
 #[derive(Debug, Clone)]
 pub(super) struct MetaAsset {
