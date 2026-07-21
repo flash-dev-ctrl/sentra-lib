@@ -46,11 +46,6 @@ pub(crate) fn asset_for_type(
     agent_home: &std::path::Path,
     asset_type: AssetType,
 ) -> Vec<Box<dyn ErasedAsset>> {
-    if agent_name == crate::agents::entries::CLAUDE_CODE_IDE_AGENT_ENTRY.name
-        && !matches!(asset_type, AssetType::Meta | AssetType::Process)
-    {
-        return Vec::new();
-    }
     match asset_type {
         AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
         AssetType::Skill => vec![Box::new(skill::SkillAsset::new(agent_name, agent_home))],
@@ -74,7 +69,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ide_extension_only_exposes_meta_and_process_assets() {
+    fn ide_extension_shares_claude_assets() {
         let home = Path::new(".claude");
 
         assert_eq!(
@@ -85,9 +80,28 @@ mod tests {
             asset_for_type("claude-code-ide", home, AssetType::Process).len(),
             1
         );
-        assert!(asset_for_type("claude-code-ide", home, AssetType::Skill).is_empty());
         assert_eq!(
-            asset_for_type("claude-cli", home, AssetType::Skill).len(),
+            asset_for_type("claude-code-ide", home, AssetType::Skill).len(),
+            1
+        );
+        assert_eq!(
+            asset_for_type("claude-code-ide", home, AssetType::Mcp).len(),
+            1
+        );
+        assert_eq!(
+            asset_for_type("claude-code-ide", home, AssetType::Provider).len(),
+            1
+        );
+        assert_eq!(
+            asset_for_type("claude-code-ide", home, AssetType::Cron).len(),
+            1
+        );
+        assert_eq!(
+            asset_for_type("claude-code-ide", home, AssetType::Plugin).len(),
+            1
+        );
+        assert_eq!(
+            asset_for_type("claude-code-ide", home, AssetType::Memory).len(),
             1
         );
     }
