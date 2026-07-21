@@ -2520,7 +2520,7 @@ experimental_bearer_token = "sk-test"
 }
 
 #[test]
-fn claude_app_exposes_local_provider_without_gateway_config() {
+fn claude_app_does_not_synthesize_local_provider_without_matching_config() {
     let dir = tempfile::tempdir().unwrap();
     let claude_app_home = dir.path().join("AppData").join("Local").join("Claude");
     fs::create_dir_all(claude_app_home.join("configLibrary")).unwrap();
@@ -2545,17 +2545,7 @@ fn claude_app_exposes_local_provider_without_gateway_config() {
         .unwrap();
     let providers = asset_data(claude_app, AssetType::Provider);
 
-    assert_eq!(providers.len(), 1);
-    assert_eq!(
-        providers[0].data[0]["baseUrl"],
-        "http://127.0.0.1:15721/claude-desktop"
-    );
-    assert_eq!(providers[0].data[0]["name"], "Claude App");
-    assert!(providers[0].data[0]["apiKey"].is_null());
-    assert_eq!(
-        providers[0].data[0]["models"],
-        serde_json::Value::Array(Vec::new())
-    );
+    assert!(providers[0].data.as_array().unwrap().is_empty());
 }
 
 #[test]

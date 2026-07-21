@@ -9,8 +9,6 @@ use crate::interfaces::{
 use crate::utils::protocol::WireProtocol;
 use crate::utils::{backup_file, mask_secret, read_json_file, write_json_file};
 
-const LOCAL_DESKTOP_BASE_URL: &str = "http://127.0.0.1:15721/claude-desktop";
-
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
     pub(crate) core: AssetCore,
@@ -60,7 +58,6 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
         }
         if let Some(base_url) = value.base_url
             && base_url != "https://api.anthropic.com"
-            && base_url != LOCAL_DESKTOP_BASE_URL
         {
             config["inferenceGatewayBaseUrl"] = json!(base_url);
         }
@@ -132,15 +129,22 @@ fn provider_data(
     agent_home: &std::path::Path,
     mask_secrets: bool,
 ) -> SentraResult<Vec<ProviderData>> {
-    let config_path = find_config_file(agent_home)?.unwrap_or(writable_config_path(agent_home)?);
-    let mut config = read_json_file(config_path)?.unwrap_or_else(|| json!({}));
+    let Some(config_path) = find_config_file(agent_home)? else {
+        return Ok(Vec::new());
+    };
+    let Some(config) = read_json_file(config_path)? else {
+        return Ok(Vec::new());
+    };
     if !config.is_object() {
-        config = json!({});
+        return Ok(Vec::new());
     }
-    let configured_base_url = config
+    let Some(base_url) = config
         .get("inferenceGatewayBaseUrl")
-        .and_then(|value| value.as_str());
-    let base_url = configured_base_url.unwrap_or(LOCAL_DESKTOP_BASE_URL);
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(Vec::new());
+    };
     let models = config
         .get("inferenceModels")
         .and_then(|value| value.as_array())
@@ -163,11 +167,7 @@ fn provider_data(
         })
         .unwrap_or_default();
     Ok(vec![ProviderData {
-        name: if configured_base_url.is_some() {
-            "Anthropic".to_string()
-        } else {
-            "Claude App".to_string()
-        },
+        name: "Anthropic".to_string(),
         base_url: Some(base_url.to_string()),
         api_key: config
             .get("inferenceGatewayApiKey")
@@ -219,11 +219,17 @@ fn find_config_file(agent_home: &std::path::Path) -> SentraResult<Option<std::pa
             .get("inferenceGatewayBaseUrl")
             .and_then(|value| value.as_str())
             .is_some();
-        if has_models || has_base_url {
+        if has_models || has_base_url || file_contains_claude_desktop_endpoint(&path) {
             return Ok(Some(path));
         }
     }
     Ok(None)
+}
+
+fn file_contains_claude_desktop_endpoint(path: &std::path::Path) -> bool {
+    std::fs::read_to_string(path)
+        .map(|content| content.contains("http://127.0.0.1:15721/claude-desktop"))
+        .unwrap_or(false)
 }
 
 fn writable_config_path(agent_home: &std::path::Path) -> SentraResult<std::path::PathBuf> {
