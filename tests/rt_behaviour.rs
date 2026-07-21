@@ -173,7 +173,7 @@ fn agent_discovery_finds_codex_home_and_title() {
             .find(|agent| agent.name() == "codex")
             .unwrap()
             .title(),
-        "Codex"
+        "Codex CLI"
     );
 }
 
@@ -284,7 +284,7 @@ fn module_discovery_returns_agents_that_own_asset_factories() {
         .collect();
     assert_eq!(agents.len(), 1);
     assert_eq!(agents[0].name(), "codex");
-    assert_eq!(agents[0].title(), "Codex");
+    assert_eq!(agents[0].title(), "Codex CLI");
     assert_eq!(agents[0].get_assets(AssetType::Mcp).unwrap().len(), 1);
 }
 

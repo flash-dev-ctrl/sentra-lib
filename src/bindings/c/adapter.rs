@@ -348,7 +348,7 @@ mod tests {
             .collect();
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].agent, "codex");
-        assert_eq!(skills[0].agent_title, "Codex");
+        assert_eq!(skills[0].agent_title, "Codex CLI");
         assert_eq!(skills[0].asset_type, AssetType::Skill);
         assert_eq!(skills[0].data[0]["name"], "demo");
         assert_eq!(skills[0].data[0]["description"], "A demo skill");

@@ -25,7 +25,7 @@ pub(crate) struct SystemAgentPath {
 
 pub(crate) const CODEX_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "codex",
-    title: Some("Codex"),
+    title: Some("Codex CLI"),
     homes: &[&[".codex"]],
     asset_for_type: crate::agents::codex::asset_for_type,
     is_installed: crate::agents::codex::is_agent_installed,
