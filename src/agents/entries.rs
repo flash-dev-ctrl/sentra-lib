@@ -77,13 +77,9 @@ pub(crate) const CLAUDE_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "claude-app",
     title: Some("Claude App"),
     homes: &[
-        #[cfg(windows)]
         &["AppData", "Local", "Claude"],
-        #[cfg(windows)]
         &["AppData", "Local", "Claude-3p"],
-        #[cfg(target_os = "macos")]
         &["Library", "Application Support", "Claude"],
-        #[cfg(target_os = "macos")]
         &["Library", "Application Support", "Claude-3p"],
     ],
     asset_for_type: crate::agents::claude_app::asset_for_type,
