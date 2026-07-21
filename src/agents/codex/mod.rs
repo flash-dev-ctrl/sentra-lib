@@ -76,28 +76,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ide_extension_only_exposes_meta_and_process_assets() {
+    fn ide_extension_uses_shared_asset_factories() {
         let home = Path::new(".codex");
 
-        assert_eq!(asset_for_type("codex-ide", home, AssetType::Meta).len(), 1);
-        assert_eq!(
-            asset_for_type("codex-ide", home, AssetType::Process).len(),
-            1
-        );
-        assert!(asset_for_type("codex-ide", home, AssetType::Skill).is_empty());
+        for asset_type in [
+            AssetType::Meta,
+            AssetType::Skill,
+            AssetType::Mcp,
+            AssetType::Memory,
+            AssetType::Cron,
+            AssetType::Provider,
+            AssetType::Plugin,
+            AssetType::Process,
+        ] {
+            assert_eq!(asset_for_type("codex-ide", home, asset_type).len(), 1);
+        }
     }
 
     #[test]
-    fn desktop_app_only_exposes_meta_and_process_assets() {
+    fn desktop_app_uses_shared_asset_factories() {
         let home = Path::new(".codex");
 
-        assert_eq!(asset_for_type("codex-app", home, AssetType::Meta).len(), 1);
-        assert_eq!(
-            asset_for_type("codex-app", home, AssetType::Process).len(),
-            1
-        );
-        assert!(asset_for_type("codex-app", home, AssetType::Skill).is_empty());
-        assert!(asset_for_type("codex-app", home, AssetType::Mcp).is_empty());
-        assert_eq!(asset_for_type("codex", home, AssetType::Skill).len(), 1);
+        for agent_name in ["codex", "codex-app"] {
+            for asset_type in [
+                AssetType::Meta,
+                AssetType::Skill,
+                AssetType::Mcp,
+                AssetType::Memory,
+                AssetType::Cron,
+                AssetType::Provider,
+                AssetType::Plugin,
+                AssetType::Process,
+            ] {
+                assert_eq!(asset_for_type(agent_name, home, asset_type).len(), 1);
+            }
+        }
     }
 }
