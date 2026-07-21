@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, McpData, McpType};
-use crate::utils::{mask_secret, read_json_file};
+use crate::utils::{read_json_file, sanitize_mcp_data};
 
 #[derive(Debug, Clone)]
 pub(super) struct McpAsset {
@@ -47,7 +47,7 @@ fn parse_servers(raw: Option<&Value>) -> Vec<McpData> {
     map.iter()
         .map(|(name, server)| {
             let raw = server.as_object();
-            McpData {
+            let mut data = McpData {
                 name: name.clone(),
                 mcp_type: Some(if string(raw, "url").is_some() {
                     McpType::Http
@@ -70,7 +70,9 @@ fn parse_servers(raw: Option<&Value>) -> Vec<McpData> {
                         .unwrap_or(false),
                 ),
                 project: None,
-            }
+            };
+            sanitize_mcp_data(&mut data);
+            data
         })
         .collect()
 }
@@ -83,22 +85,26 @@ fn env(raw: Option<&serde_json::Map<String, Value>>) -> Option<HashMap<String, S
     let map = raw?.get("env")?.as_object()?;
     Some(
         map.iter()
-            .filter_map(|(key, value)| {
-                let value = value.as_str()?.to_string();
-                let value = if sensitive(key) {
-                    mask_secret(Some(&value))?
-                } else {
-                    value
-                };
-                Some((key.clone(), value))
-            })
+            .filter_map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_string())))
             .collect(),
     )
 }
 
-fn sensitive(key: &str) -> bool {
-    let key = key.to_ascii_lowercase();
-    ["key", "token", "secret", "password", "auth"]
-        .iter()
-        .any(|part| key.contains(part))
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redacts_custom_mcp_secrets() {
+        let servers = parse_servers(Some(&serde_json::json!({
+            "example": {
+                "command": "server",
+                "args": ["--password", "argument-secret"],
+                "env": { "CLIENT_SECRET": "env-secret" }
+            }
+        })));
+
+        assert_eq!(servers[0].args, ["--password", "****"]);
+        assert_eq!(servers[0].env.as_ref().unwrap()["CLIENT_SECRET"], "****");
+    }
 }

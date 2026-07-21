@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 
 use crate::SentraResult;
 use crate::agents::install_status::{
-    InstallStatusProbe, any_command_exists_with, any_existing_dir_with, any_existing_file_with,
-    binary_paths, hidden_home_parent,
+    InstallStatusProbe, any_command_exists_with, any_existing_file_with, binary_paths,
+    hidden_home_parent,
 };
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
@@ -50,28 +50,36 @@ pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
     is_agent_installed_with(agent_home, &probe)
 }
 
-fn is_agent_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
-    any_command_exists_with(&["agy", "Antigravity"], probe)
-        || any_existing_file_with(binary_paths(agent_home.join("bin"), "agy"), probe)
-        || any_existing_dir_with(
-            vec![agent_home.to_path_buf(), antigravity_home(agent_home)],
-            probe,
-        )
+pub(super) fn is_install_target_installed(agent_home: &Path) -> bool {
+    is_install_target_installed_with(agent_home, &InstallStatusProbe::real())
 }
 
-fn antigravity_home(agent_home: &Path) -> PathBuf {
-    let home = agent_home
+fn is_agent_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
+    is_install_target_installed_with(agent_home, probe)
+        || any_existing_file_with(binary_paths(agent_home.join("bin"), "agy"), probe)
+        || any_command_exists_with(&["Antigravity"], probe)
+}
+
+fn is_install_target_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
+    any_command_exists_with(&["agy"], probe)
+        || any_existing_file_with(official_install_paths(agent_home), probe)
+        || probe.product_installed(&["Antigravity CLI"], &["Google"])
+}
+
+fn official_install_paths(agent_home: &Path) -> Vec<PathBuf> {
+    let user_home = agent_home
         .parent()
         .and_then(Path::parent)
         .map(Path::to_path_buf)
         .unwrap_or_else(|| hidden_home_parent(agent_home));
-    home.join(".gemini").join("antigravity-cli")
+    binary_paths(user_home.join(".local").join("bin"), "agy")
 }
 
 #[cfg(test)]
 mod tests {
-    use super::is_agent_installed_with;
+    use super::{is_agent_installed_with, is_install_target_installed_with};
     use crate::agents::install_status::InstallStatusProbe;
+    use std::path::Path;
 
     #[test]
     fn install_probe_accepts_agy_command() {
@@ -79,5 +87,60 @@ mod tests {
         let probe = InstallStatusProbe::test(|binary| binary == "agy", |_| false, |_| false);
 
         assert!(is_agent_installed_with(dir.path(), &probe));
+    }
+
+    #[test]
+    fn install_probe_accepts_official_user_local_binary() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent_home = dir.path().join(".gemini").join("antigravity-cli");
+        let expected = dir
+            .path()
+            .join(".local")
+            .join("bin")
+            .join(if cfg!(windows) { "agy.exe" } else { "agy" });
+        std::fs::create_dir_all(expected.parent().unwrap()).unwrap();
+        std::fs::write(expected, "").unwrap();
+        let probe = InstallStatusProbe::test(|_| false, Path::is_file, |_| false);
+
+        assert!(is_agent_installed_with(&agent_home, &probe));
+    }
+
+    #[test]
+    fn configuration_directory_alone_is_not_an_install() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent_home = dir.path().join(".gemini").join("antigravity-cli");
+        let probe = InstallStatusProbe::test(
+            |_| false,
+            |_| false,
+            |path| path.ends_with(Path::new(".gemini").join("antigravity-cli")),
+        );
+
+        assert!(!is_agent_installed_with(&agent_home, &probe));
+    }
+
+    #[test]
+    fn desktop_command_does_not_satisfy_the_cli_install_target() {
+        let probe =
+            InstallStatusProbe::test(|binary| binary == "Antigravity", |_| false, |_| false);
+
+        assert!(!is_install_target_installed_with(
+            Path::new(".gemini/antigravity-cli"),
+            &probe
+        ));
+    }
+
+    #[test]
+    fn bundled_binary_does_not_satisfy_the_official_install_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent_home = dir.path().join(".gemini").join("antigravity-cli");
+        let binary = agent_home
+            .join("bin")
+            .join(if cfg!(windows) { "agy.exe" } else { "agy" });
+        std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        std::fs::write(binary, "").unwrap();
+        let probe = InstallStatusProbe::test(|_| false, Path::is_file, |_| false);
+
+        assert!(is_agent_installed_with(&agent_home, &probe));
+        assert!(!is_install_target_installed_with(&agent_home, &probe));
     }
 }

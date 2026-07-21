@@ -6,7 +6,7 @@ use crate::interfaces::{
     ProviderProbeRequest,
 };
 use crate::utils::protocol::{WireProtocol, default_model_probe_prompt, parse_wire_protocol};
-use crate::utils::{backup_file, read_text_file, write_json_file};
+use crate::utils::{backup_file, mask_secret, read_text_file, write_json_file};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -49,33 +49,11 @@ impl_erased_asset!(
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        let config = load_config(self.core.agent_home())?;
-        let Some(llm) = config.get("llm").and_then(|value| value.as_object()) else {
-            return Ok(Vec::new());
-        };
-        let (Some(api), Some(key), Some(model)) = (
-            llm.get("api").and_then(|value| value.as_str()),
-            llm.get("key").and_then(|value| value.as_str()),
-            llm.get("model").and_then(|value| value.as_str()),
-        ) else {
-            return Ok(Vec::new());
-        };
-        Ok(vec![ProviderData {
-            name: provider_name(api),
-            base_url: Some(api.to_string()),
-            api_key: Some(key.to_string()),
-            enabled: true,
-            protocol: llm
-                .get("protocol")
-                .and_then(|value| value.as_str())
-                .and_then(|value| parse_wire_protocol(value).ok()),
-            models: vec![ProviderModel {
-                id: model.to_string(),
-                name: Some(model.to_string()),
-                enabled: true,
-            }],
-            ..ProviderData::default()
-        }])
+        provider_data(self.core.agent_home(), true)
+    }
+
+    fn get_runtime_data(&self) -> SentraResult<Vec<ProviderData>> {
+        provider_data(self.core.agent_home(), false)
     }
 
     fn set_data(&self, value: ProviderData) -> SentraResult<AssetMutationResult> {
@@ -85,6 +63,40 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     fn del_data(&self, item: &ProviderData) -> SentraResult<AssetMutationResult> {
         delete_provider_data(self.core.agent_home(), item)
     }
+}
+
+fn provider_data(home: &std::path::Path, mask_secrets: bool) -> SentraResult<Vec<ProviderData>> {
+    let config = load_config(home)?;
+    let Some(llm) = config.get("llm").and_then(|value| value.as_object()) else {
+        return Ok(Vec::new());
+    };
+    let (Some(api), Some(key), Some(model)) = (
+        llm.get("api").and_then(|value| value.as_str()),
+        llm.get("key").and_then(|value| value.as_str()),
+        llm.get("model").and_then(|value| value.as_str()),
+    ) else {
+        return Ok(Vec::new());
+    };
+    Ok(vec![ProviderData {
+        name: provider_name(api),
+        base_url: Some(api.to_string()),
+        api_key: if mask_secrets {
+            mask_secret(Some(key))
+        } else {
+            Some(key.to_string())
+        },
+        enabled: true,
+        protocol: llm
+            .get("protocol")
+            .and_then(|value| value.as_str())
+            .and_then(|value| parse_wire_protocol(value).ok()),
+        models: vec![ProviderModel {
+            id: model.to_string(),
+            name: Some(model.to_string()),
+            enabled: true,
+        }],
+        ..ProviderData::default()
+    }])
 }
 
 fn set_provider_data(
@@ -207,4 +219,28 @@ fn host_from_url(value: &str) -> Option<String> {
         .next()
         .filter(|host| !host.is_empty())
         .map(str::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::agents::sentra::provider::ProviderAsset;
+    use crate::config::SENTRA_CONFIG_FILE_NAME;
+    use crate::interfaces::Asset;
+
+    #[test]
+    fn display_masks_api_key_while_runtime_keeps_it() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(SENTRA_CONFIG_FILE_NAME),
+            r#"{"llm":{"api":"https://api.example.test/v1","key":"sk-sentra-secret","model":"gpt-test"}}"#,
+        )
+        .unwrap();
+        let asset = ProviderAsset::new("sentra", dir.path());
+
+        let display = asset.get_data().unwrap();
+        let runtime = asset.get_runtime_data().unwrap();
+
+        assert_ne!(display[0].api_key.as_deref(), Some("sk-sentra-secret"));
+        assert_eq!(runtime[0].api_key.as_deref(), Some("sk-sentra-secret"));
+    }
 }

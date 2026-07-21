@@ -42,12 +42,12 @@ pub(crate) fn ide_process_data() -> Vec<ProcessData> {
 
 fn matches_cli_process(process: &ProcessInfo<'_>) -> bool {
     matches_binary_names(process, CODEX_BINARY_NAMES)
-        && !process.path.is_some_and(is_codex_desktop_path)
+        && !process.path.is_some_and(is_codex_desktop_main)
         && !process_has_ide_extension(process, crate::agents::codex::CODEX_IDE_EXTENSION_ID)
 }
 
 fn matches_app_process(process: &ProcessInfo<'_>) -> bool {
-    process.path.is_some_and(is_codex_desktop_path)
+    process.path.is_some_and(is_codex_desktop_main)
 }
 
 fn matches_ide_process(process: &ProcessInfo<'_>) -> bool {
@@ -55,13 +55,32 @@ fn matches_ide_process(process: &ProcessInfo<'_>) -> bool {
         && process_has_ide_extension(process, crate::agents::codex::CODEX_IDE_EXTENSION_ID)
 }
 
-fn is_codex_desktop_path(path: &Path) -> bool {
+fn is_codex_desktop_main(path: &Path) -> bool {
     let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
         return false;
     };
-    !path_has_component(path, &["bin"])
-        && is_binary_name(file_name, CODEX_DESKTOP_BINARY_NAMES)
-        && path_has_component(path, CODEX_DESKTOP_PATH_COMPONENTS)
+    if !is_binary_name(file_name, CODEX_DESKTOP_BINARY_NAMES) {
+        return false;
+    }
+    if path_has_component(path, &["codex.app", "chatgpt.app"]) {
+        return true;
+    }
+    let parent = path
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|value| value.to_str());
+    (parent.is_some_and(|parent| is_binary_name(parent, &["app"]))
+        && is_windows_store_package_path(path))
+        || (!path_has_component(path, &["bin", "resources"])
+            && path_has_component(path, CODEX_DESKTOP_PATH_COMPONENTS))
+}
+
+fn is_windows_store_package_path(path: &Path) -> bool {
+    path_has_component(path, &["windowsapps"])
+        && path.components().any(|component| {
+            let component = component.as_os_str().to_string_lossy().to_ascii_lowercase();
+            component.starts_with("openai.codex_") || component.starts_with("openai.chatgpt_")
+        })
 }
 
 #[cfg(test)]
@@ -153,6 +172,29 @@ mod tests {
         assert_process_match("codex-ide", true, "codex.exe", &[], Some(&ide_path));
         assert_process_match("codex", false, "codex.exe", &[], Some(&ide_path));
         assert_process_match("codex-app", false, "codex.exe", &[], Some(&ide_path));
+    }
+
+    #[test]
+    fn separates_store_main_process_from_bundled_sidecar() {
+        let app = Path::new("Program Files")
+            .join("WindowsApps")
+            .join("OpenAI.Codex_1.0.0.0_x64__2p2nqsd0c76g0")
+            .join("app");
+        let main = app.join("Codex.exe");
+        let sidecar = app.join("resources").join("codex.exe");
+
+        assert_process_match("codex-app", true, "Codex", &[], Some(&main));
+        assert_process_match("codex", false, "Codex", &[], Some(&main));
+        assert_process_match("codex-app", false, "codex", &[], Some(&sidecar));
+        assert_process_match("codex", true, "codex", &[], Some(&sidecar));
+    }
+
+    #[test]
+    fn keeps_regular_app_directory_codex_as_cli() {
+        let path = Path::new("tools").join("app").join("codex.exe");
+
+        assert_process_match("codex-app", false, "codex", &[], Some(&path));
+        assert_process_match("codex", true, "codex", &[], Some(&path));
     }
 
     fn assert_process_match(

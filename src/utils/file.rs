@@ -33,6 +33,15 @@ pub fn read_json_file(path: impl AsRef<Path>) -> SentraResult<Option<serde_json:
     serde_json::from_str(&content).map(Some).map_err(Into::into)
 }
 
+pub(crate) fn read_jsonc_file(path: impl AsRef<Path>) -> SentraResult<Option<serde_json::Value>> {
+    let Some(content) = read_text_file(path)? else {
+        return Ok(None);
+    };
+    json5::from_str(content.trim_start_matches('\u{feff}'))
+        .map(Some)
+        .map_err(|err| SentraError::Message(err.to_string()))
+}
+
 pub fn write_text_file(path: impl AsRef<Path>, content: &str) -> SentraResult<()> {
     let path = path.as_ref();
     if let Some(parent) = path.parent() {
@@ -277,12 +286,258 @@ pub fn mask_secret(value: Option<&str>) -> Option<String> {
     if value.is_empty() {
         return None;
     }
-    let chars = value.chars().collect::<Vec<_>>();
-    let keep = if chars.len() <= 8 { 2 } else { 4 };
-    let prefix = chars.iter().take(keep).collect::<String>();
-    let suffix = chars
-        .iter()
-        .skip(chars.len().saturating_sub(keep))
-        .collect::<String>();
-    Some(format!("{prefix}****{suffix}"))
+    Some("****".to_string())
+}
+
+fn is_sensitive_key(key: &str) -> bool {
+    let key = key.to_ascii_lowercase();
+    [
+        "key",
+        "token",
+        "secret",
+        "password",
+        "credential",
+        "auth",
+        "bearer",
+        "session",
+        "cookie",
+        "private",
+    ]
+    .iter()
+    .any(|marker| key.contains(marker))
+}
+
+pub(crate) fn sanitize_env_value(key: &str, value: &str) -> String {
+    if is_sensitive_key(key) {
+        "****".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+pub(crate) fn sanitize_command_args(args: &[String]) -> Vec<String> {
+    let mut redact_next = false;
+    args.iter()
+        .map(|arg| {
+            if redact_next {
+                redact_next = false;
+                return "****".to_string();
+            }
+
+            if let Some(redacted) = sanitize_inline_secret(arg) {
+                return redacted;
+            }
+
+            let key = arg.trim_start_matches('-');
+            if key.len() != arg.len() && !key.is_empty() && is_sensitive_key(key) {
+                redact_next = true;
+            }
+            arg.clone()
+        })
+        .collect()
+}
+
+pub(crate) fn sanitize_url_credentials(value: &str) -> String {
+    let value = sanitize_url_userinfo(value);
+    let (without_fragment, fragment) = value
+        .split_once('#')
+        .map_or((value.as_str(), None), |(value, fragment)| {
+            (value, Some(fragment))
+        });
+    let (base, query) = without_fragment
+        .split_once('?')
+        .map_or((without_fragment, None), |(base, query)| {
+            (base, Some(query))
+        });
+    if query.is_none() && fragment.is_none() {
+        return value;
+    }
+    let mut sanitized = base.to_string();
+    if let Some(query) = query {
+        sanitized.push('?');
+        sanitized.push_str(&sanitize_url_pairs(query));
+    }
+    if let Some(fragment) = fragment {
+        sanitized.push('#');
+        sanitized.push_str(&sanitize_url_pairs(fragment));
+    }
+    sanitized
+}
+
+fn sanitize_url_userinfo(value: &str) -> String {
+    let Some(authority_start) = value.find("://").map(|index| index + 3) else {
+        return value.to_string();
+    };
+    let authority_end = value[authority_start..]
+        .find(['/', '?', '#'])
+        .map(|index| authority_start + index)
+        .unwrap_or(value.len());
+    let Some(userinfo_end) = value[authority_start..authority_end].rfind('@') else {
+        return value.to_string();
+    };
+    let mut sanitized = value.to_string();
+    sanitized.replace_range(authority_start..authority_start + userinfo_end, "****");
+    sanitized
+}
+
+fn sanitize_url_pairs(value: &str) -> String {
+    value
+        .split('&')
+        .map(|pair| {
+            let Some((key, _)) = pair.split_once('=') else {
+                return pair.to_string();
+            };
+            if is_sensitive_query_key(key) {
+                format!("{key}=****")
+            } else {
+                pair.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+fn is_sensitive_query_key(key: &str) -> bool {
+    let bytes = key.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%'
+            && index + 2 < bytes.len()
+            && let (Some(high), Some(low)) =
+                (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
+        {
+            decoded.push(high << 4 | low);
+            index += 3;
+        } else {
+            decoded.push(if bytes[index] == b'+' {
+                b' '
+            } else {
+                bytes[index]
+            });
+            index += 1;
+        }
+    }
+    let decoded = String::from_utf8_lossy(&decoded);
+    decoded
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .any(is_sensitive_url_parameter)
+        || is_sensitive_url_parameter(
+            &decoded
+                .chars()
+                .filter(|character| character.is_ascii_alphanumeric())
+                .collect::<String>(),
+        )
+}
+
+fn is_sensitive_url_parameter(value: &str) -> bool {
+    matches!(
+        value.to_ascii_lowercase().as_str(),
+        "key"
+            | "apikey"
+            | "xapikey"
+            | "authkey"
+            | "accesskey"
+            | "accesskeyid"
+            | "awsaccesskeyid"
+            | "subscriptionkey"
+            | "secretkey"
+            | "privatekey"
+            | "token"
+            | "accesstoken"
+            | "refreshtoken"
+            | "idtoken"
+            | "authtoken"
+            | "bearertoken"
+            | "sessiontoken"
+            | "securitytoken"
+            | "secret"
+            | "clientsecret"
+            | "password"
+            | "passwd"
+            | "credential"
+            | "credentials"
+            | "auth"
+            | "authorization"
+            | "authentication"
+            | "bearer"
+            | "session"
+            | "sessionid"
+            | "sessionkey"
+            | "cookie"
+            | "sig"
+            | "signature"
+            | "xamzsignature"
+            | "xgoogsignature"
+    )
+}
+
+fn hex_value(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn sanitize_inline_secret(arg: &str) -> Option<String> {
+    let mut segment_start = 0;
+    for (index, separator) in arg.char_indices() {
+        if !matches!(separator, '=' | ':') {
+            continue;
+        }
+        let key = arg[segment_start..index].trim().trim_start_matches('-');
+        if !key.is_empty() && is_sensitive_key(key) {
+            return Some(format!("{}****", &arg[..index + separator.len_utf8()]));
+        }
+        segment_start = index + separator.len_utf8();
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn masks_short_secrets_without_preserving_the_full_value() {
+        assert_eq!(mask_secret(Some("sk12")).as_deref(), Some("****"));
+        assert_eq!(mask_secret(Some("")).as_deref(), None);
+    }
+
+    #[test]
+    fn reads_jsonc_comments_and_trailing_commas() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mcp.json");
+        fs::write(
+            &path,
+            r#"{
+                // VS Code configuration
+                "servers": {
+                    "example": { "command": "server", },
+                },
+            }"#,
+        )
+        .unwrap();
+
+        let value = read_jsonc_file(path).unwrap().unwrap();
+
+        assert_eq!(value["servers"]["example"]["command"], "server");
+    }
+
+    #[test]
+    fn redacts_authorization_headers() {
+        let args = [
+            "--header".to_string(),
+            "Authorization: Bearer secret-token".to_string(),
+            "--header=X-API-Key: another-secret".to_string(),
+        ];
+
+        assert_eq!(
+            sanitize_command_args(&args),
+            ["--header", "Authorization:****", "--header=X-API-Key:****"]
+        );
+    }
 }

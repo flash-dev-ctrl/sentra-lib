@@ -1,7 +1,7 @@
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, McpData};
-use crate::utils::{mask_secret, parse_mcp_servers, read_json_file};
+use crate::utils::{parse_mcp_servers, read_json_file};
 
 #[derive(Debug, Clone)]
 pub(super) struct McpAsset {
@@ -35,23 +35,6 @@ impl Asset<Vec<McpData>> for McpAsset {
                 ));
             }
         }
-        mask_env(&mut results);
         Ok(results)
-    }
-}
-
-fn mask_env(servers: &mut [McpData]) {
-    for server in servers {
-        if let Some(env) = &mut server.env {
-            for (key, value) in env {
-                let key = key.to_ascii_lowercase();
-                if ["key", "token", "password", "secret"]
-                    .iter()
-                    .any(|part| key.contains(part))
-                {
-                    *value = mask_secret(Some(value)).unwrap_or_default();
-                }
-            }
-        }
     }
 }

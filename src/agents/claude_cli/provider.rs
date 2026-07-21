@@ -7,7 +7,7 @@ use crate::interfaces::{
     ProviderModel, ProviderProbeRequest, ProviderType,
 };
 use crate::utils::protocol::WireProtocol;
-use crate::utils::{backup_file, read_json_file, write_json_file};
+use crate::utils::{backup_file, mask_secret, read_json_file, write_json_file};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -43,7 +43,11 @@ impl_erased_asset!(
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        provider_data(self.core.agent_home())
+        provider_data(self.core.agent_home(), true)
+    }
+
+    fn get_runtime_data(&self) -> SentraResult<Vec<ProviderData>> {
+        provider_data(self.core.agent_home(), false)
     }
 
     fn set_data(&self, value: ProviderData) -> SentraResult<AssetMutationResult> {
@@ -155,7 +159,10 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     }
 }
 
-fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>> {
+fn provider_data(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
     let settings = read_json_file(agent_home.join("settings.json"))?.unwrap_or_else(|| json!({}));
     let env = settings.get("env").and_then(|value| value.as_object());
     let mut providers = Vec::new();
@@ -169,7 +176,13 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                     .or_else(|| env.get("ANTHROPIC_AUTH_TOKEN"))
             })
             .and_then(|value| value.as_str())
-            .map(str::to_string);
+            .and_then(|value| {
+                if mask_secrets {
+                    mask_secret(Some(value))
+                } else {
+                    Some(value.to_string())
+                }
+            });
         let mut seen = std::collections::HashSet::new();
         let mut models = Vec::new();
         for (id_key, name_key) in [

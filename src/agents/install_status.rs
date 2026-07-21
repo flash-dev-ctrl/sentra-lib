@@ -7,6 +7,7 @@ pub(crate) struct InstallStatusProbe {
     command_exists: fn(&str) -> bool,
     path_is_file: fn(&Path) -> bool,
     path_is_dir: fn(&Path) -> bool,
+    windows_product_installed: fn(&[&str], &[&str]) -> bool,
 }
 
 impl InstallStatusProbe {
@@ -15,6 +16,7 @@ impl InstallStatusProbe {
             command_exists,
             path_is_file,
             path_is_dir,
+            windows_product_installed,
         }
     }
 
@@ -28,7 +30,12 @@ impl InstallStatusProbe {
             command_exists,
             path_is_file,
             path_is_dir,
+            windows_product_installed: |_, _| false,
         }
+    }
+
+    pub(crate) fn product_installed(&self, display_names: &[&str], publishers: &[&str]) -> bool {
+        (self.windows_product_installed)(display_names, publishers)
     }
 }
 
@@ -78,6 +85,84 @@ pub(crate) fn any_existing_file_with(paths: Vec<PathBuf>, probe: &InstallStatusP
 
 pub(crate) fn any_existing_dir_with(paths: Vec<PathBuf>, probe: &InstallStatusProbe) -> bool {
     paths.iter().any(|path| (probe.path_is_dir)(path))
+}
+
+pub(crate) fn windows_product_installed(display_names: &[&str], publishers: &[&str]) -> bool {
+    #[cfg(windows)]
+    {
+        use winreg::RegKey;
+        use winreg::enums::{
+            HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY,
+        };
+
+        const UNINSTALL: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
+        for (hive, view) in [
+            (HKEY_CURRENT_USER, KEY_WOW64_64KEY),
+            (HKEY_CURRENT_USER, KEY_WOW64_32KEY),
+            (HKEY_LOCAL_MACHINE, KEY_WOW64_64KEY),
+            (HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY),
+        ] {
+            let Ok(uninstall) =
+                RegKey::predef(hive).open_subkey_with_flags(UNINSTALL, KEY_READ | view)
+            else {
+                continue;
+            };
+            for key_name in uninstall.enum_keys().filter_map(Result::ok) {
+                let Ok(product) = uninstall.open_subkey_with_flags(key_name, KEY_READ | view)
+                else {
+                    continue;
+                };
+                let Ok(display_name) = product.get_value::<String, _>("DisplayName") else {
+                    continue;
+                };
+                let Ok(publisher) = product.get_value::<String, _>("Publisher") else {
+                    continue;
+                };
+                if windows_product_matches(&display_name, &publisher, display_names, publishers) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (display_names, publishers);
+        false
+    }
+}
+
+fn windows_product_matches(
+    display_name: &str,
+    publisher: &str,
+    display_names: &[&str],
+    publishers: &[&str],
+) -> bool {
+    display_names
+        .iter()
+        .any(|expected| product_name_matches(display_name, expected))
+        && publishers.iter().any(|expected| {
+            publisher
+                .to_ascii_lowercase()
+                .contains(&expected.to_ascii_lowercase())
+        })
+}
+
+fn product_name_matches(actual: &str, expected: &str) -> bool {
+    let actual = actual.trim().to_ascii_lowercase();
+    let expected = expected.trim().to_ascii_lowercase();
+    if actual == expected {
+        return true;
+    }
+    let Some(suffix) = actual.strip_prefix(&expected) else {
+        return false;
+    };
+    let suffix = suffix.trim_start();
+    suffix.starts_with('(')
+        || (!suffix.is_empty()
+            && suffix
+                .chars()
+                .all(|char| char.is_ascii_digit() || matches!(char, '.' | '-' | ' ')))
 }
 
 fn command_exists(binary: &str) -> bool {
@@ -237,6 +322,64 @@ mod tests {
         assert!(!is_ide_extension_installed(
             &agent_home,
             "anthropic.claude-code"
+        ));
+    }
+
+    #[test]
+    fn windows_product_match_requires_product_and_publisher() {
+        assert!(windows_product_matches(
+            "Claude Code",
+            "Anthropic PBC",
+            &["Claude Code"],
+            &["Anthropic"]
+        ));
+        assert!(windows_product_matches(
+            "Antigravity CLI",
+            "Google",
+            &["Antigravity CLI"],
+            &["Google"]
+        ));
+        assert!(windows_product_matches(
+            "WorkBuddy 5.2.6",
+            "Tencent Technology (Shenzhen) Company Limited",
+            &["WorkBuddy"],
+            &["Tencent Technology"]
+        ));
+        assert!(windows_product_matches(
+            "Trae (User)",
+            "SPRING (SG) PTE. LTD",
+            &["Trae"],
+            &["SPRING (SG)"]
+        ));
+        assert!(windows_product_matches(
+            "Kiro",
+            "Amazon Web Services",
+            &["Kiro"],
+            &["Amazon Web Services"]
+        ));
+        assert!(windows_product_matches(
+            "Cursor (User)",
+            "Anysphere, Inc.",
+            &["Cursor"],
+            &["Anysphere"]
+        ));
+        assert!(windows_product_matches(
+            "Qoder (User)",
+            "Alibaba Cloud",
+            &["Qoder"],
+            &["Alibaba"]
+        ));
+        assert!(!windows_product_matches(
+            "TRAE SOLO (User)",
+            "SPRING (SG) PTE. LTD",
+            &["Trae"],
+            &["SPRING (SG)"]
+        ));
+        assert!(!windows_product_matches(
+            "WorkBuddy 5.2.6",
+            "Unrelated Publisher",
+            &["WorkBuddy"],
+            &["Tencent Technology"]
         ));
     }
 

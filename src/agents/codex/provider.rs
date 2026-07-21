@@ -9,7 +9,9 @@ use crate::interfaces::{
     ProviderModel, ProviderProbeRequest, ProviderType,
 };
 use crate::utils::protocol::{WireProtocol, default_model_probe_prompt};
-use crate::utils::{backup_file, read_json_file, read_text_file, write_json_file, write_text_file};
+use crate::utils::{
+    backup_file, mask_secret, read_json_file, read_text_file, write_json_file, write_text_file,
+};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -75,11 +77,11 @@ impl_erased_asset!(
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        let mut providers = config_providers(self.core.agent_home())?;
-        if let Some(account) = account_provider(self.core.agent_home())? {
-            providers.push(account);
-        }
-        Ok(providers)
+        provider_data(self.core.agent_home(), true)
+    }
+
+    fn get_runtime_data(&self) -> SentraResult<Vec<ProviderData>> {
+        provider_data(self.core.agent_home(), false)
     }
 
     fn set_data(&self, value: ProviderData) -> SentraResult<AssetMutationResult> {
@@ -108,7 +110,21 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     }
 }
 
-fn config_providers(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>> {
+fn provider_data(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
+    let mut providers = config_providers(agent_home, mask_secrets)?;
+    if let Some(account) = account_provider(agent_home)? {
+        providers.push(account);
+    }
+    Ok(providers)
+}
+
+fn config_providers(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
     let Some(content) = read_text_file(agent_home.join("config.toml"))? else {
         return Ok(Vec::new());
     };
@@ -123,22 +139,30 @@ fn config_providers(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderDa
         .and_then(|value| value.as_table())
     {
         for (id, raw) in table {
-            let Some(base_url) = raw.get("base_url").and_then(|value| value.as_str()) else {
-                continue;
-            };
             let enabled = active_id == Some(id.as_str());
             let model_name = current_model.filter(|_| enabled);
+            let api_key = raw
+                .get("experimental_bearer_token")
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+                .or_else(|| {
+                    raw.get("env_key")
+                        .and_then(|value| value.as_str())
+                        .and_then(|key| std::env::var(key).ok())
+                });
             providers.push(ProviderData {
                 name: raw
                     .get("name")
                     .and_then(|value| value.as_str())
                     .unwrap_or(id)
                     .to_string(),
-                base_url: Some(base_url.to_string()),
-                api_key: raw
-                    .get("experimental_bearer_token")
+                provider_id: Some(id.clone()),
+                raw_provider_id: Some(id.clone()),
+                base_url: raw
+                    .get("base_url")
                     .and_then(|value| value.as_str())
                     .map(str::to_string),
+                api_key: api_key.and_then(|value| maybe_mask_secret(value, mask_secrets)),
                 enabled,
                 models: model_name
                     .map(|id| {
@@ -149,7 +173,7 @@ fn config_providers(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderDa
                         }]
                     })
                     .unwrap_or_default(),
-                protocol: None,
+                protocol: Some(WireProtocol::Responses),
                 ..ProviderData::default()
             });
         }
@@ -171,7 +195,7 @@ fn config_providers(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderDa
                     }]
                 })
                 .unwrap_or_default(),
-            protocol: None,
+            protocol: Some(WireProtocol::Responses),
             ..ProviderData::default()
         });
     }
@@ -469,7 +493,12 @@ fn delete_provider_config(
                 let toml::Value::Table(entry) = value else {
                     return None;
                 };
-                provider_matches(entry, provider).then(|| id.clone())
+                let requested_id = provider
+                    .raw_provider_id
+                    .as_deref()
+                    .or(provider.provider_id.as_deref());
+                (requested_id == Some(id.as_str()) || provider_matches(entry, provider))
+                    .then(|| id.clone())
             })
             .collect::<Vec<_>>();
         for id in &ids {
@@ -571,6 +600,15 @@ fn provider_matches(entry: &toml::Table, provider: &ProviderData) -> bool {
 }
 
 fn provider_id(provider: &ProviderData) -> String {
+    if let Some(id) = provider
+        .raw_provider_id
+        .as_deref()
+        .or(provider.provider_id.as_deref())
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    {
+        return id.to_string();
+    }
     provider
         .base_url
         .as_deref()
@@ -585,6 +623,14 @@ fn provider_id(provider: &ProviderData) -> String {
             }
         })
         .collect()
+}
+
+fn maybe_mask_secret(value: String, mask_secrets: bool) -> Option<String> {
+    if mask_secrets {
+        mask_secret(Some(&value))
+    } else {
+        Some(value)
+    }
 }
 
 fn provider_host_or_name(provider: &ProviderData) -> String {

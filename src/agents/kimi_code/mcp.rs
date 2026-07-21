@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, McpData, McpType};
-use crate::utils::read_json_file;
+use crate::utils::{read_json_file, sanitize_mcp_data};
 
 #[derive(Debug, Clone)]
 pub(super) struct McpAsset {
@@ -70,7 +70,7 @@ fn parse_kimi_mcp_servers(raw: &Value) -> Vec<McpData> {
                 .and_then(|value| value.get("url"))
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            McpData {
+            let mut data = McpData {
                 name: name.clone(),
                 mcp_type: Some(mcp_type(value, command.is_some(), url.is_some())),
                 command,
@@ -79,7 +79,9 @@ fn parse_kimi_mcp_servers(raw: &Value) -> Vec<McpData> {
                 env: env_map(value),
                 enabled: Some(enabled(value)),
                 project: None,
-            }
+            };
+            sanitize_mcp_data(&mut data);
+            data
         })
         .collect()
 }
@@ -155,4 +157,23 @@ fn dedup_mcp(items: Vec<McpData>) -> Vec<McpData> {
         }
     }
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::agents::kimi_code::mcp::parse_kimi_mcp_servers;
+
+    #[test]
+    fn redacts_custom_mcp_secrets() {
+        let servers = parse_kimi_mcp_servers(&serde_json::json!({
+            "example": {
+                "command": "server",
+                "args": ["--api-key=argument-secret"],
+                "env": { "ACCESS_TOKEN": "env-secret" }
+            }
+        }));
+
+        assert_eq!(servers[0].args, ["--api-key=****"]);
+        assert_eq!(servers[0].env.as_ref().unwrap()["ACCESS_TOKEN"], "****");
+    }
 }

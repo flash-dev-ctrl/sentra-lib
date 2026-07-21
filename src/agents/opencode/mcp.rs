@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, McpData, McpType};
-use crate::utils::read_json_file;
+use crate::utils::{read_json_file, sanitize_mcp_data};
 
 #[derive(Debug, Clone)]
 pub(super) struct McpAsset {
@@ -77,7 +77,7 @@ fn parse_opencode_mcp_servers(raw: &Value) -> Vec<McpData> {
                     .flatten()
                     .filter_map(|item| item.as_str().map(str::to_string)),
             );
-            McpData {
+            let mut data = McpData {
                 name: name.clone(),
                 mcp_type: mcp_type(
                     value.and_then(|value| value.get("type")),
@@ -99,9 +99,35 @@ fn parse_opencode_mcp_servers(raw: &Value) -> Vec<McpData> {
                     }),
                 enabled: Some(enabled(value)),
                 project: None,
-            }
+            };
+            sanitize_mcp_data(&mut data);
+            data
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::agents::opencode::mcp::parse_opencode_mcp_servers;
+
+    #[test]
+    fn redacts_custom_mcp_secrets() {
+        let servers = parse_opencode_mcp_servers(&serde_json::json!({
+            "example": {
+                "command": ["server", "--token", "command-secret"],
+                "args": ["--header", "Authorization: Bearer header-secret"],
+                "environment": { "API_KEY": "env-secret", "REGION": "local" }
+            }
+        }));
+        let server = &servers[0];
+
+        assert_eq!(
+            server.args,
+            ["--token", "****", "--header", "Authorization:****"]
+        );
+        assert_eq!(server.env.as_ref().unwrap()["API_KEY"], "****");
+        assert_eq!(server.env.as_ref().unwrap()["REGION"], "local");
+    }
 }
 
 fn command_parts(raw: &Value) -> (Option<String>, Vec<String>) {

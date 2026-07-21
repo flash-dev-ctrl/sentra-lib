@@ -99,6 +99,7 @@ pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
 fn is_agent_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
     any_command_exists_with(&["claude"], probe)
         || any_existing_file_with(claude_cli_install_paths(agent_home), probe)
+        || probe.product_installed(&["Claude Code"], &["Anthropic"])
 }
 
 fn claude_cli_install_paths(agent_home: &Path) -> Vec<PathBuf> {

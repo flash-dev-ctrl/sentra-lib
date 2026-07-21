@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, McpData, McpType};
-use crate::utils::{mask_secret, read_text_file};
+use crate::utils::{read_text_file, sanitize_mcp_data};
 
 #[derive(Debug, Clone)]
 pub(super) struct McpAsset {
@@ -75,7 +75,7 @@ fn parse_servers(raw: Option<&serde_yaml::Value>) -> Vec<McpData> {
         .filter_map(|(name, server)| {
             let name = name.as_str()?.to_string();
             let value = server.as_mapping();
-            Some(McpData {
+            let mut data = McpData {
                 name,
                 mcp_type: Some(if string(value, "url").is_some() {
                     McpType::Http
@@ -88,7 +88,9 @@ fn parse_servers(raw: Option<&serde_yaml::Value>) -> Vec<McpData> {
                 env: env(value),
                 enabled: Some(!bool_field(value, "disabled").unwrap_or(false)),
                 project: None,
-            })
+            };
+            sanitize_mcp_data(&mut data);
+            Some(data)
         })
         .collect()
 }
@@ -118,14 +120,7 @@ fn env(raw: Option<&serde_yaml::Mapping>) -> Option<HashMap<String, String>> {
     Some(
         map.iter()
             .filter_map(|(key, value)| {
-                let key = key.as_str()?.to_string();
-                let value = value.as_str()?.to_string();
-                let value = if sensitive(&key) {
-                    mask_secret(Some(&value))?
-                } else {
-                    value
-                };
-                Some((key, value))
+                Some((key.as_str()?.to_string(), value.as_str()?.to_string()))
             })
             .collect(),
     )
@@ -135,9 +130,25 @@ fn bool_field(raw: Option<&serde_yaml::Mapping>, key: &str) -> Option<bool> {
     yaml_field(raw, key)?.as_bool()
 }
 
-fn sensitive(key: &str) -> bool {
-    let key = key.to_ascii_lowercase();
-    ["key", "token", "secret", "password", "auth"]
-        .iter()
-        .any(|part| key.contains(part))
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redacts_custom_mcp_secrets() {
+        let config: serde_yaml::Value = serde_yaml::from_str(
+            r#"
+example:
+  command: server
+  args: [--token, argument-secret]
+  env:
+    API_KEY: env-secret
+"#,
+        )
+        .unwrap();
+        let servers = parse_servers(Some(&config));
+
+        assert_eq!(servers[0].args, ["--token", "****"]);
+        assert_eq!(servers[0].env.as_ref().unwrap()["API_KEY"], "****");
+    }
 }

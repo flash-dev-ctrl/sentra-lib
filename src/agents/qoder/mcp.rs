@@ -3,7 +3,7 @@ use serde_json::Value;
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, McpData};
-use crate::utils::{mask_secret, parse_mcp_servers, read_json_file};
+use crate::utils::{parse_mcp_servers, read_json_file};
 
 #[derive(Debug, Clone)]
 pub(super) struct McpAsset {
@@ -67,24 +67,7 @@ fn global_config_file(agent_home: &std::path::Path) -> std::path::PathBuf {
 }
 
 fn parse_servers(raw: Option<&Value>) -> Vec<McpData> {
-    let mut servers = parse_mcp_servers(raw.unwrap_or(&Value::Null), None);
-    for server in &mut servers {
-        if let Some(env) = &mut server.env {
-            for (key, value) in env {
-                if sensitive(key) {
-                    *value = mask_secret(Some(value)).unwrap_or_default();
-                }
-            }
-        }
-    }
-    servers
-}
-
-fn sensitive(key: &str) -> bool {
-    let key = key.to_ascii_lowercase();
-    ["key", "token", "secret", "password", "auth"]
-        .iter()
-        .any(|part| key.contains(part))
+    parse_mcp_servers(raw.unwrap_or(&Value::Null), None)
 }
 
 #[cfg(test)]

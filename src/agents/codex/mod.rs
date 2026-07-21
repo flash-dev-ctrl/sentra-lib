@@ -53,7 +53,8 @@ pub(crate) fn asset_for_type(
     agent_home: &std::path::Path,
     asset_type: AssetType,
 ) -> Vec<Box<dyn ErasedAsset>> {
-    if agent_name == crate::agents::entries::CODEX_IDE_AGENT_ENTRY.name
+    if (agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name
+        || agent_name == crate::agents::entries::CODEX_IDE_AGENT_ENTRY.name)
         && !matches!(asset_type, AssetType::Meta | AssetType::Process)
     {
         return Vec::new();
@@ -90,6 +91,19 @@ mod tests {
             1
         );
         assert!(asset_for_type("codex-ide", home, AssetType::Skill).is_empty());
+    }
+
+    #[test]
+    fn desktop_app_only_exposes_meta_and_process_assets() {
+        let home = Path::new(".codex");
+
+        assert_eq!(asset_for_type("codex-app", home, AssetType::Meta).len(), 1);
+        assert_eq!(
+            asset_for_type("codex-app", home, AssetType::Process).len(),
+            1
+        );
+        assert!(asset_for_type("codex-app", home, AssetType::Skill).is_empty());
+        assert!(asset_for_type("codex-app", home, AssetType::Mcp).is_empty());
         assert_eq!(asset_for_type("codex", home, AssetType::Skill).len(), 1);
     }
 }

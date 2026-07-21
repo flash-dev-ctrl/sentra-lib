@@ -7,7 +7,7 @@ use crate::interfaces::{
     ProviderProbeRequest,
 };
 use crate::utils::protocol::WireProtocol;
-use crate::utils::{backup_file, read_json_file, write_json_file};
+use crate::utils::{backup_file, mask_secret, read_json_file, write_json_file};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -43,7 +43,11 @@ impl_erased_asset!(
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        provider_data(self.core.agent_home())
+        provider_data(self.core.agent_home(), true)
+    }
+
+    fn get_runtime_data(&self) -> SentraResult<Vec<ProviderData>> {
+        provider_data(self.core.agent_home(), false)
     }
 
     fn set_data(&self, value: ProviderData) -> SentraResult<AssetMutationResult> {
@@ -121,7 +125,10 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     }
 }
 
-fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>> {
+fn provider_data(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
     let Some(config_path) = find_config_file(agent_home)? else {
         return Ok(Vec::new());
     };
@@ -161,7 +168,13 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
         api_key: config
             .get("inferenceGatewayApiKey")
             .and_then(|value| value.as_str())
-            .map(str::to_string),
+            .and_then(|value| {
+                if mask_secrets {
+                    mask_secret(Some(value))
+                } else {
+                    Some(value.to_string())
+                }
+            }),
         enabled: true,
         models,
         protocol: None,

@@ -37,11 +37,23 @@ fn installable_agent(
     operation: &str,
 ) -> crate::SentraResult<install::InstallableAgent> {
     match agent {
+        "antigravity" => Ok(install::InstallableAgent::Antigravity),
+        "codebuddy" => Ok(install::InstallableAgent::CodeBuddy),
+        "coder" => Ok(install::InstallableAgent::Coder),
         "codex" => Ok(install::InstallableAgent::Codex),
         "claude" | "claude-cli" => Ok(install::InstallableAgent::ClaudeCli),
+        "cursor" => Ok(install::InstallableAgent::Cursor),
         "kimi-code" => Ok(install::InstallableAgent::KimiCode),
+        "kiro" => Ok(install::InstallableAgent::Kiro),
+        "lingcode" => Ok(install::InstallableAgent::LingCode),
+        "marvis" => Ok(install::InstallableAgent::Marvis),
         "opencode" => Ok(install::InstallableAgent::OpenCode),
         "pi" => Ok(install::InstallableAgent::Pi),
+        "qoder" => Ok(install::InstallableAgent::Qoder),
+        "qoderwork" => Ok(install::InstallableAgent::QoderWork),
+        "trae" => Ok(install::InstallableAgent::Trae),
+        "vscode" => Ok(install::InstallableAgent::VsCode),
+        "workbuddy" => Ok(install::InstallableAgent::WorkBuddy),
         other => Err(crate::SentraError::Message(format!(
             "unsupported {operation} agent: {other}"
         ))),
@@ -117,6 +129,36 @@ mod tests {
         assert_eq!(
             installable_agent("pi", "installable").unwrap(),
             install::InstallableAgent::Pi
+        );
+    }
+
+    #[test]
+    fn winget_and_npm_targets_are_installable() {
+        for agent in [
+            "antigravity",
+            "codebuddy",
+            "coder",
+            "cursor",
+            "kiro",
+            "qoder",
+            "qoderwork",
+            "trae",
+            "vscode",
+            "workbuddy",
+        ] {
+            assert!(installable_agent(agent, "install").is_ok(), "{agent}");
+        }
+    }
+
+    #[test]
+    fn unverified_sources_are_recognized_for_explicit_blocking() {
+        assert_eq!(
+            installable_agent("lingcode", "install").unwrap(),
+            install::InstallableAgent::LingCode
+        );
+        assert_eq!(
+            installable_agent("marvis", "install").unwrap(),
+            install::InstallableAgent::Marvis
         );
     }
 }

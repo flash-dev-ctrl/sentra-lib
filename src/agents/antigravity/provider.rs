@@ -35,20 +35,11 @@ impl_erased_asset!(
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        let mut results = Vec::new();
-        for path in [
-            self.core.agent_home().join("config.json"),
-            super::user_home(self.core.agent_home())
-                .join(".gemini")
-                .join("config")
-                .join("config.json"),
-        ] {
-            let Some(config) = read_json_file(path)? else {
-                continue;
-            };
-            collect_providers(&config, &mut results);
-        }
-        Ok(results)
+        provider_data(self.core.agent_home(), true)
+    }
+
+    fn get_runtime_data(&self) -> SentraResult<Vec<ProviderData>> {
+        provider_data(self.core.agent_home(), false)
     }
 
     fn set_data(&self, _value: ProviderData) -> SentraResult<AssetMutationResult> {
@@ -66,7 +57,31 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     }
 }
 
-fn collect_providers(value: &serde_json::Value, results: &mut Vec<ProviderData>) {
+fn provider_data(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
+    let mut results = Vec::new();
+    for path in [
+        agent_home.join("config.json"),
+        super::user_home(agent_home)
+            .join(".gemini")
+            .join("config")
+            .join("config.json"),
+    ] {
+        let Some(config) = read_json_file(path)? else {
+            continue;
+        };
+        collect_providers(&config, &mut results, mask_secrets);
+    }
+    Ok(results)
+}
+
+fn collect_providers(
+    value: &serde_json::Value,
+    results: &mut Vec<ProviderData>,
+    mask_secrets: bool,
+) {
     let Some(map) = value
         .get("providers")
         .or_else(|| value.get("modelProviders"))
@@ -83,7 +98,7 @@ fn collect_providers(value: &serde_json::Value, results: &mut Vec<ProviderData>)
                 .to_string(),
             base_url: string_field(raw, &["baseUrl", "base_url", "url"]),
             api_key: string_field(raw, &["apiKey", "api_key", "key", "token"])
-                .and_then(|value| mask_secret(Some(&value))),
+                .and_then(|value| maybe_mask_secret(value, mask_secrets)),
             enabled: raw
                 .and_then(|raw| raw.get("enabled"))
                 .and_then(|value| value.as_bool())
@@ -92,6 +107,14 @@ fn collect_providers(value: &serde_json::Value, results: &mut Vec<ProviderData>)
             protocol: None,
             ..ProviderData::default()
         });
+    }
+}
+
+fn maybe_mask_secret(value: String, mask_secrets: bool) -> Option<String> {
+    if mask_secrets {
+        mask_secret(Some(&value))
+    } else {
+        Some(value)
     }
 }
 
@@ -115,4 +138,23 @@ fn models(raw: Option<&serde_json::Value>) -> Vec<ProviderModel> {
             enabled: true,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::collect_providers;
+
+    #[test]
+    fn runtime_provider_data_keeps_api_key() {
+        let config = serde_json::json!({
+            "providers": {"google": {"apiKey": "sk-antigravity-secret"}}
+        });
+        let mut display = Vec::new();
+        let mut runtime = Vec::new();
+        collect_providers(&config, &mut display, true);
+        collect_providers(&config, &mut runtime, false);
+
+        assert_ne!(display[0].api_key, runtime[0].api_key);
+        assert_eq!(runtime[0].api_key.as_deref(), Some("sk-antigravity-secret"));
+    }
 }

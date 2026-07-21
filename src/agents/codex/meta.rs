@@ -109,7 +109,7 @@ fn is_codex_cli_installed_with(
 
 fn is_codex_app_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
     any_existing_file_with(codex_app_executable_paths(agent_home), probe)
-        || any_existing_dir_with(codex_app_bundle_paths(agent_home), probe)
+        || any_existing_dir_with(codex_app_dir_paths(agent_home), probe)
 }
 
 fn codex_install_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
@@ -149,14 +149,20 @@ fn codex_app_executable_paths(agent_home: &Path) -> Vec<PathBuf> {
     paths
 }
 
-fn codex_app_bundle_paths(agent_home: &Path) -> Vec<PathBuf> {
+fn codex_app_dir_paths(agent_home: &Path) -> Vec<PathBuf> {
     let user_home = hidden_home_parent(agent_home);
-    vec![
+    let mut paths = vec![
         user_home.join("Applications").join("Codex.app"),
         user_home.join("Applications").join("ChatGPT.app"),
         PathBuf::from("/Applications/Codex.app"),
         PathBuf::from("/Applications/ChatGPT.app"),
-    ]
+    ];
+    let packages = env_path("LOCALAPPDATA")
+        .unwrap_or_else(|| user_home.join("AppData").join("Local"))
+        .join("Packages");
+    paths.push(packages.join("OpenAI.Codex_2p2nqsd0c76g0"));
+    paths.push(packages.join("OpenAI.ChatGPT-Desktop_2p2nqsd0c76g0"));
+    paths
 }
 
 fn windows_app_roots(user_home: &Path) -> Vec<PathBuf> {
@@ -214,6 +220,20 @@ mod tests {
         assert!(is_codex_app_installed_with(&codex_home, &probe));
     }
 
+    #[test]
+    fn app_probe_accepts_store_package_family_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let codex_home = dir.path().join(".codex");
+        let probe = InstallStatusProbe::test(
+            command_never_exists,
+            path_never_exists,
+            only_codex_store_package_exists,
+        );
+
+        assert!(!is_codex_cli_installed_with("codex", &codex_home, &probe));
+        assert!(is_codex_app_installed_with(&codex_home, &probe));
+    }
+
     fn only_codex_command_exists(binary: &str) -> bool {
         binary == "codex"
     }
@@ -228,5 +248,9 @@ mod tests {
 
     fn path_is_dir(path: &Path) -> bool {
         path.is_dir()
+    }
+
+    fn only_codex_store_package_exists(path: &Path) -> bool {
+        path.ends_with("OpenAI.Codex_2p2nqsd0c76g0")
     }
 }

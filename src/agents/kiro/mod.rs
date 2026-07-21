@@ -1,8 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::interfaces::{AssetType, ErasedAsset};
 
 mod cron;
+mod install;
 mod mcp;
 mod memory;
 mod meta;
@@ -10,23 +11,13 @@ mod process;
 mod provider;
 mod skill;
 
+pub(crate) use install::{install_plans_for_platform, uninstall_plans_for_platform};
+
 pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    let mut agents = crate::agents::discovery::discover_entry_agents(
+    crate::agents::discovery::discover_entry_agents(
         user_home.as_ref(),
         std::slice::from_ref(&crate::agents::entries::KIRO_AGENT_ENTRY),
-    );
-    if let Some(home) = std::env::var_os("KIRO_HOME")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-    {
-        if !agents.iter().any(|agent| agent.home() == home) {
-            agents.push(crate::agents::Agent::new(
-                &crate::agents::entries::KIRO_AGENT_ENTRY,
-                home,
-            ));
-        }
-    }
-    agents
+    )
 }
 
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {

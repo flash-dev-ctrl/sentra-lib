@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::SentraResult;
 use crate::agents::install_status::{
-    InstallStatusProbe, any_command_exists_with, any_existing_dir_with,
+    InstallStatusProbe, any_command_exists_with, any_existing_file_with, binary_paths, env_path,
 };
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
@@ -46,6 +46,47 @@ impl Asset<Option<MetaData>> for MetaAsset {
 
 pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real();
-    any_command_exists_with(&["coder", "code-server"], &probe)
-        || any_existing_dir_with(vec![super::config_home(agent_home)], &probe)
+    is_install_target_installed_with(agent_home, &probe)
+        || any_command_exists_with(&["code-server"], &probe)
+}
+
+pub(super) fn is_install_target_installed(agent_home: &Path) -> bool {
+    is_install_target_installed_with(agent_home, &InstallStatusProbe::real())
+}
+
+fn is_install_target_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
+    any_command_exists_with(&["coder"], probe)
+        || any_existing_file_with(install_paths(agent_home), probe)
+        || probe.product_installed(&["Coder"], &["Coder Technologies"])
+}
+
+fn install_paths(agent_home: &Path) -> Vec<PathBuf> {
+    let user_home = super::user_home(agent_home);
+    let mut paths = binary_paths(user_home.join(".local").join("bin"), "coder");
+    if let Some(local_app_data) = env_path("LOCALAPPDATA") {
+        paths.extend(binary_paths(
+            local_app_data
+                .join("Microsoft")
+                .join("WinGet")
+                .join("Links"),
+            "coder",
+        ));
+    }
+    paths
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn code_server_does_not_satisfy_the_coder_install_target() {
+        let probe =
+            InstallStatusProbe::test(|binary| binary == "code-server", |_| false, |_| false);
+
+        assert!(!is_install_target_installed_with(
+            Path::new(".config/coderv2"),
+            &probe
+        ));
+    }
 }

@@ -1,34 +1,83 @@
-use crate::agents::install::{AgentInstallSpec, InstallCommandPlan, Platform};
+use crate::agents::install::{
+    AgentInstallSpec, InstallCommandPlan, Platform, brew_cask_plan, brew_cask_uninstall_plan,
+    curl_bash_plan, powershell_plan, winget_install_plans_for_platform,
+};
 use crate::interfaces::{AgentInstallAction, AgentUninstallOptions};
+
+const MACOS_CONFIG: &[&str] = &["\"$HOME/.claude\"", "\"$HOME/.claude.json\""];
 
 pub(crate) fn install_plans_for_platform(
     platform: Platform,
     action: AgentInstallAction,
 ) -> Vec<InstallCommandPlan> {
-    install_spec().plans_for_platform(platform, action)
+    let mut plans = match platform {
+        Platform::Windows => {
+            let mut plans =
+                winget_install_plans_for_platform(platform, action, "Anthropic.ClaudeCode");
+            plans.push(windows_native_install_plan());
+            plans
+        }
+        Platform::MacOS => vec![
+            brew_cask_plan("claude-code", action),
+            curl_bash_plan(
+                "https://claude.ai/install.sh",
+                &[],
+                "Anthropic native installer",
+            ),
+        ],
+        Platform::Linux => vec![curl_bash_plan(
+            "https://claude.ai/install.sh",
+            &[],
+            "Anthropic native installer",
+        )],
+    };
+    if action == AgentInstallAction::Update {
+        plans.insert(
+            0,
+            InstallCommandPlan {
+                program: "claude",
+                args: vec!["update".to_string()],
+                method: "claude update",
+            },
+        );
+    }
+    plans
 }
 
-pub(crate) fn uninstall_plan_for_platform(
+fn windows_native_install_plan() -> InstallCommandPlan {
+    powershell_plan(
+        "$ErrorActionPreference = 'Stop'; $script = Join-Path ([System.IO.Path]::GetTempPath()) ('claude-install-' + [System.Guid]::NewGuid().ToString('N') + '.ps1'); try { Invoke-WebRequest -UseBasicParsing -Uri 'https://claude.ai/install.ps1' -OutFile $script; & $script; if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }",
+        "Anthropic native installer",
+    )
+}
+
+pub(crate) fn uninstall_plans_for_platform(
     platform: Platform,
     options: AgentUninstallOptions,
-) -> InstallCommandPlan {
-    install_spec().uninstall_plan_for_platform(platform, options)
+) -> Vec<InstallCommandPlan> {
+    let native = install_spec().uninstall_plan_for_platform(platform, options);
+    if platform == Platform::MacOS {
+        vec![
+            brew_cask_uninstall_plan("claude-code", options, MACOS_CONFIG),
+            native,
+        ]
+    } else {
+        vec![native]
+    }
 }
 
 fn install_spec() -> AgentInstallSpec {
     AgentInstallSpec {
+        // Retained only to remove legacy package-manager installations.
         npm_package: Some("@anthropic-ai/claude-code"),
-        npm_update_package: Some("@anthropic-ai/claude-code@latest"),
+        npm_update_package: None,
         npm_global_options: &[],
         pnpm_package: Some("@anthropic-ai/claude-code"),
-        pnpm_update_package: Some("@anthropic-ai/claude-code@latest"),
+        pnpm_update_package: None,
         pnpm_global_options: &[],
-        curl_command: Some("curl -fsSL https://claude.ai/install.sh | bash"),
-        powershell_command: Some(
-            "Import-Module Microsoft.PowerShell.Utility; irm https://claude.ai/install.ps1 | iex",
-        ),
         brew_package: None,
         brew_uninstall_package: None,
+        winget_id: Some("Anthropic.ClaudeCode"),
         unix_files: &["\"$HOME/.local/bin/claude\""],
         unix_dirs: &["\"$HOME/.local/share/claude\""],
         unix_config_files: &["\"$HOME/.claude.json\""],
@@ -50,147 +99,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn windows_install_prefers_package_managers_then_powershell() {
+    fn windows_install_uses_exact_winget_source() {
         let plans = install_plans_for_platform(Platform::Windows, AgentInstallAction::Install);
-
-        assert_eq!(plans.len(), 3);
-        assert_eq!(
-            plans[0].command_line(),
-            "cmd /C npm install -g @anthropic-ai/claude-code"
-        );
-        assert_eq!(
-            plans[1].command_line(),
-            "cmd /C pnpm add -g @anthropic-ai/claude-code"
-        );
+        assert_eq!(plans.len(), 2);
+        let command = plans[0].command_line();
+        assert!(command.contains("--id Anthropic.ClaudeCode --exact --source winget"));
         assert!(
-            plans[2]
+            plans[1]
                 .command_line()
                 .contains("https://claude.ai/install.ps1")
         );
+        assert!(!plans[1].command_line().contains("| iex"));
     }
 
     #[test]
-    fn windows_update_uses_package_managers_then_powershell() {
+    fn update_prefers_native_channel() {
         let plans = install_plans_for_platform(Platform::Windows, AgentInstallAction::Update);
-
-        assert_eq!(
-            plans[0].command_line(),
-            "cmd /C npm install -g @anthropic-ai/claude-code@latest"
-        );
-        assert_eq!(
-            plans[1].command_line(),
-            "cmd /C pnpm add -g @anthropic-ai/claude-code@latest"
-        );
+        assert_eq!(plans[0].command_line(), "claude update");
     }
 
     #[test]
-    fn install_and_update_prefer_npm_then_fallbacks() {
-        let unix_install_plans =
-            install_plans_for_platform(Platform::Unix, AgentInstallAction::Install);
-        assert_eq!(
-            unix_install_plans[0].command_line(),
-            "npm install -g @anthropic-ai/claude-code"
-        );
-        assert_eq!(
-            unix_install_plans[1].command_line(),
-            "pnpm add -g @anthropic-ai/claude-code"
-        );
-        assert_eq!(
-            unix_install_plans[2].command_line(),
-            "sh -c curl -fsSL https://claude.ai/install.sh | bash"
-        );
+    fn macos_and_linux_use_official_non_piped_sources() {
+        let macos = install_plans_for_platform(Platform::MacOS, AgentInstallAction::Install);
+        assert_eq!(macos[0].command_line(), "brew install --cask claude-code");
 
-        let unix_update_plans =
-            install_plans_for_platform(Platform::Unix, AgentInstallAction::Update);
-        assert_eq!(
-            unix_update_plans[0].command_line(),
-            "npm install -g @anthropic-ai/claude-code@latest"
-        );
-        assert_eq!(
-            unix_update_plans[1].command_line(),
-            "pnpm add -g @anthropic-ai/claude-code@latest"
-        );
-
-        let install_plans =
-            install_plans_for_platform(Platform::Windows, AgentInstallAction::Install);
-        assert_eq!(
-            install_plans[0].command_line(),
-            "cmd /C npm install -g @anthropic-ai/claude-code"
-        );
-        assert_eq!(
-            install_plans[1].command_line(),
-            "cmd /C pnpm add -g @anthropic-ai/claude-code"
-        );
-
-        let update_plans =
-            install_plans_for_platform(Platform::Windows, AgentInstallAction::Update);
-        assert_eq!(
-            update_plans[0].command_line(),
-            "cmd /C npm install -g @anthropic-ai/claude-code@latest"
-        );
-        assert_eq!(
-            update_plans[1].command_line(),
-            "cmd /C pnpm add -g @anthropic-ai/claude-code@latest"
-        );
-    }
-
-    #[test]
-    fn plan_supports_unix_and_windows_installers() {
-        let unix = install_plans_for_platform(Platform::Unix, AgentInstallAction::Install);
-        assert_eq!(
-            unix[2].command_line(),
-            "sh -c curl -fsSL https://claude.ai/install.sh | bash"
-        );
-        let windows = install_plans_for_platform(Platform::Windows, AgentInstallAction::Install);
-        assert!(windows[2].command_line().contains("powershell -NoProfile -ExecutionPolicy Bypass -Command Import-Module Microsoft.PowerShell.Utility; irm https://claude.ai/install.ps1 | iex"));
-    }
-
-    #[test]
-    fn uninstall_plan_removes_user_data() {
-        let unix = uninstall_plan_for_platform(
-            Platform::Unix,
-            AgentUninstallOptions {
-                delete_config: true,
-            },
-        )
-        .command_line();
-        assert!(unix.contains(".local/bin/claude"));
-        assert!(unix.contains(".local/share/claude"));
-        assert!(unix.contains("npm uninstall -g @anthropic-ai/claude-code"));
-        assert!(unix.contains("pnpm remove -g @anthropic-ai/claude-code"));
-        assert!(unix.contains("\"$HOME/.claude.json\""));
-        assert!(unix.contains("\"$HOME/.claude\""));
-
-        let windows = uninstall_plan_for_platform(
-            Platform::Windows,
-            AgentUninstallOptions {
-                delete_config: true,
-            },
-        )
-        .command_line();
-        assert!(windows.contains(".local\\bin\\claude.exe"));
-        assert!(windows.contains(".local\\share\\claude"));
-        assert!(windows.contains("npm uninstall -g @anthropic-ai/claude-code"));
-        assert!(windows.contains("pnpm remove -g @anthropic-ai/claude-code"));
-        assert!(windows.ends_with("exit 0"));
-        assert!(windows.contains("$env:USERPROFILE\\.claude"));
-        assert!(windows.contains("$env:USERPROFILE\\.claude.json"));
-    }
-
-    #[test]
-    fn uninstall_plan_preserves_config_when_requested() {
-        let command = uninstall_plan_for_platform(
-            Platform::Unix,
-            AgentUninstallOptions {
-                delete_config: false,
-            },
-        )
-        .command_line();
-
-        assert!(command.contains("npm uninstall -g @anthropic-ai/claude-code"));
-        assert!(command.contains("pnpm remove -g @anthropic-ai/claude-code"));
-        assert!(command.contains("rm -rf \"$HOME/.local/share/claude\""));
-        assert!(!command.contains("\"$HOME/.claude.json\""));
-        assert!(!command.contains("\"$HOME/.claude\""));
+        let linux = install_plans_for_platform(Platform::Linux, AgentInstallAction::Install);
+        let command = linux[0].command_line();
+        assert!(command.contains("https://claude.ai/install.sh"));
+        assert!(command.contains("curl -fsSL \"$1\" -o \"$script\""));
+        assert!(!command.contains("curl -fsSL https://claude.ai/install.sh |"));
     }
 }

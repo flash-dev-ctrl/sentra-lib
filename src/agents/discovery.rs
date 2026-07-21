@@ -64,26 +64,31 @@ pub fn discover_agents(user_home: impl AsRef<Path>) -> Vec<Agent> {
 pub(crate) fn discover_entry_agents(user_home: &Path, entries: &[AgentEntry]) -> Vec<Agent> {
     let mut results = Vec::new();
     for entry in entries {
-        let process_homes = process_homes_from_entry(user_home, entry);
+        let custom_homes = custom_homes_from_entry(user_home, entry);
 
-        let mut installed_home = None;
+        let mut detected_install_home = None;
+        let mut static_home_found = false;
         for segments in entry.homes {
             let home = entry_home(user_home, segments);
             let home_exists = fs::metadata(&home)
                 .map(|meta| meta.is_dir())
                 .unwrap_or(false);
             if home_exists {
-                installed_home = Some(home.clone());
+                static_home_found = true;
                 push_agent_if_missing(&mut results, entry, home);
-            } else if installed_home.is_none() && (entry.is_installed)(entry.name, &home) {
-                installed_home = Some(home);
+            } else if custom_homes.is_empty()
+                && !static_home_found
+                && detected_install_home.is_none()
+                && (entry.is_installed)(entry.name, &home)
+            {
+                detected_install_home = Some(home);
             }
         }
-        if let Some(home) = installed_home {
+        if !static_home_found && let Some(home) = detected_install_home {
             push_agent_if_missing(&mut results, entry, home);
         }
 
-        for home in process_homes {
+        for home in custom_homes {
             push_agent_if_missing(&mut results, entry, home);
         }
     }
@@ -116,15 +121,30 @@ fn entry_home(user_home: &Path, segments: &[&str]) -> PathBuf {
     home
 }
 
-fn process_homes_from_entry(user_home: &Path, entry: &AgentEntry) -> Vec<PathBuf> {
+fn custom_homes_from_entry(user_home: &Path, entry: &AgentEntry) -> Vec<PathBuf> {
     if entry.process_home_env_vars.is_empty() {
         return Vec::new();
     }
 
-    (entry.process_provider)()
-        .iter()
-        .flat_map(|process| process_homes_from_env(user_home, entry, process))
-        .collect()
+    let mut homes = Vec::new();
+    let accept_external_homes =
+        home::home_dir().is_some_and(|current_home| same_home(&current_home, user_home));
+    for env_key in entry.process_home_env_vars {
+        if let Some(value) = std::env::var_os(env_key)
+            && let Some(home) = parse_process_home(user_home, &value.to_string_lossy())
+            && (accept_external_homes || home_is_within(&home, user_home))
+        {
+            push_home_if_missing(&mut homes, home);
+        }
+    }
+    for process in (entry.process_provider)() {
+        for home in process_homes_from_env(user_home, entry, &process) {
+            if accept_external_homes || home_is_within(&home, user_home) {
+                push_home_if_missing(&mut homes, home);
+            }
+        }
+    }
+    homes
 }
 
 fn process_homes_from_env(
@@ -179,8 +199,39 @@ fn push_agent_if_missing(results: &mut Vec<Agent>, entry: &AgentEntry, home: Pat
     results.push(Agent::new(entry, home));
 }
 
+fn push_home_if_missing(homes: &mut Vec<PathBuf>, home: PathBuf) {
+    if !homes.iter().any(|existing| same_home(existing, &home)) {
+        homes.push(home);
+    }
+}
+
 fn same_home(left: &Path, right: &Path) -> bool {
-    home_key(left) == home_key(right)
+    let left = home_key(left);
+    let right = home_key(right);
+    #[cfg(windows)]
+    {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
+}
+
+fn home_is_within(home: &Path, user_home: &Path) -> bool {
+    let home = normalize_home(home);
+    let user_home = normalize_home(user_home);
+    #[cfg(windows)]
+    {
+        PathBuf::from(home.to_string_lossy().to_ascii_lowercase()).starts_with(PathBuf::from(
+            user_home.to_string_lossy().to_ascii_lowercase(),
+        ))
+    }
+    #[cfg(not(windows))]
+    {
+        home.starts_with(user_home)
+    }
 }
 
 fn home_key(home: &Path) -> PathBuf {
@@ -258,6 +309,16 @@ mod tests {
         assert_eq!(codex_homes.len(), 2);
         assert!(codex_homes.contains(&home_key(&static_home)));
         assert!(codex_homes.contains(&home_key(&custom_home)));
+
+        let missing_static_dir = tempfile::tempdir().unwrap();
+        let custom_home = missing_static_dir.path().join("custom-codex");
+        set_test_processes(vec![process_with_home("CODEX_HOME", &custom_home)]);
+        let entry = test_entry(test_process_data, always_installed);
+        let agents = discover_entry_agents(missing_static_dir.path(), std::slice::from_ref(&entry));
+        set_test_processes(Vec::new());
+
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].home(), custom_home.as_path());
     }
 
     #[test]
@@ -269,6 +330,15 @@ mod tests {
 
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].home(), expected_home.as_path());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_home_comparison_ignores_ascii_case() {
+        assert!(same_home(
+            Path::new(r"C:\Users\Me\Custom-Codex"),
+            Path::new(r"c:\users\me\custom-codex")
+        ));
     }
 
     fn test_entry(

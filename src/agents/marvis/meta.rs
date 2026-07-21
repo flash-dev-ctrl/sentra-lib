@@ -1,7 +1,10 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::SentraResult;
-use crate::agents::install_status::{InstallStatusProbe, any_command_exists_with};
+use crate::agents::install_status::{
+    InstallStatusProbe, any_command_exists_with, any_existing_dir_with, any_existing_file_with,
+    binary_paths, env_path, hidden_home_parent,
+};
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::dir_exists;
@@ -44,6 +47,43 @@ impl Asset<Option<MetaData>> for MetaAsset {
     }
 }
 
-pub(super) fn is_agent_installed(_agent_name: &str, _agent_home: &Path) -> bool {
-    any_command_exists_with(&["marvis", "marvis-mcp"], &InstallStatusProbe::real())
+pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
+    let probe = InstallStatusProbe::real();
+    any_command_exists_with(&["marvis", "marvis-mcp"], &probe)
+        || any_existing_file_with(install_paths(agent_home), &probe)
+        || any_existing_dir_with(app_paths(agent_home), &probe)
+        || probe.product_installed(&["Marvis", "MarvisX"], &["Tencent", "腾讯科技"])
+}
+
+fn install_paths(agent_home: &Path) -> Vec<PathBuf> {
+    let user_home = hidden_home_parent(agent_home);
+    let mut paths = binary_paths(user_home.join(".local").join("bin"), "marvis");
+    let local_app_data =
+        env_path("LOCALAPPDATA").unwrap_or_else(|| user_home.join("AppData").join("Local"));
+    paths.extend(binary_paths(
+        local_app_data
+            .join("Programs")
+            .join("Marvis")
+            .join("Application"),
+        "Marvis",
+    ));
+    for env_name in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(root) = env_path(env_name) {
+            paths.extend(binary_paths(
+                root.join("Marvis").join("Application"),
+                "Marvis",
+            ));
+        }
+    }
+    paths
+}
+
+fn app_paths(agent_home: &Path) -> Vec<PathBuf> {
+    let user_home = hidden_home_parent(agent_home);
+    vec![
+        user_home.join("Applications").join("Marvis.app"),
+        user_home.join("Applications").join("MarvisX.app"),
+        PathBuf::from("/Applications/Marvis.app"),
+        PathBuf::from("/Applications/MarvisX.app"),
+    ]
 }
