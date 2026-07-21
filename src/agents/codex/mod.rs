@@ -53,12 +53,6 @@ pub(crate) fn asset_for_type(
     agent_home: &std::path::Path,
     asset_type: AssetType,
 ) -> Vec<Box<dyn ErasedAsset>> {
-    if (agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name
-        || agent_name == crate::agents::entries::CODEX_IDE_AGENT_ENTRY.name)
-        && !matches!(asset_type, AssetType::Meta | AssetType::Process)
-    {
-        return Vec::new();
-    }
     match asset_type {
         AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
         AssetType::Skill => vec![Box::new(skill::SkillAsset::new(agent_name, agent_home))],
@@ -82,28 +76,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ide_extension_only_exposes_meta_and_process_assets() {
+    fn ide_extension_uses_shared_asset_factories() {
         let home = Path::new(".codex");
 
-        assert_eq!(asset_for_type("codex-ide", home, AssetType::Meta).len(), 1);
-        assert_eq!(
-            asset_for_type("codex-ide", home, AssetType::Process).len(),
-            1
-        );
-        assert!(asset_for_type("codex-ide", home, AssetType::Skill).is_empty());
+        for asset_type in [
+            AssetType::Meta,
+            AssetType::Skill,
+            AssetType::Mcp,
+            AssetType::Memory,
+            AssetType::Cron,
+            AssetType::Provider,
+            AssetType::Plugin,
+            AssetType::Process,
+        ] {
+            assert_eq!(asset_for_type("codex-ide", home, asset_type).len(), 1);
+        }
     }
 
     #[test]
-    fn desktop_app_only_exposes_meta_and_process_assets() {
+    fn desktop_app_uses_shared_asset_factories() {
         let home = Path::new(".codex");
 
-        assert_eq!(asset_for_type("codex-app", home, AssetType::Meta).len(), 1);
-        assert_eq!(
-            asset_for_type("codex-app", home, AssetType::Process).len(),
-            1
-        );
-        assert!(asset_for_type("codex-app", home, AssetType::Skill).is_empty());
-        assert!(asset_for_type("codex-app", home, AssetType::Mcp).is_empty());
-        assert_eq!(asset_for_type("codex", home, AssetType::Skill).len(), 1);
+        for agent_name in ["codex", "codex-app"] {
+            for asset_type in [
+                AssetType::Meta,
+                AssetType::Skill,
+                AssetType::Mcp,
+                AssetType::Memory,
+                AssetType::Cron,
+                AssetType::Provider,
+                AssetType::Plugin,
+                AssetType::Process,
+            ] {
+                assert_eq!(asset_for_type(agent_name, home, asset_type).len(), 1);
+            }
+        }
     }
 }

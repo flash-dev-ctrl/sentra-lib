@@ -6,6 +6,7 @@ mod install;
 mod mcp;
 mod meta;
 mod process;
+mod provider;
 
 pub(crate) use install::{install_plans_for_platform, uninstall_plans_for_platform};
 mod skill;
@@ -34,6 +35,9 @@ pub(crate) fn asset_for_type(
         AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
         AssetType::Skill => vec![Box::new(skill::SkillAsset::new(agent_name, agent_home))],
         AssetType::Mcp => vec![Box::new(mcp::McpAsset::new(agent_name, agent_home))],
+        AssetType::Provider => vec![Box::new(provider::ProviderAsset::new(
+            agent_name, agent_home,
+        ))],
         AssetType::Process => vec![Box::new(crate::agents::process::ProcessAsset::new(
             agent_name,
             agent_home,

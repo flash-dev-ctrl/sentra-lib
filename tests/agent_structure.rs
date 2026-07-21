@@ -211,7 +211,19 @@ fn rust_agents_mirror_typescript_agent_object_files() {
             "process.rs",
         ],
     );
-    assert_agent_files(&src, "workbuddy", &["mod.rs", "meta.rs", "process.rs"]);
+    assert_agent_files(
+        &src,
+        "workbuddy",
+        &[
+            "mod.rs",
+            "meta.rs",
+            "install.rs",
+            "skill.rs",
+            "mcp.rs",
+            "provider.rs",
+            "process.rs",
+        ],
+    );
     assert_agent_files(
         &src,
         "sentra",
@@ -637,6 +649,11 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
     );
     assert_asset_logic_is_colocated(
         &root.join("src").join("agents").join("opencode"),
+        &["fn meta_data", "fn mcp_data", "fn provider_data"],
+        &["meta.rs", "mcp.rs", "provider.rs"],
+    );
+    assert_asset_logic_is_colocated(
+        &root.join("src").join("agents").join("workbuddy"),
         &["fn meta_data", "fn mcp_data", "fn provider_data"],
         &["meta.rs", "mcp.rs", "provider.rs"],
     );
