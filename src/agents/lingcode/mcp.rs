@@ -2,7 +2,7 @@ use crate::SentraResult;
 use crate::agents::install_status::hidden_home_parent;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, McpData};
-use crate::utils::{mask_secret, parse_mcp_servers, read_json_file};
+use crate::utils::{parse_mcp_servers, read_json_file};
 
 #[derive(Debug, Clone)]
 pub(super) struct McpAsset {
@@ -25,9 +25,9 @@ impl_erased_asset!(McpAsset, AssetType::Mcp, Vec<McpData>);
 impl Asset<Vec<McpData>> for McpAsset {
     fn get_data(&self) -> SentraResult<Vec<McpData>> {
         let home = self.core.agent_home();
-        let claude_home = hidden_home_parent(home).join(".claude");
+        let user_home = hidden_home_parent(home);
         let mut results = Vec::new();
-        for path in [home.join("mcp.json"), claude_home.join(".claude.json")] {
+        for path in [home.join("mcp.json"), user_home.join(".claude.json")] {
             let Some(config) = read_json_file(path)? else {
                 continue;
             };
@@ -44,26 +44,35 @@ impl Asset<Vec<McpData>> for McpAsset {
                 }
             }
         }
-        mask_mcp_env(&mut results);
         Ok(results)
     }
 }
 
-fn mask_mcp_env(servers: &mut [McpData]) {
-    for server in servers {
-        if let Some(env) = &mut server.env {
-            for (key, value) in env {
-                if is_sensitive_key(key) {
-                    *value = mask_secret(Some(value)).unwrap_or_default();
-                }
-            }
-        }
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn is_sensitive_key(key: &str) -> bool {
-    let key = key.to_ascii_lowercase();
-    ["key", "token", "password", "secret"]
-        .iter()
-        .any(|part| key.contains(part))
+    #[test]
+    fn reads_lingcode_and_root_claude_configuration() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join(".lingcode");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(
+            home.join("mcp.json"),
+            r#"{"mcpServers":{"lingcode":{"command":"lingcode-server"}}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join(".claude.json"),
+            r#"{"mcpServers":{"claude":{"command":"claude-server"}}}"#,
+        )
+        .unwrap();
+
+        let data =
+            <McpAsset as Asset<Vec<McpData>>>::get_data(&McpAsset::new("lingcode", home)).unwrap();
+
+        assert_eq!(data.len(), 2);
+        assert!(data.iter().any(|server| server.name == "lingcode"));
+        assert!(data.iter().any(|server| server.name == "claude"));
+    }
 }

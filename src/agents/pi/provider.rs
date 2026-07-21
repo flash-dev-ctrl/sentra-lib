@@ -7,7 +7,7 @@ use crate::interfaces::{
     ProviderProbeRequest,
 };
 use crate::utils::protocol::{WireProtocol, default_model_probe_prompt};
-use crate::utils::read_json_file;
+use crate::utils::{mask_secret, read_json_file};
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -50,7 +50,11 @@ impl_erased_asset!(
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        provider_data(self.core.agent_home())
+        provider_data(self.core.agent_home(), true)
+    }
+
+    fn get_runtime_data(&self) -> SentraResult<Vec<ProviderData>> {
+        provider_data(self.core.agent_home(), false)
     }
 
     fn set_data(&self, _value: ProviderData) -> SentraResult<AssetMutationResult> {
@@ -68,7 +72,10 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
     }
 }
 
-fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>> {
+fn provider_data(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
     let settings = read_json_file(agent_home.join("settings.json"))?.unwrap_or(Value::Null);
     let models_config = read_json_file(agent_home.join("models.json"))?.unwrap_or(Value::Null);
     let auth = read_json_file(agent_home.join("auth.json"))?.unwrap_or(Value::Null);
@@ -111,7 +118,7 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
                         raw.get("apiKey")
                             .or_else(|| raw.get("api_key"))
                             .and_then(Value::as_str)
-                            .and_then(literal_config_string)
+                            .and_then(|value| resolve_config_string(value, None))
                     })
                     .or_else(|| auth_key(auth_providers, provider_id)),
                 enabled,
@@ -164,6 +171,11 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
         }
     }
 
+    if mask_secrets {
+        for provider in &mut providers {
+            provider.api_key = mask_secret(provider.api_key.as_deref());
+        }
+    }
     Ok(providers)
 }
 
@@ -322,25 +334,106 @@ fn auth_key(
 ) -> Option<String> {
     let value = providers?.get(provider_id)?;
     if let Some(key) = value.as_str() {
-        return literal_config_string(key);
+        return resolve_config_string(key, None);
     }
     let raw = value.as_object()?;
+    let scoped_env = raw.get("env").and_then(Value::as_object);
     raw.get("apiKey")
         .or_else(|| raw.get("api_key"))
         .or_else(|| raw.get("key"))
         .or_else(|| raw.get("token"))
         .and_then(Value::as_str)
-        .and_then(literal_config_string)
+        .and_then(|value| resolve_config_string(value, scoped_env))
 }
 
-fn literal_config_string(value: &str) -> Option<String> {
+fn resolve_config_string(
+    value: &str,
+    scoped_env: Option<&serde_json::Map<String, Value>>,
+) -> Option<String> {
     let value = value.trim();
-    (!value.is_empty() && !value.starts_with('!')).then(|| value.to_string())
+    if value.starts_with('!') {
+        return None;
+    }
+
+    let mut resolved = String::new();
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '$' {
+            resolved.push(ch);
+            continue;
+        }
+        match chars.peek().copied() {
+            Some('$') => {
+                chars.next();
+                resolved.push('$');
+            }
+            Some('!') => {
+                chars.next();
+                resolved.push('!');
+            }
+            Some('{') => {
+                chars.next();
+                let mut name = String::new();
+                for next in chars.by_ref() {
+                    if next == '}' {
+                        break;
+                    }
+                    name.push(next);
+                }
+                resolved.push_str(&env_value(&name, scoped_env)?);
+            }
+            Some(next) if is_env_start(next) => {
+                let mut name = String::new();
+                while let Some(next) = chars.peek().copied() {
+                    if !is_env_part(next) {
+                        break;
+                    }
+                    name.push(next);
+                    chars.next();
+                }
+                resolved.push_str(&env_value(&name, scoped_env)?);
+            }
+            _ => resolved.push('$'),
+        }
+    }
+    (!resolved.trim().is_empty()).then_some(resolved)
+}
+
+fn env_value(name: &str, scoped_env: Option<&serde_json::Map<String, Value>>) -> Option<String> {
+    scoped_env
+        .and_then(|env| env.get(name))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| std::env::var(name).ok())
+}
+
+fn is_env_start(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphabetic()
+}
+
+fn is_env_part(ch: char) -> bool {
+    ch == '_' || ch.is_ascii_alphanumeric()
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::agents::pi::provider::pi_builtin_base_url;
+    use serde_json::json;
+
+    use crate::agents::pi::provider::{pi_builtin_base_url, resolve_config_string};
+
+    #[test]
+    fn config_strings_resolve_environment_references_without_commands() {
+        let env = json!({"TOKEN": "scoped-secret"});
+        let env = env.as_object().unwrap();
+
+        assert_eq!(
+            resolve_config_string("$TOKEN:${TOKEN}", Some(env)).as_deref(),
+            Some("scoped-secret:scoped-secret")
+        );
+        assert!(resolve_config_string("$PATH", None).is_some());
+        assert_eq!(resolve_config_string("!echo secret", Some(env)), None);
+        assert_eq!(resolve_config_string(" !echo secret", Some(env)), None);
+    }
 
     #[test]
     fn pi_builtin_base_urls_cover_static_catalog() {

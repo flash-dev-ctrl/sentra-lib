@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::interfaces::{AssetType, ErasedAsset};
 
 mod cron;
+mod install;
 mod mcp;
 mod memory;
 mod meta;
@@ -10,6 +11,8 @@ mod plugin;
 mod process;
 mod provider;
 mod skill;
+
+pub(crate) use install::{install_plans_for_platform, uninstall_plans_for_platform};
 
 pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
     crate::agents::discovery::discover_entry_agents(
@@ -20,6 +23,10 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
 
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     meta::is_agent_installed(agent_name, agent_home)
+}
+
+pub(crate) fn is_install_target_installed(agent_home: &Path) -> bool {
+    meta::is_install_target_installed(agent_home)
 }
 
 pub(crate) fn process_data() -> Vec<crate::interfaces::ProcessData> {

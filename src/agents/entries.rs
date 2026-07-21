@@ -24,8 +24,8 @@ pub(crate) struct SystemAgentPath {
 }
 
 pub(crate) const CODEX_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "codex",
-    title: Some("Codex"),
+    name: "codex-cli",
+    title: Some("Codex CLI"),
     homes: &[&[".codex"]],
     asset_for_type: crate::agents::codex::asset_for_type,
     is_installed: crate::agents::codex::is_agent_installed,
@@ -77,9 +77,13 @@ pub(crate) const CLAUDE_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "claude-app",
     title: Some("Claude App"),
     homes: &[
+        #[cfg(windows)]
         &["AppData", "Local", "Claude"],
+        #[cfg(windows)]
         &["AppData", "Local", "Claude-3p"],
+        #[cfg(target_os = "macos")]
         &["Library", "Application Support", "Claude"],
+        #[cfg(target_os = "macos")]
         &["Library", "Application Support", "Claude-3p"],
     ],
     asset_for_type: crate::agents::claude_app::asset_for_type,
@@ -291,10 +295,12 @@ pub(crate) const HERMES_SYSTEM_AGENT_ENTRY: AgentEntry = AgentEntry {
 };
 
 pub(crate) const SYSTEM_AGENT_PATHS: &[SystemAgentPath] = &[
+    #[cfg(unix)]
     SystemAgentPath {
         entry: &HERMES_SYSTEM_AGENT_ENTRY,
         system_path: "/usr/local/lib/hermes-agent",
     },
+    #[cfg(unix)]
     SystemAgentPath {
         entry: &HERMES_SYSTEM_AGENT_ENTRY,
         system_path: "/opt/hermes-agent",
@@ -302,6 +308,7 @@ pub(crate) const SYSTEM_AGENT_PATHS: &[SystemAgentPath] = &[
 ];
 
 pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
+    general("agents", &[&[".agents"]]),
     general("aider-desk", &[&[".aider-desk"]]),
     general("augment", &[&[".augment"]]),
     general("bob", &[&[".bob"]]),

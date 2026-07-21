@@ -52,14 +52,15 @@ pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
 }
 
 fn is_agent_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
-    any_command_exists_with(&["agent"], probe)
+    any_command_exists_with(&["cursor"], probe)
         || any_existing_file_with(cursor_install_paths(agent_home), probe)
         || any_existing_dir_with(cursor_app_paths(agent_home), probe)
+        || probe.product_installed(&["Cursor"], &["Anysphere"])
 }
 
 fn cursor_install_paths(agent_home: &Path) -> Vec<PathBuf> {
     let user_home = hidden_home_parent(agent_home);
-    let mut paths = binary_paths(user_home.join(".local").join("bin"), "agent");
+    let mut paths = binary_paths(user_home.join(".local").join("bin"), "cursor");
     if let Some(local_app_data) = env_path("LOCALAPPDATA") {
         paths.extend(binary_paths(
             local_app_data
@@ -71,6 +72,11 @@ fn cursor_install_paths(agent_home: &Path) -> Vec<PathBuf> {
             "cursor",
         ));
     }
+    #[cfg(unix)]
+    paths.extend([
+        PathBuf::from("/usr/bin/cursor"),
+        PathBuf::from("/usr/local/bin/cursor"),
+    ]);
     paths
 }
 
@@ -79,5 +85,24 @@ fn cursor_app_paths(agent_home: &Path) -> Vec<PathBuf> {
     vec![
         user_home.join("Applications").join("Cursor.app"),
         PathBuf::from("/Applications/Cursor.app"),
+        PathBuf::from("/usr/share/cursor"),
+        PathBuf::from("/opt/Cursor"),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cursor_agent_cli_does_not_count_as_the_desktop_product() {
+        let dir = tempfile::tempdir().unwrap();
+        let probe = InstallStatusProbe::test(
+            |binary| binary == "agent" || binary == "cursor-agent",
+            |_| false,
+            |_| false,
+        );
+
+        assert!(!is_agent_installed_with(dir.path(), &probe));
+    }
 }

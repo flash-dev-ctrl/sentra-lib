@@ -12,7 +12,7 @@ mod process;
 mod provider;
 mod skill;
 
-pub(crate) use install::{install_plans_for_platform, uninstall_plan_for_platform};
+pub(crate) use install::{install_plans_for_platform, uninstall_plans_for_platform};
 
 pub(crate) const CLAUDE_CODE_IDE_EXTENSION_ID: &str = "anthropic.claude-code";
 

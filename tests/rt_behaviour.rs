@@ -315,7 +315,6 @@ base_url = "https://api.openai.com/v1"
 "#,
     )
     .unwrap();
-
     let sentra_home = dir.path().join(".sentra");
     let sentra_skill = sentra_home.join("skills").join("sentra-skill");
     fs::create_dir_all(&sentra_skill).unwrap();
@@ -396,6 +395,9 @@ env_key = "SENTRA_RT_CODEX_TEST_KEY"
 "#,
     )
     .unwrap();
+    unsafe {
+        std::env::set_var("SENTRA_RT_CODEX_TEST_KEY", "sk-codex-runtime-secret");
+    }
 
     let codex = discover_agents(dir.path())
         .into_iter()
@@ -420,10 +422,34 @@ env_key = "SENTRA_RT_CODEX_TEST_KEY"
         .unwrap();
     assert_eq!(empty_mcp["type"], "stdio");
 
-    let providers = asset_data(&codex, AssetType::Provider);
-    assert_eq!(providers[0].data[0]["baseUrl"], "https://api.openai.com/v1");
-    assert!(providers[0].data[0]["apiKey"].is_null());
-    assert_eq!(providers[0].data[0]["models"][0]["id"], "gpt-5");
+    let provider_asset = codex
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let display: Vec<ProviderData> =
+        serde_json::from_value(provider_asset.data().unwrap()).unwrap();
+    let runtime: Vec<ProviderData> =
+        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
+    unsafe {
+        std::env::remove_var("SENTRA_RT_CODEX_TEST_KEY");
+    }
+    assert_eq!(
+        display[0].base_url.as_deref(),
+        Some("https://api.openai.com/v1")
+    );
+    assert_ne!(
+        display[0].api_key.as_deref(),
+        Some("sk-codex-runtime-secret")
+    );
+    assert_eq!(
+        runtime[0].api_key.as_deref(),
+        Some("sk-codex-runtime-secret")
+    );
+    assert_eq!(runtime[0].raw_provider_id.as_deref(), Some("openai"));
+    assert_eq!(runtime[0].protocol, Some(WireProtocol::Responses));
+    assert_eq!(runtime[0].models[0].id, "gpt-5");
 }
 
 #[test]
@@ -736,6 +762,9 @@ fn pi_agent_is_discovered_and_reads_llm_provider_config() {
         r#"{"providers":{"svip":{"name":"SVIP Gateway","api":"openai-responses","baseURL":"https://svip.example.com/v1","apiKey":"$SENTRA_PI_TEST_KEY","models":[{"id":"svip/gpt-5.5","name":"SVIP GPT 5.5"}]}}}"#,
     )
     .unwrap();
+    unsafe {
+        std::env::set_var("SENTRA_PI_TEST_KEY", "sk-pi-resolved");
+    }
 
     let agents = discover_agents(dir.path());
     let pi = agents.iter().find(|agent| agent.name() == "pi").unwrap();
@@ -746,14 +775,26 @@ fn pi_agent_is_discovered_and_reads_llm_provider_config() {
     let skills = asset_data(pi, AssetType::Skill);
     assert_eq!(skills[0].data[0]["name"], "pi-skill");
 
+    let provider_asset = pi
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
     let providers = asset_data(pi, AssetType::Provider);
+    let runtime: Vec<ProviderData> =
+        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
     let provider = &providers[0].data[0];
     assert_eq!(provider["name"], "SVIP Gateway");
     assert_eq!(provider["baseUrl"], "https://svip.example.com/v1");
-    assert_eq!(provider["apiKey"], "$SENTRA_PI_TEST_KEY");
+    assert!(provider["apiKey"].as_str().unwrap().contains("****"));
+    assert_eq!(runtime[0].api_key.as_deref(), Some("sk-pi-resolved"));
     assert_eq!(provider["enabled"], true);
     assert!(provider["protocol"].is_null());
     assert_eq!(provider["models"][0]["id"], "svip/gpt-5.5");
+    unsafe {
+        std::env::remove_var("SENTRA_PI_TEST_KEY");
+    }
 }
 
 #[test]
@@ -810,7 +851,7 @@ fn pi_provider_uses_builtin_base_url_without_models_config() {
 
     assert_eq!(provider["name"], "opencode-go");
     assert_eq!(provider["baseUrl"], "https://opencode.ai/zen/go/v1");
-    assert_eq!(provider["apiKey"], "sk-opencode");
+    assert!(provider["apiKey"].as_str().unwrap().contains("****"));
     assert_eq!(provider["enabled"], true);
     assert!(provider["protocol"].is_null());
     assert_eq!(provider["models"][0]["id"], "deepseek-v4-flash");
@@ -853,17 +894,17 @@ fn pi_provider_lists_inactive_auth_providers_without_models_config() {
 
     assert_eq!(deepseek["enabled"], true);
     assert_eq!(deepseek["baseUrl"], "https://api.deepseek.com");
-    assert_eq!(deepseek["apiKey"], "sk-deepseek");
+    assert!(deepseek["apiKey"].as_str().unwrap().contains("****"));
     assert_eq!(deepseek["models"][0]["id"], "deepseek-v4-flash");
     assert_eq!(opencode_go["enabled"], false);
     assert_eq!(opencode_go["baseUrl"], "https://opencode.ai/zen/go/v1");
-    assert_eq!(opencode_go["apiKey"], "sk-opencode");
+    assert!(opencode_go["apiKey"].as_str().unwrap().contains("****"));
     assert_eq!(minimax_cn["enabled"], false);
     assert_eq!(
         minimax_cn["baseUrl"],
         "https://api.minimaxi.com/anthropic/v1"
     );
-    assert_eq!(minimax_cn["apiKey"], "sk-minimax-cn");
+    assert!(minimax_cn["apiKey"].as_str().unwrap().contains("****"));
     assert!(minimax_cn["protocol"].is_null());
 }
 
@@ -924,10 +965,26 @@ fn openclaw_provider_reads_configured_entries_without_catalog_defaults() {
     assert!(deepseek["apiKey"].as_str().unwrap().contains("****"));
     assert!(future["baseUrl"].is_null());
     assert_eq!(custom["baseUrl"], "https://llm.example.test/v1");
+
+    let provider_asset = openclaw
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let runtime: Vec<ProviderData> =
+        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
+    assert_eq!(
+        runtime
+            .iter()
+            .find(|provider| provider.raw_provider_id.as_deref() == Some("deepseek"))
+            .and_then(|provider| provider.api_key.as_deref()),
+        Some("sk-deepseek")
+    );
 }
 
 #[test]
-fn openclaw_provider_does_not_infer_from_default_model_without_provider_table() {
+fn openclaw_provider_infers_from_default_model_without_provider_table() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".openclaw");
     fs::create_dir_all(&home).unwrap();
@@ -957,11 +1014,24 @@ fn openclaw_provider_does_not_infer_from_default_model_without_provider_table() 
         .unwrap();
     let providers = asset_data(openclaw, AssetType::Provider);
     let items = providers[0].data.as_array().unwrap();
-    assert!(items.is_empty());
+    let primary = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "opencode-go")
+        .unwrap();
+    let fallback = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "minimax-cn")
+        .unwrap();
+    assert_eq!(primary["baseUrl"], "https://opencode.ai/zen/go/v1");
+    assert_eq!(primary["models"][0]["id"], "kimi-k2.6");
+    assert_eq!(primary["models"][0]["name"], "Kimi");
+    assert_eq!(primary["enabled"], true);
+    assert_eq!(fallback["models"][0]["id"], "MiniMax-M2.7");
+    assert_eq!(fallback["enabled"], false);
 }
 
 #[test]
-fn openclaw_provider_does_not_infer_opencode_go_endpoint_from_model_name() {
+fn openclaw_provider_infers_opencode_go_endpoint_from_model_name() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".openclaw");
     fs::create_dir_all(&home).unwrap();
@@ -977,7 +1047,10 @@ fn openclaw_provider_does_not_infer_opencode_go_endpoint_from_model_name() {
         .find(|agent| agent.name() == "openclaw")
         .unwrap();
     let providers = asset_data(openclaw, AssetType::Provider);
-    assert!(providers[0].data.as_array().unwrap().is_empty());
+    let provider = &providers[0].data[0];
+    assert_eq!(provider["rawProviderId"], "opencode-go");
+    assert_eq!(provider["baseUrl"], "https://opencode.ai/zen/go/v1");
+    assert_eq!(provider["models"][0]["id"], "minimax-m2.7");
 }
 
 #[test]
@@ -1063,6 +1136,8 @@ fn opencode_provider_reads_chaitin_gateway_and_masks_api_key() {
     let providers = asset_data(opencode, AssetType::Provider);
     let provider = &providers[0].data[0];
 
+    assert_eq!(provider["providerId"], "chaitin");
+    assert_eq!(provider["rawProviderId"], "chaitin");
     assert_eq!(provider["name"], "Baizhi Gateway");
     assert_eq!(
         provider["baseUrl"],
@@ -1110,6 +1185,8 @@ fn opencode_provider_reads_legacy_dot_opencode_config() {
     let provider = &providers[0].data[0];
 
     assert_eq!(opencode.home(), dir.path().join(".config").join("opencode"));
+    assert_eq!(provider["providerId"], "chaitin");
+    assert_eq!(provider["rawProviderId"], "chaitin");
     assert_eq!(
         provider["baseUrl"],
         "https://ai-api-gateway.app.baizhi.cloud/api/openai"
@@ -1214,6 +1291,15 @@ fn opencode_provider_runtime_data_keeps_api_key_for_model_probe() {
 
     assert_ne!(masked[0].api_key.as_deref(), Some("sk-chaitin-secret"));
     assert_eq!(runtime[0].api_key.as_deref(), Some("sk-chaitin-secret"));
+
+    provider_asset
+        .set_provider_data(runtime[0].clone())
+        .unwrap();
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(home.join("opencode.json")).unwrap()).unwrap();
+    let provider_keys = config["provider"].as_object().unwrap();
+    assert_eq!(provider_keys.len(), 1);
+    assert!(provider_keys.contains_key("chaitin"));
 }
 
 #[test]
@@ -1613,7 +1699,7 @@ fn opencode_mcp_maps_local_and_remote_servers() {
     assert_eq!(local["type"], "stdio");
     assert_eq!(local["command"], "node");
     assert_eq!(local["args"][0], "server.js");
-    assert_eq!(local["env"]["TOKEN"], "test");
+    assert_eq!(local["env"]["TOKEN"], "****");
     assert_eq!(remote["type"], "http");
     assert_eq!(remote["url"], "https://mcp.example.test/mcp");
     assert_eq!(remote["enabled"], false);
@@ -1767,6 +1853,8 @@ model = "kimi-k2-0711-preview"
     let provider = &providers[0].data[0];
     let serialized = providers[0].data.to_string();
 
+    assert_eq!(provider["providerId"], "managed:kimi-code");
+    assert_eq!(provider["rawProviderId"], "managed:kimi-code");
     assert_eq!(provider["baseUrl"], "https://api.kimi.com/coding/v1");
     assert_eq!(provider["enabled"], true);
     assert!(provider["protocol"].is_null());
@@ -1775,6 +1863,23 @@ model = "kimi-k2-0711-preview"
     assert!(provider["apiKey"].as_str().unwrap().contains("****"));
     assert!(!serialized.contains("sk-kimi-secret"));
     assert!(!serialized.contains("oauth-kimi-secret"));
+
+    let provider_asset = kimi
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let runtime: Vec<ProviderData> =
+        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
+    provider_asset
+        .set_provider_data(runtime[0].clone())
+        .unwrap();
+    let config: toml::Value =
+        toml::from_str(&fs::read_to_string(home.join("config.toml")).unwrap()).unwrap();
+    let provider_keys = config["providers"].as_table().unwrap();
+    assert_eq!(provider_keys.len(), 1);
+    assert!(provider_keys.contains_key("managed:kimi-code"));
 }
 
 #[test]
@@ -1963,7 +2068,7 @@ fn kimi_code_mcp_maps_http_sse_stdio_and_plugin_servers() {
     assert_eq!(local["type"], "stdio");
     assert_eq!(local["command"], "node");
     assert_eq!(local["args"][0], "server.js");
-    assert_eq!(local["env"]["TOKEN"], "test");
+    assert_eq!(local["env"]["TOKEN"], "****");
     assert_eq!(plugin["type"], "stdio");
     assert_eq!(plugin["command"], "python");
     assert_eq!(plugin["args"][0], "server.py");
@@ -2109,14 +2214,32 @@ fn hermes_provider_reads_modern_model_and_auth_configuration() {
     let items = providers[0].data.as_array().unwrap();
     let provider = items
         .iter()
-        .find(|provider| provider["name"] == "minimax-cn")
+        .find(|provider| provider["rawProviderId"] == "minimax-cn")
         .unwrap();
 
-    assert!(provider["baseUrl"].is_null());
-    assert!(provider["protocol"].is_null());
+    assert_eq!(provider["providerId"], "minimax-cn");
+    assert_eq!(provider["baseUrl"], "https://api.minimaxi.com/anthropic");
+    assert_eq!(provider["protocol"], "anthropic_messages");
     assert_eq!(provider["enabled"], true);
     assert_eq!(provider["models"][0]["id"], "MiniMax-M2.7");
-    assert!(provider["apiKey"].is_null());
+    assert!(provider["apiKey"].as_str().unwrap().contains("****"));
+    assert_ne!(provider["apiKey"], "secret-minimax-key");
+
+    let provider_asset = hermes
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let runtime: Vec<ProviderData> =
+        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
+    assert_eq!(
+        runtime
+            .iter()
+            .find(|provider| provider.raw_provider_id.as_deref() == Some("minimax-cn"))
+            .and_then(|provider| provider.api_key.as_deref()),
+        Some("secret-minimax-key")
+    );
 }
 
 #[test]
@@ -2137,11 +2260,49 @@ fn hermes_provider_can_be_discovered_from_auth_without_config_yaml() {
         .unwrap();
     let providers = asset_data(hermes, AssetType::Provider);
     let items = providers[0].data.as_array().unwrap();
-    assert!(items.is_empty());
+    let deepseek = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "deepseek")
+        .unwrap();
+    let opencode_go = items
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "opencode-go")
+        .unwrap();
+    assert_eq!(deepseek["baseUrl"], "https://api.deepseek.com");
+    assert_eq!(deepseek["enabled"], true);
+    assert!(deepseek["apiKey"].as_str().unwrap().contains("****"));
+    assert_eq!(opencode_go["baseUrl"], "https://opencode.ai/zen/go/v1");
+    assert_eq!(opencode_go["enabled"], false);
 }
 
 #[test]
-fn codex_provider_without_base_url_is_not_enriched_from_catalog() {
+fn hermes_provider_merges_dotenv_without_config_yaml() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".hermes");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(home.join(".env"), "DEEPSEEK_API_KEY=secret-dotenv-key\n").unwrap();
+
+    let agents = discover_agents(dir.path());
+    let hermes = agents
+        .iter()
+        .find(|agent| agent.name() == "hermes")
+        .unwrap();
+    let providers = asset_data(hermes, AssetType::Provider);
+    let provider = providers[0]
+        .data
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|provider| provider["rawProviderId"] == "deepseek")
+        .unwrap();
+
+    assert_eq!(provider["baseUrl"], "https://api.deepseek.com");
+    assert!(provider["apiKey"].as_str().unwrap().contains("****"));
+    assert_ne!(provider["apiKey"], "secret-dotenv-key");
+}
+
+#[test]
+fn codex_provider_without_base_url_keeps_config_identity_without_catalog_defaults() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".codex");
     fs::create_dir_all(&home).unwrap();
@@ -2159,7 +2320,11 @@ name = "DeepSeek"
     let agents = discover_agents(dir.path());
     let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
     let providers = asset_data(codex, AssetType::Provider);
-    assert!(providers[0].data.as_array().unwrap().is_empty());
+    let provider = &providers[0].data[0];
+    assert_eq!(provider["rawProviderId"], "deepseek");
+    assert!(provider["baseUrl"].is_null());
+    assert_eq!(provider["protocol"], "responses");
+    assert_eq!(provider["enabled"], true);
 }
 
 #[test]
@@ -2354,7 +2519,7 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     let claude_cli_home = dir.path().join(".claude");
     fs::create_dir_all(&claude_cli_home).unwrap();
     fs::write(
-        claude_cli_home.join(".claude.json"),
+        dir.path().join(".claude.json"),
         r#"{"mcpServers":{"global":{"command":"node"}},"projects":{"/work":{"mcpServers":{"project":{"url":"https://mcp.example.com/sse"}}}}}"#,
     )
     .unwrap();
@@ -2491,6 +2656,16 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     );
     assert_eq!(cli_provider[0].data[0]["enabled"], true);
     assert!(cli_provider[0].data[0]["protocol"].is_null());
+    assert_ne!(cli_provider[0].data[0]["apiKey"], "sk-cli");
+    let cli_provider_asset = claude_cli
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let cli_runtime: Vec<ProviderData> =
+        serde_json::from_value(cli_provider_asset.runtime_data().unwrap()).unwrap();
+    assert_eq!(cli_runtime[0].api_key.as_deref(), Some("sk-cli"));
     let cli_cron = asset_data(claude_cli, AssetType::Cron);
     assert_eq!(cli_cron[0].data[0]["schedule"], "0 9 * * *");
 
@@ -2505,6 +2680,16 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     );
     assert_eq!(app_provider[0].data[0]["models"][0]["name"], "Opus");
     assert_eq!(app_provider[0].data[0]["enabled"], true);
+    assert_ne!(app_provider[0].data[0]["apiKey"], "sk-app");
+    let app_provider_asset = claude_app
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let app_runtime: Vec<ProviderData> =
+        serde_json::from_value(app_provider_asset.runtime_data().unwrap()).unwrap();
+    assert_eq!(app_runtime[0].api_key.as_deref(), Some("sk-app"));
     let app_cron = asset_data(claude_app, AssetType::Cron);
     assert_eq!(app_cron[0].data[0]["name"], "scheduled skill");
     assert_eq!(app_cron[0].data[0]["prompt"], "Run from Claude App");
@@ -2518,7 +2703,7 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
     assert_eq!(hermes_meta[0].data["version"], "7");
     let hermes_provider = asset_data(hermes, AssetType::Provider);
     assert_eq!(hermes_provider[0].data[0]["models"][0]["id"], "hermes-4");
-    assert_eq!(hermes_provider[0].data[0]["apiKey"], "sk****12");
+    assert_eq!(hermes_provider[0].data[0]["apiKey"], "****");
     assert_eq!(hermes_provider[0].data[0]["enabled"], true);
     let hermes_cron = asset_data(hermes, AssetType::Cron);
     assert_eq!(hermes_cron[0].data[0]["type"], "every");
@@ -2530,7 +2715,7 @@ fn migrated_builtin_agents_discover_and_parse_representative_assets() {
         .unwrap();
     let openclaw_provider = asset_data(openclaw, AssetType::Provider);
     assert_eq!(openclaw_provider[0].data[0]["models"][0]["id"], "oc-1");
-    assert_eq!(openclaw_provider[0].data[0]["apiKey"], "sk****12");
+    assert_eq!(openclaw_provider[0].data[0]["apiKey"], "****");
     assert_eq!(openclaw_provider[0].data[0]["enabled"], true);
     let openclaw_cron = asset_data(openclaw, AssetType::Cron);
     assert_eq!(openclaw_cron[0].data[0]["cwds"][0], "/workspace");

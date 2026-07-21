@@ -47,22 +47,29 @@ impl Asset<Option<MetaData>> for MetaAsset {
 
 pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real();
-    any_command_exists_with(&["trae-cli"], &probe)
+    any_command_exists_with(&["trae"], &probe)
         || any_existing_file_with(install_paths(agent_home), &probe)
         || any_existing_dir_with(app_paths(agent_home), &probe)
+        || probe.product_installed(&["Trae"], &["SPRING (SG)", "ByteDance"])
 }
 
 fn install_paths(agent_home: &Path) -> Vec<PathBuf> {
     let mut paths = binary_paths(
         hidden_home_parent(agent_home).join(".local").join("bin"),
-        "trae-cli",
+        "trae",
     );
     if let Some(local_app_data) = env_path("LOCALAPPDATA") {
         paths.extend(binary_paths(
             local_app_data.join("Programs").join("Trae"),
-            "trae-cli",
+            "Trae",
         ));
     }
+    #[cfg(unix)]
+    paths.extend([
+        PathBuf::from("/usr/bin/trae"),
+        PathBuf::from("/usr/local/bin/trae"),
+        PathBuf::from("/usr/share/trae/trae"),
+    ]);
     paths
 }
 
@@ -72,5 +79,24 @@ fn app_paths(agent_home: &Path) -> Vec<PathBuf> {
             .join("Applications")
             .join("Trae.app"),
         PathBuf::from("/Applications/Trae.app"),
+        PathBuf::from("/usr/share/trae"),
+        PathBuf::from("/opt/Trae"),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trae_cli_alone_does_not_count_as_the_desktop_product() {
+        let dir = tempfile::tempdir().unwrap();
+        let probe = InstallStatusProbe::test(|binary| binary == "trae-cli", |_| false, |_| false);
+
+        assert!(
+            !(any_command_exists_with(&["trae"], &probe)
+                || any_existing_file_with(install_paths(dir.path()), &probe)
+                || any_existing_dir_with(app_paths(dir.path()), &probe))
+        );
+    }
 }

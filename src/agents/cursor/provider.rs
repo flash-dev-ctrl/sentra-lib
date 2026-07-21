@@ -23,11 +23,18 @@ impl_erased_asset!(ProviderAsset, AssetType::Provider, Vec<ProviderData>);
 
 impl Asset<Vec<ProviderData>> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        provider_data(self.core.agent_home())
+        provider_data(self.core.agent_home(), true)
+    }
+
+    fn get_runtime_data(&self) -> SentraResult<Vec<ProviderData>> {
+        provider_data(self.core.agent_home(), false)
     }
 }
 
-fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>> {
+fn provider_data(
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
     let mut results = Vec::new();
     for path in [
         agent_home.join("config.json"),
@@ -36,12 +43,12 @@ fn provider_data(agent_home: &std::path::Path) -> SentraResult<Vec<ProviderData>
         let Some(config) = read_json_file(path)? else {
             continue;
         };
-        results.extend(providers_from_value(&config));
+        results.extend(providers_from_value(&config, mask_secrets));
     }
     Ok(results)
 }
 
-fn providers_from_value(config: &serde_json::Value) -> Vec<ProviderData> {
+fn providers_from_value(config: &serde_json::Value, mask_secrets: bool) -> Vec<ProviderData> {
     let Some(raw) = config
         .get("providers")
         .or_else(|| config.get("modelProviders"))
@@ -65,10 +72,16 @@ fn providers_from_value(config: &serde_json::Value) -> Vec<ProviderData> {
             .collect(),
         _ => Vec::new(),
     };
-    entries.into_iter().map(provider_from_entry).collect()
+    entries
+        .into_iter()
+        .map(|entry| provider_from_entry(entry, mask_secrets))
+        .collect()
 }
 
-fn provider_from_entry((name, raw): (String, &serde_json::Value)) -> ProviderData {
+fn provider_from_entry(
+    (name, raw): (String, &serde_json::Value),
+    mask_secrets: bool,
+) -> ProviderData {
     let obj = raw.as_object();
     ProviderData {
         name: string_field(obj, &["name"]).unwrap_or(name),
@@ -77,7 +90,7 @@ fn provider_from_entry((name, raw): (String, &serde_json::Value)) -> ProviderDat
             obj,
             &["apiKey", "api_key", "key", "token", "password", "secret"],
         )
-        .and_then(|value| mask_secret(Some(&value))),
+        .and_then(|value| maybe_mask_secret(value, mask_secrets)),
         enabled: obj
             .and_then(|raw| raw.get("enabled"))
             .and_then(|value| value.as_bool())
@@ -85,6 +98,14 @@ fn provider_from_entry((name, raw): (String, &serde_json::Value)) -> ProviderDat
         models: models(obj.and_then(|raw| raw.get("models"))),
         protocol: None,
         ..ProviderData::default()
+    }
+}
+
+fn maybe_mask_secret(value: String, mask_secrets: bool) -> Option<String> {
+    if mask_secrets {
+        mask_secret(Some(&value))
+    } else {
+        Some(value)
     }
 }
 
@@ -119,4 +140,21 @@ fn string_field(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::providers_from_value;
+
+    #[test]
+    fn runtime_provider_data_keeps_api_key() {
+        let config = serde_json::json!({
+            "providers": {"openai": {"apiKey": "sk-cursor-secret"}}
+        });
+        let display = providers_from_value(&config, true);
+        let runtime = providers_from_value(&config, false);
+
+        assert_ne!(display[0].api_key, runtime[0].api_key);
+        assert_eq!(runtime[0].api_key.as_deref(), Some("sk-cursor-secret"));
+    }
 }

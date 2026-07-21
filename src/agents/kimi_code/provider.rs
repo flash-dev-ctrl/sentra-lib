@@ -283,6 +283,8 @@ fn provider_data(
         results.push(ProviderData {
             name: string_field(raw, &["name", "display_name", "displayName"])
                 .unwrap_or_else(|| provider_id.clone()),
+            provider_id: Some(provider_id.clone()),
+            raw_provider_id: Some(provider_id.clone()),
             base_url: string_field(raw, &["base_url", "baseURL", "baseUrl", "url"]),
             api_key: string_field(raw, &["api_key", "apiKey", "key", "token"])
                 .and_then(|value| maybe_mask_secret(value, mask_secrets)),

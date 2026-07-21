@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, ProcessData};
-use crate::utils::mask_secret;
+use crate::utils::{sanitize_command_args, sanitize_env_value};
 
 pub(crate) type ProcessMatcher = fn(&ProcessInfo<'_>) -> bool;
 
@@ -77,7 +77,7 @@ fn process_record(process: &sysinfo::Process, matcher: ProcessMatcher) -> Option
     Some(ProcessData {
         pid: process.pid().as_u32(),
         name,
-        cmdline,
+        cmdline: sanitize_command_args(&cmdline),
         started_at: process.start_time(),
         run_time_seconds: process.run_time(),
         path,
@@ -141,6 +141,24 @@ fn value_has_ide_extension(value: &str, extension_id: &str) -> bool {
     })
 }
 
+pub(crate) fn cmdline_has_path_components(process: &ProcessInfo<'_>, components: &[&str]) -> bool {
+    !components.is_empty()
+        && process.cmdline.iter().any(|arg| {
+            let path_components = arg
+                .trim_matches(['"', '\''])
+                .split(['/', '\\'])
+                .map(normalized_binary_name)
+                .collect::<Vec<_>>();
+            let expected = components
+                .iter()
+                .map(|component| normalized_binary_name(component))
+                .collect::<Vec<_>>();
+            path_components
+                .windows(expected.len())
+                .any(|window| window == expected.as_slice())
+        })
+}
+
 fn command_basename(command: &str) -> &str {
     command.rsplit(['/', '\\']).next().unwrap_or(command)
 }
@@ -162,32 +180,10 @@ fn sanitized_env(entries: &[OsString]) -> BTreeMap<String, String> {
         if key.is_empty() {
             continue;
         }
-        let value = if is_sensitive_env_key(key) {
-            mask_secret(Some(value)).unwrap_or_default()
-        } else {
-            value.to_string()
-        };
+        let value = sanitize_env_value(key, value);
         env.insert(key.to_string(), value);
     }
     env
-}
-
-fn is_sensitive_env_key(key: &str) -> bool {
-    let key = key.to_ascii_lowercase();
-    [
-        "key",
-        "token",
-        "secret",
-        "password",
-        "credential",
-        "auth",
-        "bearer",
-        "session",
-        "cookie",
-        "private",
-    ]
-    .iter()
-    .any(|marker| key.contains(marker))
 }
 
 fn os_to_string(value: &OsStr) -> String {
@@ -271,6 +267,29 @@ mod tests {
     }
 
     #[test]
+    fn matches_all_cmdline_path_components_exactly() {
+        let cmdline = vec![
+            "node.exe".to_string(),
+            r#"C:\Users\me\node_modules\@scope\agent\cli.js"#.to_string(),
+        ];
+        let process = ProcessInfo {
+            name: "node.exe",
+            cmdline: &cmdline,
+            path: None,
+        };
+
+        assert!(cmdline_has_path_components(&process, &["@scope", "agent"]));
+        assert!(!cmdline_has_path_components(
+            &process,
+            &["@scope", "agent-helper"]
+        ));
+        assert!(!cmdline_has_path_components(
+            &process,
+            &["node_modules", "agent"]
+        ));
+    }
+
+    #[test]
     fn sanitizes_sensitive_environment_values() {
         let env = sanitized_env(&[
             OsString::from("OPENAI_API_KEY=sk-1234567890"),
@@ -279,8 +298,7 @@ mod tests {
 
         assert_eq!(env.get("PATH").map(String::as_str), Some("/usr/bin"));
         let api_key = env.get("OPENAI_API_KEY").unwrap();
-        assert_ne!(api_key, "sk-1234567890");
-        assert!(api_key.contains("****"));
+        assert_eq!(api_key, "****");
     }
 
     fn assert_matches_binary_names(

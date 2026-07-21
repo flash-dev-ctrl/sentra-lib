@@ -284,6 +284,8 @@ fn provider_data(
                 .to_string();
             results.push(ProviderData {
                 name,
+                provider_id: Some(provider_id.clone()),
+                raw_provider_id: Some(provider_id.clone()),
                 base_url: base_url(raw, options),
                 api_key: configured_api_key(raw, options, mask_secrets)
                     .or_else(|| auth_keys.get(provider_id).cloned()),

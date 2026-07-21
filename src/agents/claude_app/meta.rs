@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::SentraResult;
 use crate::agents::install_status::{
-    InstallStatusProbe, any_existing_dir_with, any_existing_file_with, binary_paths,
+    InstallStatusProbe, any_existing_dir_with, any_existing_file_with, binary_paths, env_path,
     hidden_home_parent,
 };
 use crate::agents::object::{AssetCore, impl_erased_asset};
@@ -60,30 +60,46 @@ pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
 
 fn is_agent_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
     any_existing_file_with(claude_app_install_paths(agent_home), probe)
-        || any_existing_dir_with(claude_app_bundle_paths(agent_home), probe)
+        || any_existing_dir_with(claude_app_dir_paths(agent_home), probe)
+        || probe.product_installed(&["Claude"], &["Anthropic"])
 }
 
 fn claude_app_install_paths(agent_home: &Path) -> Vec<PathBuf> {
     let user_home = claude_app_user_home(agent_home);
     let mut paths = binary_paths(agent_home, "Claude");
     paths.extend(binary_paths(agent_home.join("app"), "Claude"));
-    paths.extend(binary_paths(
-        user_home
-            .join("AppData")
-            .join("Local")
-            .join("Programs")
-            .join("Claude"),
-        "Claude",
-    ));
+    for local_app_data in local_app_data_roots(&user_home) {
+        paths.extend(binary_paths(
+            local_app_data.join("Programs").join("Claude"),
+            "Claude",
+        ));
+    }
     paths
 }
 
-fn claude_app_bundle_paths(agent_home: &Path) -> Vec<PathBuf> {
+fn claude_app_dir_paths(agent_home: &Path) -> Vec<PathBuf> {
     let user_home = claude_app_user_home(agent_home);
-    vec![
+    let mut paths = vec![
         user_home.join("Applications").join("Claude.app"),
         PathBuf::from("/Applications/Claude.app"),
-    ]
+    ];
+    paths.extend(
+        local_app_data_roots(&user_home)
+            .into_iter()
+            .map(|root| root.join("Packages").join("Claude_pzs8sxrjxfjjc")),
+    );
+    paths
+}
+
+fn local_app_data_roots(user_home: &Path) -> Vec<PathBuf> {
+    let default = user_home.join("AppData").join("Local");
+    let mut roots = vec![default.clone()];
+    if let Some(root) = env_path("LOCALAPPDATA")
+        && root != default
+    {
+        roots.push(root);
+    }
+    roots
 }
 
 fn claude_app_user_home(agent_home: &Path) -> PathBuf {
@@ -155,6 +171,19 @@ mod tests {
         assert!(is_agent_installed_with(&app_home, &probe));
     }
 
+    #[test]
+    fn install_probe_accepts_store_package_family() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_home = dir.path().join("AppData").join("Local").join("Claude");
+        let probe = InstallStatusProbe::test(
+            command_never_exists,
+            path_never_exists,
+            only_claude_package_exists,
+        );
+
+        assert!(is_agent_installed_with(&app_home, &probe));
+    }
+
     fn command_never_exists(_: &str) -> bool {
         false
     }
@@ -165,5 +194,9 @@ mod tests {
 
     fn path_is_file(path: &Path) -> bool {
         path.is_file()
+    }
+
+    fn only_claude_package_exists(path: &Path) -> bool {
+        path.ends_with("Claude_pzs8sxrjxfjjc")
     }
 }
