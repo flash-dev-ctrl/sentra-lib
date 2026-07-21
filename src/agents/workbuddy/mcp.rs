@@ -25,27 +25,30 @@ impl_erased_asset!(McpAsset, AssetType::Mcp, Vec<McpData>);
 
 impl Asset<Vec<McpData>> for McpAsset {
     fn get_data(&self) -> SentraResult<Vec<McpData>> {
-        let home = self.core.agent_home();
-        let mut results = read_servers(home.join(".mcp.json"), None)?;
-        let mut connector_configs = std::fs::read_dir(home.join("connectors"))
-            .into_iter()
-            .flatten()
-            .filter_map(Result::ok)
-            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
-            .map(|entry| {
-                (
-                    entry.file_name().to_string_lossy().to_string(),
-                    entry.path().join("mcp.json"),
-                )
-            })
-            .filter(|(_, path)| path.is_file())
-            .collect::<Vec<_>>();
-        connector_configs.sort_by(|left, right| left.0.cmp(&right.0));
-        for (profile, path) in connector_configs {
-            results.extend(read_servers(path, Some(profile))?);
-        }
-        Ok(results)
+        mcp_data(self.core.agent_home())
     }
+}
+
+fn mcp_data(agent_home: &std::path::Path) -> SentraResult<Vec<McpData>> {
+    let mut results = read_servers(agent_home.join(".mcp.json"), None)?;
+    let mut connector_configs = std::fs::read_dir(agent_home.join("connectors"))
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .map(|entry| {
+            (
+                entry.file_name().to_string_lossy().to_string(),
+                entry.path().join("mcp.json"),
+            )
+        })
+        .filter(|(_, path)| path.is_file())
+        .collect::<Vec<_>>();
+    connector_configs.sort_by(|left, right| left.0.cmp(&right.0));
+    for (profile, path) in connector_configs {
+        results.extend(read_servers(path, Some(profile))?);
+    }
+    Ok(results)
 }
 
 fn read_servers(path: PathBuf, project: Option<String>) -> SentraResult<Vec<McpData>> {
@@ -63,7 +66,8 @@ fn read_servers(path: PathBuf, project: Option<String>) -> SentraResult<Vec<McpD
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::agents::workbuddy::mcp::McpAsset;
+    use crate::interfaces::{Asset, McpData};
 
     #[test]
     fn reads_root_and_connector_profile_servers() {

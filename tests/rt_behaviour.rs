@@ -296,6 +296,75 @@ fn module_discovery_returns_agents_that_own_asset_factories() {
 }
 
 #[test]
+fn workbuddy_exposes_provider_and_mcp_assets_from_dot_workbuddy_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".workbuddy");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(
+        home.join("models.json"),
+        r#"[
+  {
+    "id": "MiniMax-M2.5",
+    "name": "MiniMax-M2.5",
+    "vendor": "MiniMax",
+    "url": "https://api.minimaxi.com/v1/chat/completions",
+    "apiKey": "asfasfasd"
+  },
+  {
+    "id": "auto",
+    "name": "TokenPlan企业轻享 / Auto",
+    "vendor": "Tencent Cloud Token Plan",
+    "url": "https://tokenhub.tencentmaas.com/plan/v3/chat/completions",
+    "apiKey": "asfasdf"
+  }
+]"#,
+    )
+    .unwrap();
+    fs::write(
+        home.join(".mcp.json"),
+        r#"{
+  "mcpServers": {
+    "connector-proxy": {
+      "type": "http",
+      "url": "http://127.0.0.1:54384/mcp",
+      "description": "Aggregated proxy"
+    }
+  }
+}"#,
+    )
+    .unwrap();
+
+    let workbuddy = discover_agents(dir.path())
+        .into_iter()
+        .find(|agent| agent.name() == "workbuddy")
+        .unwrap();
+
+    let providers = asset_data(&workbuddy, AssetType::Provider);
+    assert_eq!(providers[0].data[0]["name"], "MiniMax");
+    assert_eq!(
+        providers[0].data[0]["baseUrl"],
+        "https://api.minimaxi.com/v1/chat/completions"
+    );
+    assert_ne!(providers[0].data[0]["apiKey"], "asfasfasd");
+    assert_eq!(providers[0].data[0]["models"][0]["id"], "MiniMax-M2.5");
+
+    let provider_asset = workbuddy
+        .get_assets(AssetType::Provider)
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    let provider_runtime: Vec<ProviderData> =
+        serde_json::from_value(provider_asset.runtime_data().unwrap()).unwrap();
+    assert_eq!(provider_runtime[0].api_key.as_deref(), Some("asfasfasd"));
+
+    let mcps = asset_data(&workbuddy, AssetType::Mcp);
+    assert_eq!(mcps[0].data[0]["name"], "connector-proxy");
+    assert_eq!(mcps[0].data[0]["type"], "http");
+    assert_eq!(mcps[0].data[0]["url"], "http://127.0.0.1:54384/mcp");
+}
+
+#[test]
 fn discovered_agents_identify_and_collect_supported_assets() {
     let dir = tempfile::tempdir().unwrap();
 

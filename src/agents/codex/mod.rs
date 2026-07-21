@@ -53,12 +53,6 @@ pub(crate) fn asset_for_type(
     agent_home: &std::path::Path,
     asset_type: AssetType,
 ) -> Vec<Box<dyn ErasedAsset>> {
-    if (agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name
-        || agent_name == crate::agents::entries::CODEX_IDE_AGENT_ENTRY.name)
-        && !matches!(asset_type, AssetType::Meta | AssetType::Process)
-    {
-        return Vec::new();
-    }
     match asset_type {
         AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
         AssetType::Skill => vec![Box::new(skill::SkillAsset::new(agent_name, agent_home))],
