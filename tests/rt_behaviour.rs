@@ -269,8 +269,15 @@ fn discovery_returns_ide_extension_entries_from_vscode_family_indexes() {
             true
         );
         assert_eq!(agent.get_assets(AssetType::Process).unwrap().len(), 1);
-        assert!(agent.get_assets(AssetType::Skill).unwrap().is_empty());
     }
+
+    let claude_ide = agents
+        .iter()
+        .find(|agent| agent.name() == "claude-code-ide")
+        .unwrap();
+    assert_eq!(claude_ide.get_assets(AssetType::Skill).unwrap().len(), 1);
+    assert_eq!(claude_ide.get_assets(AssetType::Mcp).unwrap().len(), 1);
+    assert_eq!(claude_ide.get_assets(AssetType::Provider).unwrap().len(), 1);
 }
 
 #[test]
@@ -2509,6 +2516,45 @@ experimental_bearer_token = "sk-test"
             .as_str()
             .unwrap()
             .contains(r#"{"results":[]}"#)
+    );
+}
+
+#[test]
+fn claude_app_exposes_local_provider_without_gateway_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let claude_app_home = dir.path().join("AppData").join("Local").join("Claude");
+    fs::create_dir_all(claude_app_home.join("configLibrary")).unwrap();
+    fs::write(
+        claude_app_home.join("configLibrary").join("default.json"),
+        "{}",
+    )
+    .unwrap();
+    let claude_app_bin = dir
+        .path()
+        .join("AppData")
+        .join("Local")
+        .join("Programs")
+        .join("Claude");
+    fs::create_dir_all(&claude_app_bin).unwrap();
+    fs::write(claude_app_bin.join(test_binary_name("Claude")), "").unwrap();
+
+    let agents = discover_agents(dir.path());
+    let claude_app = agents
+        .iter()
+        .find(|agent| agent.name() == "claude-app")
+        .unwrap();
+    let providers = asset_data(claude_app, AssetType::Provider);
+
+    assert_eq!(providers.len(), 1);
+    assert_eq!(
+        providers[0].data[0]["baseUrl"],
+        "http://127.0.0.1:15721/claude-desktop"
+    );
+    assert_eq!(providers[0].data[0]["name"], "Claude App");
+    assert!(providers[0].data[0]["apiKey"].is_null());
+    assert_eq!(
+        providers[0].data[0]["models"],
+        serde_json::Value::Array(Vec::new())
     );
 }
 
