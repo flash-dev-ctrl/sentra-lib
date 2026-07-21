@@ -108,7 +108,7 @@ fn parse_opencode_mcp_servers(raw: &Value) -> Vec<McpData> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::agents::opencode::mcp::parse_opencode_mcp_servers;
 
     #[test]
     fn redacts_custom_mcp_secrets() {

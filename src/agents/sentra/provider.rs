@@ -223,7 +223,9 @@ fn host_from_url(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::agents::sentra::provider::ProviderAsset;
+    use crate::config::SENTRA_CONFIG_FILE_NAME;
+    use crate::interfaces::Asset;
 
     #[test]
     fn display_masks_api_key_while_runtime_keeps_it() {

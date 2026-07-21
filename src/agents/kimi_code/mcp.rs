@@ -161,7 +161,7 @@ fn dedup_mcp(items: Vec<McpData>) -> Vec<McpData> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::agents::kimi_code::mcp::parse_kimi_mcp_servers;
 
     #[test]
     fn redacts_custom_mcp_secrets() {
