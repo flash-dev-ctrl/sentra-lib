@@ -336,7 +336,6 @@ pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
     general("codemaker", &[&[".codemaker"]]),
     general("codestudio", &[&[".codestudio"]]),
     general("command-code", &[&[".commandcode"]]),
-    general("continue", &[&[".continue"]]),
     general("cortex", &[&[".snowflake", "cortex"]]),
     general("crush", &[&[".config", "crush"]]),
     general("deepagents", &[&[".deepagents", "agent"]]),
