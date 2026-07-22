@@ -33,7 +33,7 @@ impl InstallableAgent {
             Self::Antigravity => "antigravity",
             Self::CodeBuddy => "codebuddy",
             Self::Coder => "coder",
-            Self::Codex => "codex",
+            Self::Codex => "codex-cli",
             Self::ClaudeCli => "claude-cli",
             Self::Cursor => "cursor",
             Self::KimiCode => "kimi-code",
@@ -57,7 +57,7 @@ impl InstallableAgent {
             Self::Antigravity => &ANTIGRAVITY_AGENT_ENTRY,
             Self::CodeBuddy => &CODEBUDDY_AGENT_ENTRY,
             Self::Coder => &CODER_AGENT_ENTRY,
-            Self::Codex => &CODEX_AGENT_ENTRY,
+            Self::Codex => &CODEX_CLI_AGENT_ENTRY,
             Self::ClaudeCli => &CLAUDE_CLI_AGENT_ENTRY,
             Self::Cursor => &CURSOR_AGENT_ENTRY,
             Self::KimiCode => &KIMI_CODE_AGENT_ENTRY,
@@ -1083,7 +1083,7 @@ mod tests {
         assert_eq!(progress[1].stage, AgentInstallProgressStage::Trying);
         assert_eq!(progress[2].current, 2);
         assert_eq!(progress[2].total, 2);
-        assert_eq!(progress[2].method, "codex");
+        assert_eq!(progress[2].method, "codex-cli");
         assert_eq!(progress[2].stage, AgentInstallProgressStage::Verifying);
     }
 

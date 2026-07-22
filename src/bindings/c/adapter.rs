@@ -286,6 +286,12 @@ fn clean_canonical_path(path: PathBuf) -> PathBuf {
 }
 
 fn agent_matches(filter: &str, agent_name: &str) -> bool {
+    let filter = match filter {
+        "codex" => "codex-cli",
+        "codex-ide" => "codex-cli-ide",
+        "claude-ide" | "claude-code-ide" => "claude-cli-ide",
+        filter => filter,
+    };
     filter == agent_name || (filter == "claude" && agent_name.starts_with("claude-"))
 }
 
@@ -347,7 +353,7 @@ mod tests {
             .filter(|a| a.asset_type == AssetType::Skill)
             .collect();
         assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].agent, "codex");
+        assert_eq!(skills[0].agent, "codex-cli");
         assert_eq!(skills[0].agent_title, "Codex CLI");
         assert_eq!(skills[0].asset_type, AssetType::Skill);
         assert_eq!(skills[0].data[0]["name"], "demo");
@@ -371,7 +377,7 @@ mod tests {
             .filter(|a| a.asset_type == AssetType::Skill)
             .collect();
         assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].agent, "codex");
+        assert_eq!(skills[0].agent, "codex-cli");
         assert_eq!(skills[0].data[0]["name"], "demo");
     }
 
@@ -455,7 +461,7 @@ mod tests {
         let results = scan_skills(&request).unwrap();
         let codex_results: Vec<_> = results
             .iter()
-            .filter(|r| r.agent_name.as_deref() == Some("codex"))
+            .filter(|r| r.agent_name.as_deref() == Some("codex-cli"))
             .collect();
         assert_eq!(codex_results.len(), 1);
         assert_eq!(codex_results[0].data.name, "codex-skill");
@@ -677,6 +683,13 @@ status = "ACTIVE"
     }
 
     // ── scan_skills: agent filter edge cases ───────────────────────────
+
+    #[test]
+    fn legacy_ide_aliases_match_canonical_agent_names() {
+        assert!(agent_matches("codex-ide", "codex-cli-ide"));
+        assert!(agent_matches("claude-ide", "claude-cli-ide"));
+        assert!(agent_matches("claude-code-ide", "claude-cli-ide"));
+    }
 
     #[test]
     fn scan_agent_filter_no_match_returns_empty() {

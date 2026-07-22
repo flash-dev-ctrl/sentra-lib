@@ -42,7 +42,7 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
         id: Some(agent_name.to_string()),
         name: "Kimi Code".to_string(),
         description: Some(
-            "Kimi Code CLI user configuration, providers, MCP servers, skills, plugins, and local memory."
+            "Kimi Code CLI user configuration, providers, MCP servers, skills, and plugins."
                 .to_string(),
         ),
         version: None,

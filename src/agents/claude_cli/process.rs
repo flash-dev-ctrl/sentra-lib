@@ -13,7 +13,7 @@ pub(crate) fn ide_process_data() -> Vec<ProcessData> {
 }
 
 pub(super) fn matcher(agent_name: &str) -> crate::agents::process::ProcessMatcher {
-    if agent_name == crate::agents::entries::CLAUDE_CODE_IDE_AGENT_ENTRY.name {
+    if agent_name == crate::agents::entries::CLAUDE_CLI_IDE_AGENT_ENTRY.name {
         matches_ide_process
     } else {
         matches_cli_process
@@ -64,10 +64,10 @@ mod tests {
             .join("claude.exe");
         let cli_path = Path::new("usr").join("local").join("bin").join("claude");
 
-        assert_process_match("claude-code-ide", true, Some(&ide_path));
+        assert_process_match("claude-cli-ide", true, Some(&ide_path));
         assert_process_match("claude-cli", false, Some(&ide_path));
         assert_process_match("claude-cli", true, Some(&cli_path));
-        assert_process_match("claude-code-ide", false, Some(&cli_path));
+        assert_process_match("claude-cli-ide", false, Some(&cli_path));
     }
 
     #[test]

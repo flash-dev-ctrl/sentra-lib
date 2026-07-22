@@ -51,7 +51,6 @@ fn rust_agents_mirror_typescript_agent_object_files() {
             "install.rs",
             "skill.rs",
             "mcp.rs",
-            "memory.rs",
             "provider.rs",
             "plugin.rs",
             "process.rs",
@@ -467,11 +466,11 @@ fn agent_entries_are_defined_in_shared_entries_file() {
 
     for symbol in [
         "CLAUDE_APP_AGENT_ENTRY",
-        "CLAUDE_CODE_IDE_AGENT_ENTRY",
+        "CLAUDE_CLI_IDE_AGENT_ENTRY",
         "CLAUDE_CLI_AGENT_ENTRY",
         "CODEX_APP_AGENT_ENTRY",
-        "CODEX_AGENT_ENTRY",
-        "CODEX_IDE_AGENT_ENTRY",
+        "CODEX_CLI_AGENT_ENTRY",
+        "CODEX_CLI_IDE_AGENT_ENTRY",
         "ANTIGRAVITY_AGENT_ENTRY",
         "CODEBUDDY_AGENT_ENTRY",
         "CODER_AGENT_ENTRY",
@@ -525,10 +524,10 @@ fn agent_modules_reference_entry_registry_directly() {
 
     for (module, symbol) in [
         ("claude_app", "CLAUDE_APP_AGENT_ENTRY"),
-        ("claude_cli", "CLAUDE_CODE_IDE_AGENT_ENTRY"),
+        ("claude_cli", "CLAUDE_CLI_IDE_AGENT_ENTRY"),
         ("claude_cli", "CLAUDE_CLI_AGENT_ENTRY"),
-        ("codex", "CODEX_AGENT_ENTRY"),
-        ("codex", "CODEX_IDE_AGENT_ENTRY"),
+        ("codex", "CODEX_CLI_AGENT_ENTRY"),
+        ("codex", "CODEX_CLI_IDE_AGENT_ENTRY"),
         ("antigravity", "ANTIGRAVITY_AGENT_ENTRY"),
         ("codebuddy", "CODEBUDDY_AGENT_ENTRY"),
         ("coder", "CODER_AGENT_ENTRY"),
@@ -639,13 +638,8 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
     }
     assert_asset_logic_is_colocated(
         &root.join("src").join("agents").join("kimi_code"),
-        &[
-            "fn meta_data",
-            "fn mcp_data",
-            "fn memory_data",
-            "fn provider_data",
-        ],
-        &["meta.rs", "mcp.rs", "memory.rs", "provider.rs"],
+        &["fn meta_data", "fn mcp_data", "fn provider_data"],
+        &["meta.rs", "mcp.rs", "provider.rs"],
     );
     assert_asset_logic_is_colocated(
         &root.join("src").join("agents").join("opencode"),

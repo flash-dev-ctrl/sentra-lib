@@ -19,7 +19,7 @@ const CODEX_DESKTOP_PATH_COMPONENTS: &[&str] = &[
 ];
 
 pub(super) fn matcher(agent_name: &str) -> crate::agents::process::ProcessMatcher {
-    if agent_name == crate::agents::entries::CODEX_IDE_AGENT_ENTRY.name {
+    if agent_name == crate::agents::entries::CODEX_CLI_IDE_AGENT_ENTRY.name {
         matches_ide_process
     } else if agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name {
         matches_app_process
@@ -89,28 +89,28 @@ mod tests {
 
     #[test]
     fn matches_codex_process_by_binary_name() {
-        assert_process_match("codex", true, "codex", &[], None);
-        assert_process_match("codex", true, "codex.exe", &[], None);
-        assert_process_match("codex", true, "Codex.exe", &[], None);
+        assert_process_match("codex-cli", true, "codex", &[], None);
+        assert_process_match("codex-cli", true, "codex.exe", &[], None);
+        assert_process_match("codex-cli", true, "Codex.exe", &[], None);
     }
 
     #[test]
     fn matches_codex_process_by_first_command() {
         assert_process_match(
-            "codex",
+            "codex-cli",
             true,
             "node",
             &[r"C:\Users\me\AppData\Local\Programs\OpenAI\Codex\codex.exe"],
             None,
         );
-        assert_process_match("codex", true, "node", &["/usr/local/bin/codex"], None);
+        assert_process_match("codex-cli", true, "node", &["/usr/local/bin/codex"], None);
     }
 
     #[test]
     fn does_not_match_codex_as_substring() {
-        assert_process_match("codex", false, "my-codex-helper", &[], None);
+        assert_process_match("codex-cli", false, "my-codex-helper", &[], None);
         assert_process_match(
-            "codex",
+            "codex-cli",
             false,
             "node",
             &["/usr/local/bin/my-codex-helper"],
@@ -131,7 +131,7 @@ mod tests {
         let temp_path = Path::new("temp").join("ChatGPT.exe");
 
         assert_process_match("codex-app", true, "ChatGPT.exe", &[], Some(&chatgpt_path));
-        assert_process_match("codex", false, "ChatGPT.exe", &[], Some(&chatgpt_path));
+        assert_process_match("codex-cli", false, "ChatGPT.exe", &[], Some(&chatgpt_path));
         assert_process_match("codex-app", false, "ChatGPT.exe", &[], Some(&temp_path));
     }
 
@@ -152,9 +152,9 @@ mod tests {
             .join("MacOS")
             .join("Codex");
 
-        assert_process_match("codex", true, "codex.exe", &[], Some(&cli_path));
+        assert_process_match("codex-cli", true, "codex.exe", &[], Some(&cli_path));
         assert_process_match("codex-app", false, "codex.exe", &[], Some(&cli_path));
-        assert_process_match("codex", false, "Codex", &[], Some(&app_path));
+        assert_process_match("codex-cli", false, "Codex", &[], Some(&app_path));
         assert_process_match("codex-app", true, "Codex", &[], Some(&app_path));
     }
 
@@ -169,8 +169,8 @@ mod tests {
             .join("windows-x86_64")
             .join("codex.exe");
 
-        assert_process_match("codex-ide", true, "codex.exe", &[], Some(&ide_path));
-        assert_process_match("codex", false, "codex.exe", &[], Some(&ide_path));
+        assert_process_match("codex-cli-ide", true, "codex.exe", &[], Some(&ide_path));
+        assert_process_match("codex-cli", false, "codex.exe", &[], Some(&ide_path));
         assert_process_match("codex-app", false, "codex.exe", &[], Some(&ide_path));
     }
 
@@ -184,9 +184,9 @@ mod tests {
         let sidecar = app.join("resources").join("codex.exe");
 
         assert_process_match("codex-app", true, "Codex", &[], Some(&main));
-        assert_process_match("codex", false, "Codex", &[], Some(&main));
+        assert_process_match("codex-cli", false, "Codex", &[], Some(&main));
         assert_process_match("codex-app", false, "codex", &[], Some(&sidecar));
-        assert_process_match("codex", true, "codex", &[], Some(&sidecar));
+        assert_process_match("codex-cli", true, "codex", &[], Some(&sidecar));
     }
 
     #[test]
@@ -194,7 +194,7 @@ mod tests {
         let path = Path::new("tools").join("app").join("codex.exe");
 
         assert_process_match("codex-app", false, "codex", &[], Some(&path));
-        assert_process_match("codex", true, "codex", &[], Some(&path));
+        assert_process_match("codex-cli", true, "codex", &[], Some(&path));
     }
 
     fn assert_process_match(

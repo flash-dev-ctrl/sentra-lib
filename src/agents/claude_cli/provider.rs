@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use crate::SentraResult;
+use crate::agents::install_status::hidden_home_parent;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{
     Asset, AssetMutationErrorCode, AssetMutationResult, AssetType, ProviderAccount, ProviderData,
@@ -8,6 +9,8 @@ use crate::interfaces::{
 };
 use crate::utils::protocol::WireProtocol;
 use crate::utils::{backup_file, mask_secret, read_json_file, write_json_file};
+
+const COMPLETED_ONBOARDING_KEY: &str = "hasCompletedOnboarding";
 
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
@@ -90,8 +93,11 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
                 settings["env"][key] = json!(model.id);
             }
         }
+        let (user_config_path, user_config) = optimized_user_config(self.core.agent_home())?;
         backup_file(&settings_path)?;
+        backup_file(&user_config_path)?;
         write_json_file(settings_path, &settings)?;
+        write_json_file(user_config_path, &user_config)?;
         Ok(AssetMutationResult::changed())
     }
 
@@ -157,6 +163,20 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
         write_json_file(settings_path, &settings)?;
         Ok(AssetMutationResult::changed())
     }
+}
+
+fn optimized_user_config(
+    agent_home: &std::path::Path,
+) -> SentraResult<(std::path::PathBuf, serde_json::Value)> {
+    let path = hidden_home_parent(agent_home).join(".claude.json");
+    let mut config = match read_json_file(&path)? {
+        Some(serde_json::Value::Object(config)) => config,
+        Some(config) => serde_json::from_value(config)?,
+        None => serde_json::Map::new(),
+    };
+    config.remove(COMPLETED_ONBOARDING_KEY);
+    config.insert(COMPLETED_ONBOARDING_KEY.to_string(), json!(true));
+    Ok((path, serde_json::Value::Object(config)))
 }
 
 fn provider_data(
@@ -436,4 +456,133 @@ fn host_from_url(value: &str) -> Option<String> {
         .next()
         .filter(|host| !host.is_empty())
         .map(str::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    use super::*;
+
+    #[test]
+    fn set_data_backs_up_and_optimizes_user_config_for_cli_and_ide() {
+        for agent_name in ["claude-cli", "claude-cli-ide"] {
+            let user_home = tempfile::tempdir().unwrap();
+            let agent_home = user_home.path().join(".claude");
+            fs::create_dir_all(&agent_home).unwrap();
+            fs::write(
+                agent_home.join("settings.json"),
+                r#"{"env":{"KEEP":"value"}}"#,
+            )
+            .unwrap();
+            let original_user_config =
+                r#"{"theme":"dark","hasCompletedOnboarding":false,"locale":"en-US"}"#;
+            fs::write(user_home.path().join(".claude.json"), original_user_config).unwrap();
+
+            let result = ProviderAsset::new(agent_name, &agent_home)
+                .set_data(gateway_provider())
+                .unwrap();
+
+            assert!(result.changed);
+            let user_config = read_json_file(user_home.path().join(".claude.json"))
+                .unwrap()
+                .expect("optimized user config");
+            assert_eq!(user_config["theme"], "dark");
+            assert_eq!(user_config["locale"], "en-US");
+            assert_eq!(user_config[COMPLETED_ONBOARDING_KEY], true);
+            assert_eq!(
+                user_config
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .next_back()
+                    .map(String::as_str),
+                Some(COMPLETED_ONBOARDING_KEY)
+            );
+            let settings = read_json_file(agent_home.join("settings.json"))
+                .unwrap()
+                .expect("updated model settings");
+            assert_eq!(settings["env"]["KEEP"], "value");
+            assert_eq!(settings["env"]["ANTHROPIC_MODEL"], "claude-test");
+
+            let backups = backup_paths(user_home.path(), ".claude.json.bak.");
+            assert_eq!(backups.len(), 1);
+            assert_eq!(
+                fs::read_to_string(&backups[0]).unwrap(),
+                original_user_config
+            );
+        }
+    }
+
+    #[test]
+    fn set_data_creates_optimized_user_config_when_missing() {
+        let user_home = tempfile::tempdir().unwrap();
+        let agent_home = user_home.path().join(".claude");
+        fs::create_dir_all(&agent_home).unwrap();
+
+        ProviderAsset::new("claude-cli", &agent_home)
+            .set_data(gateway_provider())
+            .unwrap();
+
+        let user_config = read_json_file(user_home.path().join(".claude.json"))
+            .unwrap()
+            .expect("created user config");
+        assert_eq!(user_config[COMPLETED_ONBOARDING_KEY], true);
+        assert!(backup_paths(user_home.path(), ".claude.json.bak.").is_empty());
+    }
+
+    #[test]
+    fn invalid_or_non_object_user_config_stops_before_model_settings_are_written() {
+        for original_user_config in ["{invalid", "[]"] {
+            let user_home = tempfile::tempdir().unwrap();
+            let agent_home = user_home.path().join(".claude");
+            fs::create_dir_all(&agent_home).unwrap();
+            let original_settings = r#"{"env":{"KEEP":"value"}}"#;
+            fs::write(agent_home.join("settings.json"), original_settings).unwrap();
+            fs::write(user_home.path().join(".claude.json"), original_user_config).unwrap();
+
+            let result =
+                ProviderAsset::new("claude-cli-ide", &agent_home).set_data(gateway_provider());
+
+            assert!(result.is_err());
+            assert_eq!(
+                fs::read_to_string(agent_home.join("settings.json")).unwrap(),
+                original_settings
+            );
+            assert!(backup_paths(&agent_home, "settings.json.bak.").is_empty());
+            assert!(backup_paths(user_home.path(), ".claude.json.bak.").is_empty());
+        }
+    }
+
+    fn gateway_provider() -> ProviderData {
+        ProviderData {
+            name: "Gateway".to_string(),
+            provider_type: ProviderType::Gateway,
+            base_url: Some("https://gateway.example.test".to_string()),
+            api_key: Some("sk-test".to_string()),
+            enabled: true,
+            models: vec![ProviderModel {
+                id: "claude-test".to_string(),
+                name: Some("Claude Test".to_string()),
+                enabled: true,
+            }],
+            ..ProviderData::default()
+        }
+    }
+
+    fn backup_paths(dir: &Path, prefix: &str) -> Vec<PathBuf> {
+        let mut paths = fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(prefix))
+            })
+            .collect::<Vec<_>>();
+        paths.sort();
+        paths
+    }
 }

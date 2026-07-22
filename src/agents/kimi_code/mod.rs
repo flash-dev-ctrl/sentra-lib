@@ -4,7 +4,6 @@ use crate::interfaces::{AssetType, ErasedAsset};
 
 mod install;
 mod mcp;
-mod memory;
 mod meta;
 mod plugin;
 mod process;
@@ -43,7 +42,7 @@ pub(crate) fn asset_for_type(
         AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
         AssetType::Skill => vec![Box::new(skill::SkillAsset::new(agent_name, agent_home))],
         AssetType::Mcp => vec![Box::new(mcp::McpAsset::new(agent_name, agent_home))],
-        AssetType::Memory => vec![Box::new(memory::MemoryAsset::new(agent_name, agent_home))],
+        AssetType::Memory => Vec::new(),
         AssetType::Cron => Vec::new(),
         AssetType::Provider => vec![Box::new(provider::ProviderAsset::new(
             agent_name, agent_home,

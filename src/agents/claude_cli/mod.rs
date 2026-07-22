@@ -24,7 +24,7 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
     );
     agents.extend(crate::agents::discovery::discover_installed_entry_agents(
         user_home,
-        &[&crate::agents::entries::CLAUDE_CODE_IDE_AGENT_ENTRY],
+        &[&crate::agents::entries::CLAUDE_CLI_IDE_AGENT_ENTRY],
     ));
     agents
 }
@@ -73,35 +73,35 @@ mod tests {
         let home = Path::new(".claude");
 
         assert_eq!(
-            asset_for_type("claude-code-ide", home, AssetType::Meta).len(),
+            asset_for_type("claude-cli-ide", home, AssetType::Meta).len(),
             1
         );
         assert_eq!(
-            asset_for_type("claude-code-ide", home, AssetType::Process).len(),
+            asset_for_type("claude-cli-ide", home, AssetType::Process).len(),
             1
         );
         assert_eq!(
-            asset_for_type("claude-code-ide", home, AssetType::Skill).len(),
+            asset_for_type("claude-cli-ide", home, AssetType::Skill).len(),
             1
         );
         assert_eq!(
-            asset_for_type("claude-code-ide", home, AssetType::Mcp).len(),
+            asset_for_type("claude-cli-ide", home, AssetType::Mcp).len(),
             1
         );
         assert_eq!(
-            asset_for_type("claude-code-ide", home, AssetType::Provider).len(),
+            asset_for_type("claude-cli-ide", home, AssetType::Provider).len(),
             1
         );
         assert_eq!(
-            asset_for_type("claude-code-ide", home, AssetType::Cron).len(),
+            asset_for_type("claude-cli-ide", home, AssetType::Cron).len(),
             1
         );
         assert_eq!(
-            asset_for_type("claude-code-ide", home, AssetType::Plugin).len(),
+            asset_for_type("claude-cli-ide", home, AssetType::Plugin).len(),
             1
         );
         assert_eq!(
-            asset_for_type("claude-code-ide", home, AssetType::Memory).len(),
+            asset_for_type("claude-cli-ide", home, AssetType::Memory).len(),
             1
         );
     }

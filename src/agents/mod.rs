@@ -40,7 +40,7 @@ fn installable_agent(
         "antigravity" => Ok(install::InstallableAgent::Antigravity),
         "codebuddy" => Ok(install::InstallableAgent::CodeBuddy),
         "coder" => Ok(install::InstallableAgent::Coder),
-        "codex" => Ok(install::InstallableAgent::Codex),
+        "codex" | "codex-cli" => Ok(install::InstallableAgent::Codex),
         "claude" | "claude-cli" => Ok(install::InstallableAgent::ClaudeCli),
         "cursor" => Ok(install::InstallableAgent::Cursor),
         "kimi-code" => Ok(install::InstallableAgent::KimiCode),
@@ -115,6 +115,16 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn codex_cli_and_legacy_alias_are_installable() {
+        for agent in ["codex-cli", "codex"] {
+            assert_eq!(
+                installable_agent(agent, "installable").unwrap(),
+                install::InstallableAgent::Codex
+            );
+        }
+    }
 
     #[test]
     fn kimi_code_is_installable() {

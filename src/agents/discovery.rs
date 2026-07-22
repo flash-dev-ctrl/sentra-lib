@@ -302,7 +302,7 @@ mod tests {
 
         let codex_homes = agents
             .iter()
-            .filter(|agent| agent.name() == "codex")
+            .filter(|agent| agent.name() == "codex-cli")
             .map(|agent| home_key(agent.home()))
             .collect::<Vec<_>>();
 
@@ -346,7 +346,7 @@ mod tests {
         is_installed: crate::agents::entries::AgentInstallDetector,
     ) -> AgentEntry {
         AgentEntry {
-            name: "codex",
+            name: "codex-cli",
             title: Some("Codex"),
             homes: &[&[".codex"]],
             asset_for_type: test_assets,

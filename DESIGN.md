@@ -9,7 +9,7 @@ RiskChecker
 当前只需要实现skill即可，但是要考虑扩展性,配置文件在 ~/.sentra/config.json
 逻辑时先采集资产然后调用RiskScann.scan
 
-sentra scan skill(cron, memory, xxx) --agent codex --agent claude
+sentra scan skill(cron, memory, xxx) --agent codex-cli --agent claude
 
 默认扫描所有agent
 
