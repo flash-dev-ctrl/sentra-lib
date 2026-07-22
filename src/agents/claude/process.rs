@@ -26,18 +26,12 @@ fn matches_cli_process(process: &ProcessInfo<'_>) -> bool {
             && cmdline_has_path_components(process, &["@anthropic-ai", "claude-code"]));
     is_cli
         && !process.path.is_some_and(is_claude_desktop_path)
-        && !process_has_ide_extension(
-            process,
-            crate::agents::claude_cli::CLAUDE_CODE_IDE_EXTENSION_ID,
-        )
+        && !process_has_ide_extension(process, crate::agents::claude::CLAUDE_CODE_IDE_EXTENSION_ID)
 }
 
 fn matches_ide_process(process: &ProcessInfo<'_>) -> bool {
     matches_binary_names(process, &["claude", "claude.exe"])
-        && process_has_ide_extension(
-            process,
-            crate::agents::claude_cli::CLAUDE_CODE_IDE_EXTENSION_ID,
-        )
+        && process_has_ide_extension(process, crate::agents::claude::CLAUDE_CODE_IDE_EXTENSION_ID)
 }
 
 fn is_claude_desktop_path(path: &std::path::Path) -> bool {

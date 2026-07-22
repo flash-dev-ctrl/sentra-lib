@@ -1908,7 +1908,7 @@ fn kimi_cli_discovers_default_home() {
 }
 
 #[test]
-fn kimi_code_provider_parses_config_and_masks_secrets() {
+fn kimi_cli_provider_parses_config_and_masks_secrets() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     fs::create_dir_all(home.join("credentials")).unwrap();
@@ -1973,7 +1973,7 @@ model = "kimi-k2-0711-preview"
 }
 
 #[test]
-fn kimi_code_provider_set_data_writes_config_toml() {
+fn kimi_cli_provider_set_data_writes_config_toml() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     fs::create_dir_all(&home).unwrap();
@@ -2036,7 +2036,7 @@ fn kimi_code_provider_set_data_writes_config_toml() {
 }
 
 #[test]
-fn kimi_code_provider_delete_removes_provider_config() {
+fn kimi_cli_provider_delete_removes_provider_config() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     fs::create_dir_all(&home).unwrap();
@@ -2102,7 +2102,7 @@ model = "claude"
 }
 
 #[test]
-fn kimi_code_mcp_maps_http_sse_stdio_and_plugin_servers() {
+fn kimi_cli_mcp_maps_http_sse_stdio_and_plugin_servers() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     let plugin_root = home.join("plugins").join("managed").join("demo");
@@ -2165,7 +2165,7 @@ fn kimi_code_mcp_maps_http_sse_stdio_and_plugin_servers() {
 }
 
 #[test]
-fn kimi_code_collects_skills_and_plugins() {
+fn kimi_cli_collects_skills_and_plugins() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     let local_skill = home.join("skills").join("local");

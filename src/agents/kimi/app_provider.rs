@@ -57,7 +57,7 @@ impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
 }
 
 fn provider_data(agent_home: &Path) -> SentraResult<Vec<ProviderData>> {
-    let daimon_home = crate::agents::kimi_code::app_daimon_home(agent_home);
+    let daimon_home = crate::agents::kimi::app_daimon_home(agent_home);
     if let Some(config) = read_json_file(daimon_home.join("config.json"))? {
         let providers = providers_from_daimon_config(&config);
         if !providers.is_empty() {
@@ -69,7 +69,7 @@ fn provider_data(agent_home: &Path) -> SentraResult<Vec<ProviderData>> {
         daimon_home.join("runtime").join("kimi-code"),
         agent_home.join("daimon-share"),
     ] {
-        let providers = crate::agents::kimi_code::provider::provider_data(&config_home, true)?;
+        let providers = crate::agents::kimi::provider::provider_data(&config_home, true)?;
         if !providers.is_empty() {
             return Ok(providers);
         }

@@ -423,13 +423,13 @@ fn install_plans_for_platform(
             crate::agents::codex::install_plans_for_platform(platform, action)
         }
         InstallableAgent::ClaudeCli => {
-            crate::agents::claude_cli::install_plans_for_platform(platform, action)
+            crate::agents::claude::install_plans_for_platform(platform, action)
         }
         InstallableAgent::Cursor => {
             crate::agents::cursor::install_plans_for_platform(platform, action)
         }
         InstallableAgent::KimiCode => {
-            crate::agents::kimi_code::install_plans_for_platform(platform, action)
+            crate::agents::kimi::install_plans_for_platform(platform, action)
         }
         InstallableAgent::Kiro => crate::agents::kiro::install_plans_for_platform(platform, action),
         InstallableAgent::LingCode | InstallableAgent::Marvis => Vec::new(),
@@ -487,13 +487,13 @@ fn uninstall_plans_for_platform(
             )]
         }
         InstallableAgent::ClaudeCli => {
-            crate::agents::claude_cli::uninstall_plans_for_platform(platform, options)
+            crate::agents::claude::uninstall_plans_for_platform(platform, options)
         }
         InstallableAgent::Cursor => {
             crate::agents::cursor::uninstall_plans_for_platform(platform, options)
         }
         InstallableAgent::KimiCode => {
-            vec![crate::agents::kimi_code::uninstall_plan_for_platform(
+            vec![crate::agents::kimi::uninstall_plan_for_platform(
                 platform, options,
             )]
         }

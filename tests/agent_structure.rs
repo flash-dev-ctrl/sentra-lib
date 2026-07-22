@@ -27,7 +27,30 @@ fn rust_agents_mirror_typescript_agent_object_files() {
             "provider.rs",
         ],
     );
-    for agent in ["claude_app", "claude_cli", "hermes", "openclaw"] {
+    assert_agent_files(
+        &src,
+        "claude",
+        &[
+            "mod.rs",
+            "meta.rs",
+            "install.rs",
+            "skill.rs",
+            "mcp.rs",
+            "memory.rs",
+            "cron.rs",
+            "provider.rs",
+            "plugin.rs",
+            "process.rs",
+            "app_meta.rs",
+            "app_skill.rs",
+            "app_mcp.rs",
+            "app_memory.rs",
+            "app_cron.rs",
+            "app_provider.rs",
+            "app_process.rs",
+        ],
+    );
+    for agent in ["hermes", "openclaw"] {
         assert_agent_files(
             &src,
             agent,
@@ -44,7 +67,7 @@ fn rust_agents_mirror_typescript_agent_object_files() {
     }
     assert_agent_files(
         &src,
-        "kimi_code",
+        "kimi",
         &[
             "mod.rs",
             "meta.rs",
@@ -237,8 +260,7 @@ fn each_agent_module_owns_discovery() {
     let shared_discovery = std::fs::read_to_string(src.join("discovery.rs")).unwrap();
 
     for module in [
-        "claude_app",
-        "claude_cli",
+        "claude",
         "codex",
         "antigravity",
         "codebuddy",
@@ -246,7 +268,7 @@ fn each_agent_module_owns_discovery() {
         "cursor",
         "general",
         "hermes",
-        "kimi_code",
+        "kimi",
         "kiro",
         "lingcode",
         "marvis",
@@ -278,8 +300,7 @@ fn agent_asset_modules_are_not_public() {
     let src = root.join("src").join("agents");
 
     for module in [
-        "claude_app",
-        "claude_cli",
+        "claude",
         "codex",
         "antigravity",
         "codebuddy",
@@ -287,7 +308,7 @@ fn agent_asset_modules_are_not_public() {
         "cursor",
         "general",
         "hermes",
-        "kimi_code",
+        "kimi",
         "kiro",
         "lingcode",
         "marvis",
@@ -353,8 +374,7 @@ fn agent_module_wrappers_do_not_expose_asset_mutator_shortcuts() {
     let src = root.join("src").join("agents");
 
     for module in [
-        "claude_app",
-        "claude_cli",
+        "claude",
         "codex",
         "antigravity",
         "codebuddy",
@@ -362,7 +382,7 @@ fn agent_module_wrappers_do_not_expose_asset_mutator_shortcuts() {
         "cursor",
         "general",
         "hermes",
-        "kimi_code",
+        "kimi",
         "kiro",
         "lingcode",
         "marvis",
@@ -398,7 +418,7 @@ fn meta_assets_do_not_expose_install_shortcuts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let agents_dir = root.join("src").join("agents");
 
-    for module in ["claude_cli", "codex"] {
+    for module in ["claude", "codex"] {
         let content = std::fs::read_to_string(agents_dir.join(module).join("meta.rs")).unwrap();
         for forbidden in ["fn install(", "fn uninstall("] {
             assert!(
@@ -423,8 +443,7 @@ fn agent_modules_do_not_define_redundant_typed_wrappers() {
     let src = root.join("src").join("agents");
 
     for module in [
-        "claude_app",
-        "claude_cli",
+        "claude",
         "codex",
         "antigravity",
         "codebuddy",
@@ -432,7 +451,7 @@ fn agent_modules_do_not_define_redundant_typed_wrappers() {
         "cursor",
         "general",
         "hermes",
-        "kimi_code",
+        "kimi",
         "kiro",
         "lingcode",
         "marvis",
@@ -525,9 +544,9 @@ fn agent_modules_reference_entry_registry_directly() {
     let src = root.join("src").join("agents");
 
     for (module, symbol) in [
-        ("claude_app", "CLAUDE_APP_AGENT_ENTRY"),
-        ("claude_cli", "CLAUDE_CLI_IDE_AGENT_ENTRY"),
-        ("claude_cli", "CLAUDE_CLI_AGENT_ENTRY"),
+        ("claude", "CLAUDE_APP_AGENT_ENTRY"),
+        ("claude", "CLAUDE_CLI_IDE_AGENT_ENTRY"),
+        ("claude", "CLAUDE_CLI_AGENT_ENTRY"),
         ("codex", "CODEX_CLI_AGENT_ENTRY"),
         ("codex", "CODEX_CLI_IDE_AGENT_ENTRY"),
         ("antigravity", "ANTIGRAVITY_AGENT_ENTRY"),
@@ -535,9 +554,9 @@ fn agent_modules_reference_entry_registry_directly() {
         ("coder", "CODER_AGENT_ENTRY"),
         ("cursor", "CURSOR_AGENT_ENTRY"),
         ("hermes", "HERMES_AGENT_ENTRY"),
-        ("kimi_code", "KIMI_APP_AGENT_ENTRY"),
-        ("kimi_code", "KIMI_CLI_AGENT_ENTRY"),
-        ("kimi_code", "KIMI_CLI_IDE_AGENT_ENTRY"),
+        ("kimi", "KIMI_APP_AGENT_ENTRY"),
+        ("kimi", "KIMI_CLI_AGENT_ENTRY"),
+        ("kimi", "KIMI_CLI_IDE_AGENT_ENTRY"),
         ("kiro", "KIRO_AGENT_ENTRY"),
         ("lingcode", "LINGCODE_AGENT_ENTRY"),
         ("marvis", "MARVIS_AGENT_ENTRY"),
@@ -627,7 +646,35 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
         &["fn meta_data", "fn provider_data"],
         &["meta.rs", "provider.rs"],
     );
-    for agent in ["claude_app", "claude_cli", "hermes", "openclaw"] {
+    assert_asset_logic_is_colocated(
+        &root.join("src").join("agents").join("claude"),
+        &[
+            "fn meta_data",
+            "fn mcp_data",
+            "fn memory_data",
+            "fn cron_data",
+            "fn provider_data",
+        ],
+        &["meta.rs", "mcp.rs", "memory.rs", "cron.rs", "provider.rs"],
+    );
+    assert_asset_logic_is_colocated(
+        &root.join("src").join("agents").join("claude"),
+        &[
+            "fn meta_data",
+            "fn mcp_data",
+            "fn memory_data",
+            "fn cron_data",
+            "fn provider_data",
+        ],
+        &[
+            "app_meta.rs",
+            "app_mcp.rs",
+            "app_memory.rs",
+            "app_cron.rs",
+            "app_provider.rs",
+        ],
+    );
+    for agent in ["hermes", "openclaw"] {
         assert_asset_logic_is_colocated(
             &root.join("src").join("agents").join(agent),
             &[
@@ -641,7 +688,7 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
         );
     }
     assert_asset_logic_is_colocated(
-        &root.join("src").join("agents").join("kimi_code"),
+        &root.join("src").join("agents").join("kimi"),
         &["fn meta_data", "fn mcp_data", "fn provider_data"],
         &["meta.rs", "mcp.rs", "provider.rs"],
     );

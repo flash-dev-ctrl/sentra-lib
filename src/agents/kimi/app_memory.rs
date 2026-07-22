@@ -24,7 +24,7 @@ impl_erased_asset!(MemoryAsset, AssetType::Memory, Vec<MemoryData>);
 impl Asset<Vec<MemoryData>> for MemoryAsset {
     fn get_data(&self) -> SentraResult<Vec<MemoryData>> {
         let agents_home =
-            crate::agents::kimi_code::app_daimon_home(self.core.agent_home()).join("agents");
+            crate::agents::kimi::app_daimon_home(self.core.agent_home()).join("agents");
         let vaults = std::fs::read_dir(agents_home)
             .into_iter()
             .flatten()

@@ -36,10 +36,7 @@ fn matches_cli_process(process: &ProcessInfo<'_>) -> bool {
             && cmdline_has_path_components(process, &["@moonshot-ai", "kimi-code"]));
     is_cli
         && !matches_app_process(process)
-        && !process_has_ide_extension(
-            process,
-            crate::agents::kimi_code::KIMI_CODE_IDE_EXTENSION_ID,
-        )
+        && !process_has_ide_extension(process, crate::agents::kimi::KIMI_CODE_IDE_EXTENSION_ID)
 }
 
 fn matches_app_process(process: &ProcessInfo<'_>) -> bool {
@@ -53,10 +50,7 @@ fn matches_app_process(process: &ProcessInfo<'_>) -> bool {
 }
 
 fn matches_ide_process(process: &ProcessInfo<'_>) -> bool {
-    process_has_ide_extension(
-        process,
-        crate::agents::kimi_code::KIMI_CODE_IDE_EXTENSION_ID,
-    )
+    process_has_ide_extension(process, crate::agents::kimi::KIMI_CODE_IDE_EXTENSION_ID)
 }
 
 #[cfg(test)]

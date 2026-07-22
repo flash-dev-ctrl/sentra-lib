@@ -24,11 +24,11 @@ impl_erased_asset!(SkillAsset, AssetType::Skill, Vec<SkillData>, SkillData);
 impl Asset<Vec<SkillData>, SkillData> for SkillAsset {
     fn get_data(&self) -> SentraResult<Vec<SkillData>> {
         let mut results = collect_skills_from_dir(
-            crate::agents::kimi_code::app_daimon_home(self.core.agent_home()).join("skills"),
+            crate::agents::kimi::app_daimon_home(self.core.agent_home()).join("skills"),
         )?;
-        results.extend(crate::agents::kimi_code::skill::plugin_skill_data(
-            &crate::agents::kimi_code::app_runtime_home(self.core.agent_home()),
+        results.extend(crate::agents::kimi::skill::plugin_skill_data(
+            &crate::agents::kimi::app_runtime_home(self.core.agent_home()),
         )?);
-        Ok(crate::agents::kimi_code::skill::dedup_skills(results))
+        Ok(crate::agents::kimi::skill::dedup_skills(results))
     }
 }

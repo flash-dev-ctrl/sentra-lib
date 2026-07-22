@@ -7,15 +7,14 @@ mod object;
 mod process;
 
 mod antigravity;
-mod claude_app;
-mod claude_cli;
+mod claude;
 mod codebuddy;
 mod coder;
 mod codex;
 mod cursor;
 mod general;
 mod hermes;
-mod kimi_code;
+mod kimi;
 mod kiro;
 mod lingcode;
 mod marvis;

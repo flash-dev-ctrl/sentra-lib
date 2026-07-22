@@ -37,10 +37,9 @@ pub fn discover_agents(user_home: impl AsRef<Path>) -> Vec<Agent> {
     let user_home = user_home.as_ref();
     let mut results = Vec::new();
     results.extend(crate::agents::codex::discover_agents(user_home));
-    results.extend(crate::agents::claude_cli::discover_agents(user_home));
-    results.extend(crate::agents::claude_app::discover_agents(user_home));
+    results.extend(crate::agents::claude::discover_agents(user_home));
     results.extend(crate::agents::hermes::discover_agents(user_home));
-    results.extend(crate::agents::kimi_code::discover_agents(user_home));
+    results.extend(crate::agents::kimi::discover_agents(user_home));
     results.extend(crate::agents::openclaw::discover_agents(user_home));
     results.extend(crate::agents::opencode::discover_agents(user_home));
     results.extend(crate::agents::pi::discover_agents(user_home));

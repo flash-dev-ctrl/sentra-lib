@@ -60,11 +60,11 @@ fn agents_module_exports_only_public_discovery_surface() {
     assert!(agents_rs.contains("pub use base::Agent;"));
     assert!(agents_rs.contains("pub use discovery::discover_agents;"));
     for symbol in [
-        "pub mod claude_app",
-        "pub mod claude_cli",
+        "pub mod claude",
         "pub mod codex",
         "pub mod general",
         "pub mod hermes",
+        "pub mod kimi",
         "pub mod openclaw",
         "pub mod opencode",
         "pub mod sentra",

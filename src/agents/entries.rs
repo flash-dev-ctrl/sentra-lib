@@ -57,9 +57,9 @@ pub(crate) const CLAUDE_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "claude-cli",
     title: Some("Claude Code"),
     homes: &[&[".claude"]],
-    asset_for_type: crate::agents::claude_cli::asset_for_type,
-    is_installed: crate::agents::claude_cli::is_agent_installed,
-    process_provider: crate::agents::claude_cli::process_data,
+    asset_for_type: crate::agents::claude::asset_for_type,
+    is_installed: crate::agents::claude::is_agent_installed,
+    process_provider: crate::agents::claude::process_data,
     process_home_env_vars: &[],
 };
 
@@ -67,9 +67,9 @@ pub(crate) const CLAUDE_CLI_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "claude-cli-ide",
     title: Some("Claude Code IDE Extension"),
     homes: &[&[".claude"]],
-    asset_for_type: crate::agents::claude_cli::asset_for_type,
-    is_installed: crate::agents::claude_cli::is_agent_installed,
-    process_provider: crate::agents::claude_cli::ide_process_data,
+    asset_for_type: crate::agents::claude::asset_for_type,
+    is_installed: crate::agents::claude::is_agent_installed,
+    process_provider: crate::agents::claude::ide_process_data,
     process_home_env_vars: &[],
 };
 
@@ -82,9 +82,9 @@ pub(crate) const CLAUDE_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
         &["Library", "Application Support", "Claude"],
         &["Library", "Application Support", "Claude-3p"],
     ],
-    asset_for_type: crate::agents::claude_app::asset_for_type,
-    is_installed: crate::agents::claude_app::is_agent_installed,
-    process_provider: crate::agents::claude_app::process_data,
+    asset_for_type: crate::agents::claude::asset_for_type,
+    is_installed: crate::agents::claude::is_agent_installed,
+    process_provider: crate::agents::claude::app_process_data,
     process_home_env_vars: &[],
 };
 
@@ -102,9 +102,9 @@ pub(crate) const KIMI_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "kimi-cli",
     title: Some("Kimi Code"),
     homes: &[&[".kimi-code"]],
-    asset_for_type: crate::agents::kimi_code::asset_for_type,
-    is_installed: crate::agents::kimi_code::is_agent_installed,
-    process_provider: crate::agents::kimi_code::process_data,
+    asset_for_type: crate::agents::kimi::asset_for_type,
+    is_installed: crate::agents::kimi::is_agent_installed,
+    process_provider: crate::agents::kimi::process_data,
     process_home_env_vars: &["KIMI_CODE_HOME"],
 };
 
@@ -116,9 +116,9 @@ pub(crate) const KIMI_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
         &["Library", "Application Support", "kimi-desktop"],
         &[".config", "kimi-desktop"],
     ],
-    asset_for_type: crate::agents::kimi_code::asset_for_type,
-    is_installed: crate::agents::kimi_code::is_agent_installed,
-    process_provider: crate::agents::kimi_code::app_process_data,
+    asset_for_type: crate::agents::kimi::asset_for_type,
+    is_installed: crate::agents::kimi::is_agent_installed,
+    process_provider: crate::agents::kimi::app_process_data,
     process_home_env_vars: &[],
 };
 
@@ -126,9 +126,9 @@ pub(crate) const KIMI_CLI_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "kimi-cli-ide",
     title: Some("Kimi Code IDE Extension"),
     homes: &[&[".kimi-code"]],
-    asset_for_type: crate::agents::kimi_code::asset_for_type,
-    is_installed: crate::agents::kimi_code::is_agent_installed,
-    process_provider: crate::agents::kimi_code::ide_process_data,
+    asset_for_type: crate::agents::kimi::asset_for_type,
+    is_installed: crate::agents::kimi::is_agent_installed,
+    process_provider: crate::agents::kimi::ide_process_data,
     process_home_env_vars: &["KIMI_CODE_HOME"],
 };
 

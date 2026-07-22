@@ -140,7 +140,7 @@ fn path_parts_end_with(parts: &[String], suffix: &[&str]) -> bool {
 mod tests {
     use std::path::Path;
 
-    use crate::agents::claude_app::meta::is_agent_installed_with;
+    use crate::agents::claude::app_meta::is_agent_installed_with;
     use crate::agents::install_status::InstallStatusProbe;
 
     #[test]

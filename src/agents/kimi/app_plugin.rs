@@ -22,7 +22,7 @@ impl_erased_asset!(PluginAsset, AssetType::Plugin, Vec<PluginData>);
 
 impl Asset<Vec<PluginData>> for PluginAsset {
     fn get_data(&self) -> SentraResult<Vec<PluginData>> {
-        crate::agents::kimi_code::plugin::plugin_data(&crate::agents::kimi_code::app_runtime_home(
+        crate::agents::kimi::plugin::plugin_data(&crate::agents::kimi::app_runtime_home(
             self.core.agent_home(),
         ))
     }

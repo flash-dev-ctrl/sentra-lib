@@ -463,7 +463,9 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    use super::*;
+    use crate::agents::claude::provider::{COMPLETED_ONBOARDING_KEY, ProviderAsset};
+    use crate::interfaces::{Asset, ProviderData, ProviderModel, ProviderType};
+    use crate::utils::read_json_file;
 
     #[test]
     fn set_data_backs_up_and_optimizes_user_config_for_cli_and_ide() {

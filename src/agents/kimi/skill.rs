@@ -47,7 +47,7 @@ impl Asset<Vec<SkillData>, SkillData> for SkillAsset {
 
 pub(super) fn skill_data(agent_home: &std::path::Path) -> SentraResult<Vec<SkillData>> {
     let mut results = collect_skills_from_dir(agent_home.join("skills"))?;
-    if let Some(user_home) = crate::agents::kimi_code::default_user_home(agent_home) {
+    if let Some(user_home) = crate::agents::kimi::default_user_home(agent_home) {
         results.extend(collect_skills_from_dir(
             user_home.join(".agents").join("skills"),
         )?);
@@ -58,7 +58,7 @@ pub(super) fn skill_data(agent_home: &std::path::Path) -> SentraResult<Vec<Skill
 
 pub(super) fn plugin_skill_data(agent_home: &std::path::Path) -> SentraResult<Vec<SkillData>> {
     let mut results = Vec::new();
-    for manifest in crate::agents::kimi_code::plugin::plugin_manifests(agent_home)? {
+    for manifest in crate::agents::kimi::plugin::plugin_manifests(agent_home)? {
         if !manifest.enabled {
             continue;
         }

@@ -22,7 +22,7 @@ impl_erased_asset!(McpAsset, AssetType::Mcp, Vec<McpData>);
 
 impl Asset<Vec<McpData>> for McpAsset {
     fn get_data(&self) -> SentraResult<Vec<McpData>> {
-        crate::agents::kimi_code::mcp::mcp_data(&crate::agents::kimi_code::app_runtime_home(
+        crate::agents::kimi::mcp::mcp_data(&crate::agents::kimi::app_runtime_home(
             self.core.agent_home(),
         ))
     }

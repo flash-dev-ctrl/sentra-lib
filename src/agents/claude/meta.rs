@@ -89,7 +89,7 @@ pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     if agent_name == crate::agents::entries::CLAUDE_CLI_IDE_AGENT_ENTRY.name {
         return is_ide_extension_installed(
             agent_home,
-            crate::agents::claude_cli::CLAUDE_CODE_IDE_EXTENSION_ID,
+            crate::agents::claude::CLAUDE_CODE_IDE_EXTENSION_ID,
         );
     }
     let probe = InstallStatusProbe::real();

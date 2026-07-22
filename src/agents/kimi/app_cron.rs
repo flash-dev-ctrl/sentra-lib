@@ -31,7 +31,7 @@ impl Asset<Vec<CronData>> for CronAsset {
 }
 
 fn cron_data(agent_home: &Path) -> Vec<CronData> {
-    let agents_home = crate::agents::kimi_code::app_daimon_home(agent_home).join("agents");
+    let agents_home = crate::agents::kimi::app_daimon_home(agent_home).join("agents");
     let mut paths = Vec::new();
     for agent_dir in read_dir_paths(&agents_home) {
         let automations = agent_dir.join("blueprint").join("automations");

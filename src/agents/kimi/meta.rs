@@ -65,7 +65,7 @@ pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     if agent_name == crate::agents::entries::KIMI_CLI_IDE_AGENT_ENTRY.name {
         return is_ide_extension_installed(
             agent_home,
-            crate::agents::kimi_code::KIMI_CODE_IDE_EXTENSION_ID,
+            crate::agents::kimi::KIMI_CODE_IDE_EXTENSION_ID,
         );
     }
     let probe = InstallStatusProbe::real();
@@ -167,7 +167,12 @@ fn path_ends_with(path: &Path, suffix: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::path::Path;
+
+    use crate::agents::install_status::InstallStatusProbe;
+    use crate::agents::kimi::meta::{
+        is_kimi_app_installed_with, is_kimi_cli_installed_with, kimi_app_user_home,
+    };
 
     #[test]
     fn install_probes_separate_cli_and_app() {

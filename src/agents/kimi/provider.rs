@@ -439,7 +439,7 @@ fn maybe_mask_secret(value: String, mask_secrets: bool) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::agents::kimi_code::provider::ProviderAsset;
+    use crate::agents::kimi::provider::ProviderAsset;
     use crate::utils::protocol::WireProtocol;
 
     #[test]
