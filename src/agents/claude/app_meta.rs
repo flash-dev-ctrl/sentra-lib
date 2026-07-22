@@ -54,7 +54,7 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
 }
 
 pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
-    let probe = InstallStatusProbe::real();
+    let probe = InstallStatusProbe::real(claude_app_user_home(agent_home));
     is_agent_installed_with(agent_home, &probe)
 }
 

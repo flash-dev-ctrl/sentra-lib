@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::SentraResult;
 use crate::agents::install_status::{
     InstallStatusProbe, any_command_exists_with, any_existing_dir_with, any_existing_file_with,
-    binary_paths, hidden_home_parent, is_ide_extension_installed,
+    binary_paths, hidden_home_parent, is_ide_extension_installed, user_home_for_agent_home,
 };
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
@@ -68,10 +68,11 @@ pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
             crate::agents::kimi::KIMI_CODE_IDE_EXTENSION_ID,
         );
     }
-    let probe = InstallStatusProbe::real();
     if agent_name == crate::agents::entries::KIMI_APP_AGENT_ENTRY.name {
+        let probe = InstallStatusProbe::real(kimi_app_user_home(agent_home));
         is_kimi_app_installed_with(agent_home, &probe)
     } else {
+        let probe = InstallStatusProbe::real(user_home_for_agent_home(agent_home, &[".kimi-code"]));
         is_kimi_cli_installed_with(agent_home, &probe)
     }
 }

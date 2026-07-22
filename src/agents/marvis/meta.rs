@@ -48,7 +48,7 @@ impl Asset<Option<MetaData>> for MetaAsset {
 }
 
 pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
-    let probe = InstallStatusProbe::real();
+    let probe = InstallStatusProbe::real(hidden_home_parent(agent_home));
     any_command_exists_with(&["marvis", "marvis-mcp"], &probe)
         || any_existing_file_with(install_paths(agent_home), &probe)
         || any_existing_dir_with(app_paths(agent_home), &probe)

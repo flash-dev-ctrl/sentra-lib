@@ -1,6 +1,9 @@
 use crate::SentraResult;
 use crate::agents::discovery::get_agent_title;
-use crate::agents::install_status::{InstallStatusProbe, is_named_cli_agent_installed_with};
+use crate::agents::install_status::{
+    InstallStatusProbe, hidden_home_parent, is_named_cli_agent_installed_with,
+    user_home_for_agent_home,
+};
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::dir_exists;
@@ -48,7 +51,13 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
 }
 
 pub(super) fn is_agent_installed(agent_name: &str, agent_home: &std::path::Path) -> bool {
-    let probe = InstallStatusProbe::real();
+    let user_home = crate::agents::entries::GENERAL_AGENT_ENTRIES
+        .iter()
+        .find(|entry| entry.name == agent_name)
+        .and_then(|entry| entry.homes.first())
+        .map(|segments| user_home_for_agent_home(agent_home, segments))
+        .unwrap_or_else(|| hidden_home_parent(agent_home));
+    let probe = InstallStatusProbe::real(user_home);
     is_agent_installed_with(agent_name, agent_home, &probe)
 }
 

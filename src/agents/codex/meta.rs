@@ -4,6 +4,7 @@ use crate::SentraResult;
 use crate::agents::install_status::{
     InstallStatusProbe, any_command_exists_with, any_existing_dir_with, any_existing_file_with,
     binary_paths, env_path, hidden_home_parent, is_ide_extension_installed,
+    user_home_for_agent_home,
 };
 use crate::agents::object::AssetCore;
 use crate::interfaces::{Asset, AssetType, ErasedAsset, MetaData};
@@ -90,7 +91,7 @@ pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
             crate::agents::codex::CODEX_IDE_EXTENSION_ID,
         );
     }
-    let probe = InstallStatusProbe::real();
+    let probe = InstallStatusProbe::real(user_home_for_agent_home(agent_home, &[".codex"]));
     if agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name {
         is_codex_app_installed_with(agent_home, &probe)
     } else {

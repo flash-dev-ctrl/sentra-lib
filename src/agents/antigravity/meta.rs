@@ -46,12 +46,15 @@ impl Asset<Option<MetaData>> for MetaAsset {
 }
 
 pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
-    let probe = InstallStatusProbe::real();
+    let probe = InstallStatusProbe::real(antigravity_user_home(agent_home));
     is_agent_installed_with(agent_home, &probe)
 }
 
 pub(super) fn is_install_target_installed(agent_home: &Path) -> bool {
-    is_install_target_installed_with(agent_home, &InstallStatusProbe::real())
+    is_install_target_installed_with(
+        agent_home,
+        &InstallStatusProbe::real(antigravity_user_home(agent_home)),
+    )
 }
 
 fn is_agent_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
@@ -67,12 +70,18 @@ fn is_install_target_installed_with(agent_home: &Path, probe: &InstallStatusProb
 }
 
 fn official_install_paths(agent_home: &Path) -> Vec<PathBuf> {
-    let user_home = agent_home
+    binary_paths(
+        antigravity_user_home(agent_home).join(".local").join("bin"),
+        "agy",
+    )
+}
+
+fn antigravity_user_home(agent_home: &Path) -> PathBuf {
+    agent_home
         .parent()
         .and_then(Path::parent)
         .map(Path::to_path_buf)
-        .unwrap_or_else(|| hidden_home_parent(agent_home));
-    binary_paths(user_home.join(".local").join("bin"), "agy")
+        .unwrap_or_else(|| hidden_home_parent(agent_home))
 }
 
 #[cfg(test)]

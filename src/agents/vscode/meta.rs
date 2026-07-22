@@ -46,12 +46,15 @@ impl Asset<Option<MetaData>> for MetaAsset {
 }
 
 pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
-    let probe = InstallStatusProbe::real();
+    let probe = InstallStatusProbe::real(super::user_home(agent_home));
     is_agent_installed_with(agent_home, &probe)
 }
 
 pub(super) fn is_install_target_installed(agent_home: &Path) -> bool {
-    is_install_target_installed_with(agent_home, &InstallStatusProbe::real())
+    is_install_target_installed_with(
+        agent_home,
+        &InstallStatusProbe::real(super::user_home(agent_home)),
+    )
 }
 
 fn is_agent_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {

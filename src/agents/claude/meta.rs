@@ -92,7 +92,7 @@ pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
             crate::agents::claude::CLAUDE_CODE_IDE_EXTENSION_ID,
         );
     }
-    let probe = InstallStatusProbe::real();
+    let probe = InstallStatusProbe::real(hidden_home_parent(agent_home));
     is_agent_installed_with(agent_home, &probe)
 }
 
