@@ -28,8 +28,9 @@ impl Asset<Vec<SkillData>> for SkillAsset {
         if let Some(path) = crate::agents::trae::workspace_path(".trae/skills") {
             results.extend(collect_skills_from_dir(path)?);
         }
-        if let Some(path) = crate::agents::trae::workspace_path(".agents/skills") {
-            results.extend(collect_skills_from_dir(path)?);
+        let user_home = home.parent().unwrap_or(home);
+        if let Some(path) = crate::agents::workspace_agents_dir(user_home) {
+            results.extend(collect_skills_from_dir(path.join("skills"))?);
         }
         Ok(results)
     }

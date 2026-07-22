@@ -71,14 +71,6 @@ pub(crate) fn ide_process_data() -> Vec<crate::interfaces::ProcessData> {
     process::ide_process_data()
 }
 
-pub(crate) fn default_user_home(agent_home: &Path) -> Option<PathBuf> {
-    if agent_home.file_name().and_then(|name| name.to_str()) == Some(".kimi-code") {
-        agent_home.parent().map(Path::to_path_buf)
-    } else {
-        home::home_dir()
-    }
-}
-
 pub(super) fn app_daimon_home(agent_home: &Path) -> PathBuf {
     agent_home.join("daimon-share").join("daimon")
 }

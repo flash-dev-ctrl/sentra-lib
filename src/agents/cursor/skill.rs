@@ -1,5 +1,4 @@
 use crate::SentraResult;
-use crate::agents::install_status::hidden_home_parent;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, SkillData};
 use crate::utils::collect_skills_from_dir;
@@ -25,11 +24,6 @@ impl_erased_asset!(SkillAsset, AssetType::Skill, Vec<SkillData>);
 impl Asset<Vec<SkillData>> for SkillAsset {
     fn get_data(&self) -> SentraResult<Vec<SkillData>> {
         let home = self.core.agent_home();
-        let user_home = hidden_home_parent(home);
-        let mut results = collect_skills_from_dir(home.join("skills"))?;
-        results.extend(collect_skills_from_dir(
-            user_home.join(".agents").join("skills"),
-        )?);
-        Ok(results)
+        collect_skills_from_dir(home.join("skills"))
     }
 }

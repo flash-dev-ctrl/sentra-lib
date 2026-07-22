@@ -31,6 +31,29 @@ mod workbuddy;
 pub use base::Agent;
 pub use discovery::discover_agents;
 
+pub(crate) fn workspace_agents_dir(user_home: &std::path::Path) -> Option<std::path::PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    let current_home = home::home_dir();
+    workspace_agents_dir_from(user_home, current_home.as_deref(), &cwd)
+}
+
+fn workspace_agents_dir_from(
+    user_home: &std::path::Path,
+    current_home: Option<&std::path::Path>,
+    cwd: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    if same_location(cwd, user_home) || current_home.is_some_and(|home| same_location(cwd, home)) {
+        return None;
+    }
+    Some(cwd.join(".agents"))
+}
+
+fn same_location(left: &std::path::Path, right: &std::path::Path) -> bool {
+    let left = left.canonicalize().unwrap_or_else(|_| left.to_path_buf());
+    let right = right.canonicalize().unwrap_or_else(|_| right.to_path_buf());
+    left == right
+}
+
 fn installable_agent(
     agent: &str,
     operation: &str,
@@ -170,6 +193,38 @@ mod tests {
         assert_eq!(
             installable_agent("marvis", "install").unwrap(),
             install::InstallableAgent::Marvis
+        );
+    }
+
+    #[test]
+    fn workspace_agents_dir_excludes_user_homes() {
+        let scanned_home = tempfile::tempdir().unwrap();
+        let current_home = tempfile::tempdir().unwrap();
+        let workspace = tempfile::tempdir().unwrap();
+
+        assert!(
+            workspace_agents_dir_from(
+                scanned_home.path(),
+                Some(current_home.path()),
+                scanned_home.path(),
+            )
+            .is_none()
+        );
+        assert!(
+            workspace_agents_dir_from(
+                scanned_home.path(),
+                Some(current_home.path()),
+                current_home.path(),
+            )
+            .is_none()
+        );
+        assert_eq!(
+            workspace_agents_dir_from(
+                scanned_home.path(),
+                Some(current_home.path()),
+                workspace.path(),
+            ),
+            Some(workspace.path().join(".agents"))
         );
     }
 }

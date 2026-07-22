@@ -25,15 +25,19 @@ impl Asset<Vec<SkillData>> for SkillAsset {
     fn get_data(&self) -> SentraResult<Vec<SkillData>> {
         let home = super::user_home(self.core.agent_home());
         let cwd = std::env::current_dir().unwrap_or_default();
+        let workspace_agents = crate::agents::workspace_agents_dir(home);
+        let mut dirs = vec![home.join(".copilot").join("skills")];
+        if let Some(workspace_agents) = &workspace_agents {
+            dirs.push(workspace_agents.join("skills"));
+        }
+        dirs.push(cwd.join(".github").join("skills"));
+        if let Some(workspace_agents) = &workspace_agents {
+            dirs.push(workspace_agents.join("hooks"));
+        }
+        dirs.push(cwd.join(".github").join("hooks"));
+
         let mut results = Vec::new();
-        for dir in [
-            home.join(".copilot").join("skills"),
-            home.join(".agents").join("skills"),
-            cwd.join(".agents").join("skills"),
-            cwd.join(".github").join("skills"),
-            cwd.join(".agents").join("hooks"),
-            cwd.join(".github").join("hooks"),
-        ] {
+        for dir in dirs {
             results.extend(collect_skills_from_dir(dir)?);
         }
         Ok(results)

@@ -2165,11 +2165,63 @@ fn kimi_cli_mcp_maps_http_sse_stdio_and_plugin_servers() {
 }
 
 #[test]
-fn kimi_cli_collects_skills_and_plugins() {
+fn user_agents_skills_belong_only_to_general_agent() {
+    let dir = tempfile::tempdir().unwrap();
+    let global_skill = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("general-only-skill");
+    fs::create_dir_all(&global_skill).unwrap();
+    fs::write(
+        global_skill.join("SKILL.md"),
+        "---\nname: general-only-skill\n---\nbody",
+    )
+    .unwrap();
+    for home in [
+        dir.path().join(".config").join("coderv2"),
+        dir.path().join(".cursor"),
+        dir.path().join(".kimi-code"),
+        dir.path().join(".trae"),
+        dir.path().join(".vscode"),
+    ] {
+        fs::create_dir_all(home).unwrap();
+    }
+
+    let agents = discover_agents(dir.path());
+    for agent_name in ["coder", "cursor", "kimi-cli", "trae", "vscode"] {
+        let agent = agents
+            .iter()
+            .find(|agent| agent.name() == agent_name)
+            .unwrap();
+        let skills = asset_data(agent, AssetType::Skill);
+        let items = skills[0].data.as_array().unwrap();
+        assert!(
+            !items
+                .iter()
+                .any(|item| item["name"] == "general-only-skill"),
+            "{agent_name} must not collect user-home .agents skills"
+        );
+    }
+
+    let general = agents
+        .iter()
+        .find(|agent| agent.name() == "agents")
+        .unwrap();
+    let skills = asset_data(general, AssetType::Skill);
+    let items = skills[0].data.as_array().unwrap();
+    assert!(
+        items
+            .iter()
+            .any(|item| item["name"] == "general-only-skill")
+    );
+}
+
+#[test]
+fn kimi_cli_collects_local_and_plugin_skills() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     let local_skill = home.join("skills").join("local");
-    let global_skill = dir.path().join(".agents").join("skills").join("global");
     let plugin_root = home
         .join("plugins")
         .join("managed")
@@ -2177,14 +2229,8 @@ fn kimi_cli_collects_skills_and_plugins() {
         .join("plugin");
     let plugin_skill = plugin_root.join("skills").join("plugin-skill");
     fs::create_dir_all(&local_skill).unwrap();
-    fs::create_dir_all(&global_skill).unwrap();
     fs::create_dir_all(&plugin_skill).unwrap();
     fs::write(local_skill.join("SKILL.md"), "---\nname: local\n---\nbody").unwrap();
-    fs::write(
-        global_skill.join("SKILL.md"),
-        "---\nname: global\n---\nbody",
-    )
-    .unwrap();
     fs::write(
         plugin_skill.join("SKILL.md"),
         "---\nname: plugin-skill\n---\nbody",
@@ -2211,7 +2257,6 @@ fn kimi_cli_collects_skills_and_plugins() {
     let skills = asset_data(kimi, AssetType::Skill);
     let skill_items = skills[0].data.as_array().unwrap();
     assert!(skill_items.iter().any(|item| item["name"] == "local"));
-    assert!(skill_items.iter().any(|item| item["name"] == "global"));
     let plugin_skill = skill_items
         .iter()
         .find(|item| item["name"] == "plugin-skill")

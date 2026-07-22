@@ -732,6 +732,34 @@ fn agents_do_not_depend_on_risks_or_skills_modules() {
     }
 }
 
+#[test]
+fn product_skill_modules_do_not_access_agents_home_directly() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let agents_dir = root.join("src").join("agents");
+
+    for entry in std::fs::read_dir(&agents_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+    {
+        let module_dir = entry.path();
+        if !module_dir.is_dir()
+            || module_dir.file_name().and_then(|name| name.to_str()) == Some("general")
+        {
+            continue;
+        }
+        let skill_file = module_dir.join("skill.rs");
+        if !skill_file.is_file() {
+            continue;
+        }
+        let content = std::fs::read_to_string(&skill_file).unwrap();
+        assert!(
+            !content.contains(".agents"),
+            "{} must leave user-home .agents skills to the general agent and use the shared workspace guard",
+            skill_file.strip_prefix(root).unwrap().display()
+        );
+    }
+}
+
 fn assert_asset_logic_is_colocated(dir: &Path, helpers: &[&str], asset_files: &[&str]) {
     let mod_rs = std::fs::read_to_string(dir.join("mod.rs")).unwrap();
     for helper in helpers {
