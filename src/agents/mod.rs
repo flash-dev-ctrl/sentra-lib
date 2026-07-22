@@ -43,7 +43,7 @@ fn installable_agent(
         "codex" | "codex-cli" => Ok(install::InstallableAgent::Codex),
         "claude" | "claude-cli" => Ok(install::InstallableAgent::ClaudeCli),
         "cursor" => Ok(install::InstallableAgent::Cursor),
-        "kimi-code" => Ok(install::InstallableAgent::KimiCode),
+        "kimi" | "kimi-code" | "kimi-cli" => Ok(install::InstallableAgent::KimiCode),
         "kiro" => Ok(install::InstallableAgent::Kiro),
         "lingcode" => Ok(install::InstallableAgent::LingCode),
         "marvis" => Ok(install::InstallableAgent::Marvis),
@@ -127,11 +127,13 @@ mod tests {
     }
 
     #[test]
-    fn kimi_code_is_installable() {
-        assert_eq!(
-            installable_agent("kimi-code", "installable").unwrap(),
-            install::InstallableAgent::KimiCode
-        );
+    fn kimi_cli_and_legacy_aliases_are_installable() {
+        for agent in ["kimi-cli", "kimi-code", "kimi"] {
+            assert_eq!(
+                installable_agent(agent, "installable").unwrap(),
+                install::InstallableAgent::KimiCode
+            );
+        }
     }
 
     #[test]

@@ -64,7 +64,7 @@ pub(crate) fn plugin_manifests(
     Ok(manifests)
 }
 
-fn plugin_data(agent_home: &std::path::Path) -> SentraResult<Vec<PluginData>> {
+pub(super) fn plugin_data(agent_home: &std::path::Path) -> SentraResult<Vec<PluginData>> {
     let plugins = plugin_manifests(agent_home)?
         .into_iter()
         .map(plugin_from_manifest)

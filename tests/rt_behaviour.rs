@@ -1877,7 +1877,7 @@ fn opencode_does_not_expose_memory_assets() {
 }
 
 #[test]
-fn kimi_code_discovers_default_home() {
+fn kimi_cli_discovers_default_home() {
     let dir = tempfile::tempdir().unwrap();
     let default_home = dir.path().join(".kimi-code");
     fs::create_dir_all(&default_home).unwrap();
@@ -1886,17 +1886,23 @@ fn kimi_code_discovers_default_home() {
 
     let kimi_homes = agents
         .iter()
-        .filter(|agent| agent.name() == "kimi-code")
+        .filter(|agent| agent.name() == "kimi-cli")
         .map(|agent| agent.home().to_path_buf())
         .collect::<Vec<_>>();
 
     assert_eq!(kimi_homes, vec![default_home.clone()]);
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code" && agent.home() == default_home)
+        .find(|agent| agent.name() == "kimi-cli" && agent.home() == default_home)
         .unwrap();
     assert_eq!(kimi.title(), "Kimi Code");
-    assert!(kimi.get_assets(AssetType::Cron).unwrap().is_empty());
+    assert!(
+        asset_data(kimi, AssetType::Cron)[0]
+            .data
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     assert!(kimi.get_assets(AssetType::Memory).unwrap().is_empty());
     assert_eq!(kimi.get_assets(AssetType::Process).unwrap().len(), 1);
 }
@@ -1931,7 +1937,7 @@ model = "kimi-k2-0711-preview"
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let providers = asset_data(kimi, AssetType::Provider);
     let provider = &providers[0].data[0];
@@ -1975,7 +1981,7 @@ fn kimi_code_provider_set_data_writes_config_toml() {
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let provider_asset = kimi
         .get_assets(AssetType::Provider)
@@ -2063,7 +2069,7 @@ model = "claude"
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let provider_asset = kimi
         .get_assets(AssetType::Provider)
@@ -2126,7 +2132,7 @@ fn kimi_code_mcp_maps_http_sse_stdio_and_plugin_servers() {
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let mcps = asset_data(kimi, AssetType::Mcp);
     let items = mcps[0].data.as_array().unwrap();
@@ -2200,7 +2206,7 @@ fn kimi_code_collects_skills_and_plugins() {
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let skills = asset_data(kimi, AssetType::Skill);
     let skill_items = skills[0].data.as_array().unwrap();
@@ -2229,6 +2235,165 @@ fn kimi_code_collects_skills_and_plugins() {
             .any(|item| item == "skills")
     );
     assert!(!plugin_json.contains("sk-plugin-secret"));
+}
+
+#[test]
+fn kimi_cli_ide_shares_cli_assets_without_memory_collector() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".kimi-code");
+    fs::create_dir_all(home.join("skills").join("shared")).unwrap();
+    fs::write(
+        home.join("skills").join("shared").join("SKILL.md"),
+        "---\nname: shared\n---\nbody",
+    )
+    .unwrap();
+    write_ide_extension_index(dir.path(), ".vscode", &["moonshot-ai.kimi-code"]);
+
+    let agents = discover_agents(dir.path());
+    let cli = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-cli")
+        .unwrap();
+    let ide = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-cli-ide")
+        .unwrap();
+
+    assert_eq!(ide.title(), "Kimi Code IDE Extension");
+    assert_eq!(ide.home(), cli.home());
+    assert_eq!(
+        asset_data(ide, AssetType::Skill)[0].data[0]["name"],
+        "shared"
+    );
+    assert!(ide.get_assets(AssetType::Memory).unwrap().is_empty());
+    assert_eq!(ide.get_assets(AssetType::Process).unwrap().len(), 1);
+}
+
+#[test]
+fn kimi_app_collects_daimon_assets_and_masks_credentials() {
+    let dir = tempfile::tempdir().unwrap();
+    let app_home = dir
+        .path()
+        .join("AppData")
+        .join("Roaming")
+        .join("kimi-desktop");
+    let daimon = app_home.join("daimon-share").join("daimon");
+    let builtin_skill = daimon.join("skills").join("builtin");
+    let runtime_home = daimon.join("runtime").join("kimi-code").join("home");
+    let plugin = runtime_home.join("plugins").join("managed").join("demo");
+    let plugin_skill = plugin.join("skills").join("plugin-skill");
+    let vault = daimon
+        .join("agents")
+        .join("main")
+        .join("memory")
+        .join("vault");
+    let automation = daimon
+        .join("agents")
+        .join("main")
+        .join("blueprint")
+        .join("automations")
+        .join("automation_daily");
+    for path in [&builtin_skill, &plugin_skill, &vault, &automation] {
+        fs::create_dir_all(path).unwrap();
+    }
+    fs::write(
+        builtin_skill.join("SKILL.md"),
+        "---\nname: builtin\n---\nbody",
+    )
+    .unwrap();
+    fs::write(
+        plugin_skill.join("SKILL.md"),
+        "---\nname: plugin-skill\n---\nbody",
+    )
+    .unwrap();
+    fs::write(
+        plugin.join("kimi.plugin.json"),
+        r#"{
+          "name":"demo",
+          "skills":"skills",
+          "mcpServers":{"demo-mcp":{"command":"server","env":{"TOKEN":"secret-mcp"}}}
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        runtime_home.join("plugins").join("installed.json"),
+        r#"{"version":1,"plugins":[{"id":"demo","enabled":true}]}"#,
+    )
+    .unwrap();
+    fs::write(vault.join("profile.md"), "private memory").unwrap();
+    fs::write(
+        daimon.join("config.json"),
+        r#"{
+          "model": {
+            "current": "k3-agent",
+            "providers": {
+              "daimon-kimi-code": {"type":"kimi","baseUrl":"https://api.example.test","credential":"kimiCode"}
+            },
+            "models": {
+              "k3-agent": {"provider":"daimon-kimi-code","model":"k3-agent"}
+            }
+          },
+          "credentials": {"kimiCode":{"apiKey":"secret-provider"}}
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        automation.join("automation.json"),
+        r#"{
+          "version":1,
+          "automation": {
+            "automationId":"automation_daily",
+            "title":"Daily",
+            "enabled":true,
+            "trigger":{"kind":"schedule","cron":"0 9 * * *"},
+            "execution":{"kind":"agent","prompt":"report"},
+            "createdAt":"2026-07-22T00:00:00Z",
+            "updatedAt":"2026-07-22T01:00:00Z"
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let app = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-app")
+        .unwrap();
+
+    assert_eq!(app.title(), "Kimi App");
+    assert_eq!(
+        asset_data(app, AssetType::Skill)[0]
+            .data
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        asset_data(app, AssetType::Plugin)[0].data[0]["name"],
+        "demo"
+    );
+    assert_eq!(
+        asset_data(app, AssetType::Mcp)[0].data[0]["env"]["TOKEN"],
+        "****"
+    );
+    let providers = asset_data(app, AssetType::Provider);
+    assert_eq!(providers[0].data[0]["providerId"], "daimon-kimi-code");
+    assert_eq!(providers[0].data[0]["apiKey"], "****");
+    assert!(!providers[0].data.to_string().contains("secret-provider"));
+    assert_eq!(
+        asset_data(app, AssetType::Memory)[0]
+            .data
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        asset_data(app, AssetType::Cron)[0].data[0]["schedule"],
+        "0 9 * * *"
+    );
+    assert_eq!(app.get_assets(AssetType::Process).unwrap().len(), 1);
 }
 
 #[test]

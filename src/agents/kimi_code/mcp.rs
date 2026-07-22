@@ -31,7 +31,7 @@ impl Asset<Vec<McpData>> for McpAsset {
     }
 }
 
-fn mcp_data(agent_home: &std::path::Path) -> SentraResult<Vec<McpData>> {
+pub(super) fn mcp_data(agent_home: &std::path::Path) -> SentraResult<Vec<McpData>> {
     let mut results = Vec::new();
     if let Some(config) = read_json_file(agent_home.join("mcp.json"))? {
         results.extend(parse_kimi_mcp_servers(

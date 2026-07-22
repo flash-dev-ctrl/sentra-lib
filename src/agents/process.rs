@@ -121,8 +121,8 @@ pub(crate) fn process_has_ide_extension(process: &ProcessInfo<'_>, extension_id:
         .is_some_and(|path| value_has_ide_extension(path.to_string_lossy().as_ref(), extension_id))
         || process
             .cmdline
-            .first()
-            .is_some_and(|command| value_has_ide_extension(command, extension_id))
+            .iter()
+            .any(|command| value_has_ide_extension(command, extension_id))
 }
 
 fn value_has_ide_extension(value: &str, extension_id: &str) -> bool {

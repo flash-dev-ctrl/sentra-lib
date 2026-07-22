@@ -98,13 +98,37 @@ pub(crate) const HERMES_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const KIMI_CODE_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "kimi-code",
+pub(crate) const KIMI_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "kimi-cli",
     title: Some("Kimi Code"),
     homes: &[&[".kimi-code"]],
     asset_for_type: crate::agents::kimi_code::asset_for_type,
     is_installed: crate::agents::kimi_code::is_agent_installed,
     process_provider: crate::agents::kimi_code::process_data,
+    process_home_env_vars: &["KIMI_CODE_HOME"],
+};
+
+pub(crate) const KIMI_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "kimi-app",
+    title: Some("Kimi App"),
+    homes: &[
+        &["AppData", "Roaming", "kimi-desktop"],
+        &["Library", "Application Support", "kimi-desktop"],
+        &[".config", "kimi-desktop"],
+    ],
+    asset_for_type: crate::agents::kimi_code::asset_for_type,
+    is_installed: crate::agents::kimi_code::is_agent_installed,
+    process_provider: crate::agents::kimi_code::app_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const KIMI_CLI_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "kimi-cli-ide",
+    title: Some("Kimi Code IDE Extension"),
+    homes: &[&[".kimi-code"]],
+    asset_for_type: crate::agents::kimi_code::asset_for_type,
+    is_installed: crate::agents::kimi_code::is_agent_installed,
+    process_provider: crate::agents::kimi_code::ide_process_data,
     process_home_env_vars: &["KIMI_CODE_HOME"],
 };
 
@@ -359,7 +383,9 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         CLAUDE_CLI_IDE_AGENT_ENTRY.clone(),
         CLAUDE_APP_AGENT_ENTRY.clone(),
         HERMES_AGENT_ENTRY.clone(),
-        KIMI_CODE_AGENT_ENTRY.clone(),
+        KIMI_CLI_AGENT_ENTRY.clone(),
+        KIMI_APP_AGENT_ENTRY.clone(),
+        KIMI_CLI_IDE_AGENT_ENTRY.clone(),
         OPENCLAW_AGENT_ENTRY.clone(),
         OPENCODE_AGENT_ENTRY.clone(),
         PI_AGENT_ENTRY.clone(),
@@ -437,6 +463,13 @@ mod tests {
                 "claude-cli-ide",
                 "Claude Code IDE Extension",
             ),
+            (&KIMI_CLI_AGENT_ENTRY, "kimi-cli", "Kimi Code"),
+            (&KIMI_APP_AGENT_ENTRY, "kimi-app", "Kimi App"),
+            (
+                &KIMI_CLI_IDE_AGENT_ENTRY,
+                "kimi-cli-ide",
+                "Kimi Code IDE Extension",
+            ),
         ] {
             assert_eq!(entry.name, name);
             assert_eq!(entry.title, Some(title));
@@ -453,7 +486,9 @@ mod tests {
             &CLAUDE_CLI_IDE_AGENT_ENTRY,
             &CLAUDE_APP_AGENT_ENTRY,
             &HERMES_AGENT_ENTRY,
-            &KIMI_CODE_AGENT_ENTRY,
+            &KIMI_CLI_AGENT_ENTRY,
+            &KIMI_APP_AGENT_ENTRY,
+            &KIMI_CLI_IDE_AGENT_ENTRY,
             &OPENCLAW_AGENT_ENTRY,
             &OPENCODE_AGENT_ENTRY,
             &PI_AGENT_ENTRY,

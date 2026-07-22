@@ -236,7 +236,7 @@ fn delete_provider_data(
     Ok(AssetMutationResult::changed())
 }
 
-fn provider_data(
+pub(super) fn provider_data(
     agent_home: &std::path::Path,
     mask_secrets: bool,
 ) -> SentraResult<Vec<ProviderData>> {
@@ -444,7 +444,7 @@ mod tests {
 
     #[test]
     fn probe_requests_cover_supported_protocols() {
-        let provider = ProviderAsset::new("kimi-code", ".kimi-code");
+        let provider = ProviderAsset::new("kimi-cli", ".kimi-code");
         let requests = provider.get_request("kimi-k2");
 
         assert_eq!(requests.len(), 3);
