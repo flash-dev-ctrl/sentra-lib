@@ -3,9 +3,8 @@ use std::path::{Path, PathBuf};
 use crate::SentraResult;
 use crate::agents::codebuddy::surface;
 use crate::agents::install_status::{
-    InstallStatusProbe, any_command_exists_with, any_existing_dir_with, any_existing_file_with,
-    binary_paths, env_path, is_ide_extension_installed, is_named_cli_agent_installed_with,
-    user_home_for_agent_home,
+    InstallStatusProbe, any_existing_dir_with, any_existing_file_with, binary_paths, env_path,
+    is_ide_extension_installed, is_named_cli_agent_installed_with, user_home_for_agent_home,
 };
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
@@ -92,18 +91,9 @@ fn is_codebuddy_ide_installed_with(
     } else {
         &["CodeBuddy"]
     };
-    any_command_exists_with(ide_commands(agent_name), probe)
-        || any_existing_file_with(ide_install_paths(agent_name, agent_home), probe)
+    any_existing_file_with(ide_install_paths(agent_name, agent_home), probe)
         || any_existing_dir_with(ide_app_paths(agent_name, agent_home), probe)
         || probe.product_installed(products, &["Tencent", "腾讯"])
-}
-
-fn ide_commands(agent_name: &str) -> &'static [&'static str] {
-    if surface::is_cn(agent_name) {
-        &["CodeBuddy CN", "buddycn"]
-    } else {
-        &["CodeBuddy", "codebuddy-ide"]
-    }
 }
 
 fn ide_install_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
@@ -169,6 +159,25 @@ mod tests {
         if cfg!(windows) {
             assert!(is_codebuddy_ide_installed_with(
                 "codebuddy-cn-ide",
+                &app_home,
+                &probe
+            ));
+        }
+    }
+
+    #[test]
+    fn cli_command_does_not_imply_desktop_ide_installation() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_home = dir.path().join("AppData").join("Roaming").join("CodeBuddy");
+        let probe = InstallStatusProbe::test(
+            |binary| binary.eq_ignore_ascii_case("CodeBuddy"),
+            |_| false,
+            |_| false,
+        );
+
+        if cfg!(windows) {
+            assert!(!is_codebuddy_ide_installed_with(
+                "codebuddy-ide",
                 &app_home,
                 &probe
             ));
