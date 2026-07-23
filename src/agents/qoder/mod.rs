@@ -12,7 +12,9 @@ mod process;
 mod provider;
 mod skill;
 mod surface;
+mod work_cron;
 mod work_install;
+mod work_mcp;
 mod work_meta;
 mod work_process;
 mod work_skill;
@@ -72,6 +74,8 @@ pub(crate) fn asset_for_type(
             AssetType::Skill => vec![Box::new(work_skill::SkillAsset::new(
                 agent_name, agent_home,
             ))],
+            AssetType::Mcp => vec![Box::new(work_mcp::McpAsset::new(agent_name, agent_home))],
+            AssetType::Cron => vec![Box::new(work_cron::CronAsset::new(agent_name, agent_home))],
             AssetType::Process => vec![Box::new(crate::agents::process::ProcessAsset::new(
                 agent_name,
                 agent_home,

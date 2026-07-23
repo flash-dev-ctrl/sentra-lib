@@ -1,3 +1,7 @@
+use std::path::{Path, PathBuf};
+
+use crate::agents::install_status::{env_path, hidden_home_parent};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum QoderEdition {
     En,
@@ -68,4 +72,49 @@ pub(super) fn is_cn(agent_name: &str) -> bool {
             | QoderSurface::Ide(QoderEdition::Cn)
             | QoderSurface::Work(QoderEdition::Cn)
     )
+}
+
+pub(super) fn work_data_roots(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
+    let app_dir = if is_cn(agent_name) {
+        "QoderWorkCN"
+    } else {
+        "QoderWork"
+    };
+    let mut roots = Vec::new();
+    let user_home = hidden_home_parent(agent_home);
+    if agent_home_is_default_work_home(agent_name, agent_home)
+        && let Some(app_data) = env_path("APPDATA")
+        && app_data.starts_with(&user_home)
+    {
+        roots.push(app_data.join(app_dir));
+    }
+    roots.extend([
+        user_home.join("AppData").join("Roaming").join(app_dir),
+        user_home
+            .join("Library")
+            .join("Application Support")
+            .join(app_dir),
+        user_home.join(".config").join(app_dir),
+    ]);
+    dedup_paths(roots)
+}
+
+fn dedup_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for path in paths {
+        if out.iter().any(|item: &PathBuf| item == &path) {
+            continue;
+        }
+        out.push(path);
+    }
+    out
+}
+
+fn agent_home_is_default_work_home(agent_name: &str, agent_home: &Path) -> bool {
+    let home_dir_name = if is_cn(agent_name) {
+        ".qoderwork-cn"
+    } else {
+        ".qoderwork"
+    };
+    hidden_home_parent(agent_home).join(home_dir_name).as_path() == agent_home
 }
