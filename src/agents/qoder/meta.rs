@@ -6,6 +6,7 @@ use crate::agents::install_status::{
     hidden_home_parent,
 };
 use crate::agents::object::{AssetCore, impl_erased_asset};
+use crate::agents::qoder::surface;
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::dir_exists;
 
@@ -33,10 +34,9 @@ impl Asset<Option<MetaData>> for MetaAsset {
         if !dir_exists(self.core.agent_home()) && !installed {
             return Ok(None);
         }
-        let cn = self.core.agent_name() == "qoder-cn";
         Ok(Some(MetaData {
             id: Some(self.core.agent_name().to_string()),
-            name: if cn { "Qoder CN" } else { "Qoder" }.to_string(),
+            name: surface::title(self.core.agent_name()).to_string(),
             description: None,
             version: None,
             author: Some("Alibaba Cloud".to_string()),
@@ -50,50 +50,72 @@ impl Asset<Option<MetaData>> for MetaAsset {
 
 pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real(hidden_home_parent(agent_home));
-    any_command_exists_with(&[command(agent_name)], &probe)
-        || any_existing_file_with(install_paths(agent_name, agent_home), &probe)
-        || is_desktop_installed_with(agent_home, &probe)
+    if surface::is_ide(agent_name) {
+        is_desktop_installed_with(agent_name, agent_home, &probe)
+    } else {
+        any_command_exists_with(&[surface::cli_command(agent_name)], &probe)
+            || any_existing_file_with(install_paths(agent_name, agent_home), &probe)
+    }
 }
 
 pub(super) fn is_install_target_installed(agent_home: &Path) -> bool {
     let probe = InstallStatusProbe::real(hidden_home_parent(agent_home));
     if cfg!(windows) {
-        is_desktop_installed_with(agent_home, &probe)
+        is_desktop_installed_with("qoder-ide", agent_home, &probe)
     } else {
         any_command_exists_with(&["qodercli"], &probe)
-            || any_existing_file_with(install_paths("qoder", agent_home), &probe)
-    }
-}
-
-fn command(agent_name: &str) -> &'static str {
-    if agent_name == "qoder-cn" {
-        "qoderclicn"
-    } else {
-        "qodercli"
+            || any_existing_file_with(install_paths("qoder-cli", agent_home), &probe)
     }
 }
 
 fn install_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
-    let command = command(agent_name);
+    let command = surface::cli_command(agent_name);
     binary_paths(
-        hidden_home_parent(agent_home).join(".qoder").join("bin"),
+        hidden_home_parent(agent_home)
+            .join(surface::cli_home_dir(agent_name))
+            .join("bin"),
         command,
     )
 }
 
-fn is_desktop_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
-    any_existing_file_with(desktop_install_paths(agent_home), probe)
-        || probe.product_installed(&["Qoder"], &["Alibaba", "Qoder"])
+fn is_desktop_installed_with(
+    agent_name: &str,
+    agent_home: &Path,
+    probe: &InstallStatusProbe,
+) -> bool {
+    any_existing_file_with(desktop_install_paths(agent_name, agent_home), probe)
+        || if surface::is_cn(agent_name) {
+            probe.product_installed(&["Qoder CN", "QoderCN"], &["Alibaba", "Qoder"])
+        } else {
+            probe.product_installed(&["Qoder"], &["Alibaba", "Qoder"])
+        }
 }
 
-fn desktop_install_paths(agent_home: &Path) -> Vec<PathBuf> {
+fn desktop_install_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
     let user_home = hidden_home_parent(agent_home);
     let local_app_data =
         env_path("LOCALAPPDATA").unwrap_or_else(|| user_home.join("AppData").join("Local"));
-    let mut paths = binary_paths(local_app_data.join("Programs").join("Qoder"), "Qoder");
+    let (dir_names, binary_names): (&[&str], &[&str]) = if surface::is_cn(agent_name) {
+        (&["Qoder CN", "QoderCN"], &["QoderCN", "Qoder CN"])
+    } else {
+        (&["Qoder"], &["Qoder"])
+    };
+    let mut paths = Vec::new();
+    for dir_name in dir_names {
+        for binary_name in binary_names {
+            paths.extend(binary_paths(
+                local_app_data.join("Programs").join(dir_name),
+                binary_name,
+            ));
+        }
+    }
     for env_name in ["ProgramFiles", "ProgramFiles(x86)"] {
         if let Some(root) = env_path(env_name) {
-            paths.extend(binary_paths(root.join("Qoder"), "Qoder"));
+            for dir_name in dir_names {
+                for binary_name in binary_names {
+                    paths.extend(binary_paths(root.join(dir_name), binary_name));
+                }
+            }
         }
     }
     paths
@@ -105,7 +127,7 @@ mod tests {
 
     #[test]
     fn cli_install_path_does_not_repeat_the_binary_name() {
-        let paths = install_paths("qoder", Path::new("home/.qoder"));
+        let paths = install_paths("qoder-cli", Path::new("home/.qoder"));
         let binary = if cfg!(windows) {
             "qodercli.exe"
         } else {
@@ -121,6 +143,22 @@ mod tests {
             !paths
                 .iter()
                 .any(|path| path.ends_with(Path::new("qodercli").join(binary)))
+        );
+    }
+
+    #[test]
+    fn cn_cli_install_path_uses_cn_home_and_binary() {
+        let paths = install_paths("qoder-cn-cli", Path::new("home/.qoder-cn"));
+        let binary = if cfg!(windows) {
+            "qoderclicn.exe"
+        } else {
+            "qoderclicn"
+        };
+
+        assert!(
+            paths
+                .iter()
+                .any(|path| path.ends_with(Path::new(".qoder-cn").join("bin").join(binary)))
         );
     }
 }

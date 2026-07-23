@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
+use crate::agents::qoder::surface;
 use crate::interfaces::{Asset, AssetType, McpData};
 use crate::utils::{parse_mcp_servers, read_json_file};
 
@@ -27,7 +28,7 @@ impl Asset<Vec<McpData>> for McpAsset {
     fn get_data(&self) -> SentraResult<Vec<McpData>> {
         let mut out = Vec::new();
         let cwd = std::env::current_dir().unwrap_or_default();
-        let project_home = cwd.join(format!(".{}", self.core.agent_name()));
+        let project_home = cwd.join(surface::cli_home_dir(self.core.agent_name()));
         for root in [self.core.agent_home().to_path_buf(), project_home] {
             for file in ["settings.json", "settings.local.json", "mcp.json"] {
                 let Some(config) = read_json_file(root.join(file))? else {

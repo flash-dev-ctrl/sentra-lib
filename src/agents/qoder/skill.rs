@@ -1,5 +1,6 @@
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
+use crate::agents::qoder::surface;
 use crate::interfaces::{Asset, AssetType, SkillData};
 use crate::utils::collect_skills_from_dir;
 
@@ -28,7 +29,7 @@ impl Asset<Vec<SkillData>> for SkillAsset {
             self.core.agent_home().join("agents"),
         )?);
         let cwd = std::env::current_dir().unwrap_or_default();
-        let project_home = cwd.join(format!(".{}", self.core.agent_name()));
+        let project_home = cwd.join(surface::cli_home_dir(self.core.agent_name()));
         out.extend(collect_skills_from_dir(project_home.join("skills"))?);
         out.extend(collect_skills_from_dir(project_home.join("agents"))?);
         Ok(out)

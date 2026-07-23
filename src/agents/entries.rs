@@ -242,9 +242,9 @@ pub(crate) const MARVIS_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const QODER_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "qoder",
-    title: Some("Qoder"),
+pub(crate) const QODER_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "qoder-cli",
+    title: Some("Qoder CLI"),
     homes: &[&[".qoder"]],
     asset_for_type: crate::agents::qoder::asset_for_type,
     is_installed: crate::agents::qoder::is_agent_installed,
@@ -252,9 +252,33 @@ pub(crate) const QODER_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const QODER_CN_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "qoder-cn",
-    title: Some("Qoder CN"),
+pub(crate) const QODER_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "qoder-ide",
+    title: Some("Qoder IDE"),
+    homes: &[
+        &["AppData", "Roaming", "Qoder"],
+        &["Library", "Application Support", "Qoder"],
+        &[".config", "Qoder"],
+    ],
+    asset_for_type: crate::agents::qoder::asset_for_type,
+    is_installed: crate::agents::qoder::is_agent_installed,
+    process_provider: crate::agents::qoder::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const QODER_WORK_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "qoder-work",
+    title: Some("Qoder Work"),
+    homes: &[&[".qoderwork"]],
+    asset_for_type: crate::agents::qoder::asset_for_type,
+    is_installed: crate::agents::qoder::is_agent_installed,
+    process_provider: crate::agents::qoder::work_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const QODER_CN_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "qoder-cn-cli",
+    title: Some("Qoder CN CLI"),
     homes: &[&[".qoder-cn"]],
     asset_for_type: crate::agents::qoder::asset_for_type,
     is_installed: crate::agents::qoder::is_agent_installed,
@@ -262,17 +286,40 @@ pub(crate) const QODER_CN_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const QODER_AGENT_ENTRIES: &[AgentEntry] = &[QODER_AGENT_ENTRY, QODER_CN_AGENT_ENTRY];
-
-pub(crate) const QODERWORK_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "qoderwork",
-    title: Some("QoderWork"),
-    homes: &[&[".qoderwork"]],
-    asset_for_type: crate::agents::qoderwork::asset_for_type,
-    is_installed: crate::agents::qoderwork::is_agent_installed,
-    process_provider: crate::agents::qoderwork::process_data,
+pub(crate) const QODER_CN_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "qoder-cn-ide",
+    title: Some("Qoder CN IDE"),
+    homes: &[
+        &["AppData", "Roaming", "QoderCN"],
+        &["AppData", "Roaming", "Qoder CN"],
+        &["Library", "Application Support", "QoderCN"],
+        &["Library", "Application Support", "Qoder CN"],
+        &[".config", "QoderCN"],
+    ],
+    asset_for_type: crate::agents::qoder::asset_for_type,
+    is_installed: crate::agents::qoder::is_agent_installed,
+    process_provider: crate::agents::qoder::process_data,
     process_home_env_vars: &[],
 };
+
+pub(crate) const QODER_CN_WORK_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "qoder-cn-work",
+    title: Some("Qoder CN Work"),
+    homes: &[&[".qoderwork-cn"]],
+    asset_for_type: crate::agents::qoder::asset_for_type,
+    is_installed: crate::agents::qoder::is_agent_installed,
+    process_provider: crate::agents::qoder::work_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const QODER_AGENT_ENTRIES: &[AgentEntry] = &[
+    QODER_CLI_AGENT_ENTRY,
+    QODER_IDE_AGENT_ENTRY,
+    QODER_WORK_AGENT_ENTRY,
+    QODER_CN_CLI_AGENT_ENTRY,
+    QODER_CN_IDE_AGENT_ENTRY,
+    QODER_CN_WORK_AGENT_ENTRY,
+];
 
 pub(crate) const TRAE_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "trae",
@@ -396,9 +443,12 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         KIRO_AGENT_ENTRY.clone(),
         LINGCODE_AGENT_ENTRY.clone(),
         MARVIS_AGENT_ENTRY.clone(),
-        QODER_AGENT_ENTRY.clone(),
-        QODER_CN_AGENT_ENTRY.clone(),
-        QODERWORK_AGENT_ENTRY.clone(),
+        QODER_CLI_AGENT_ENTRY.clone(),
+        QODER_IDE_AGENT_ENTRY.clone(),
+        QODER_WORK_AGENT_ENTRY.clone(),
+        QODER_CN_CLI_AGENT_ENTRY.clone(),
+        QODER_CN_IDE_AGENT_ENTRY.clone(),
+        QODER_CN_WORK_AGENT_ENTRY.clone(),
         TRAE_AGENT_ENTRY.clone(),
         VSCODE_AGENT_ENTRY.clone(),
         WORKBUDDY_AGENT_ENTRY.clone(),
@@ -469,6 +519,12 @@ mod tests {
                 "kimi-cli-ide",
                 "Kimi Code IDE Extension",
             ),
+            (&QODER_CLI_AGENT_ENTRY, "qoder-cli", "Qoder CLI"),
+            (&QODER_IDE_AGENT_ENTRY, "qoder-ide", "Qoder IDE"),
+            (&QODER_WORK_AGENT_ENTRY, "qoder-work", "Qoder Work"),
+            (&QODER_CN_CLI_AGENT_ENTRY, "qoder-cn-cli", "Qoder CN CLI"),
+            (&QODER_CN_IDE_AGENT_ENTRY, "qoder-cn-ide", "Qoder CN IDE"),
+            (&QODER_CN_WORK_AGENT_ENTRY, "qoder-cn-work", "Qoder CN Work"),
         ] {
             assert_eq!(entry.name, name);
             assert_eq!(entry.title, Some(title));
@@ -499,9 +555,12 @@ mod tests {
             &KIRO_AGENT_ENTRY,
             &LINGCODE_AGENT_ENTRY,
             &MARVIS_AGENT_ENTRY,
-            &QODER_AGENT_ENTRY,
-            &QODER_CN_AGENT_ENTRY,
-            &QODERWORK_AGENT_ENTRY,
+            &QODER_CLI_AGENT_ENTRY,
+            &QODER_IDE_AGENT_ENTRY,
+            &QODER_WORK_AGENT_ENTRY,
+            &QODER_CN_CLI_AGENT_ENTRY,
+            &QODER_CN_IDE_AGENT_ENTRY,
+            &QODER_CN_WORK_AGENT_ENTRY,
             &TRAE_AGENT_ENTRY,
             &VSCODE_AGENT_ENTRY,
             &WORKBUDDY_AGENT_ENTRY,
