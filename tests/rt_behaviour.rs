@@ -2405,7 +2405,7 @@ fn kimi_app_collects_daimon_assets_and_masks_credentials() {
         .find(|agent| agent.name() == "kimi-app")
         .unwrap();
 
-    assert_eq!(app.title(), "Kimi App");
+    assert_eq!(app.title(), "Kimi Work");
     assert_eq!(
         asset_data(app, AssetType::Skill)[0]
             .data
