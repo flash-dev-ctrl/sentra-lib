@@ -77,15 +77,24 @@ mod tests {
 
     #[test]
     fn separates_desktop_process_tree_from_cli() {
-        let app = Path::new(r"C:\Users\me\AppData\Local\Programs\kimi-desktop\Kimi.exe");
-        let runtime = Path::new(
-            r"C:\Users\me\AppData\Local\Programs\kimi-desktop\resources\runtime\node.exe",
-        );
+        let app = Path::new("Users")
+            .join("me")
+            .join("AppData")
+            .join("Local")
+            .join("Programs")
+            .join("kimi-desktop")
+            .join("Kimi.exe");
+        let runtime = app
+            .parent()
+            .unwrap()
+            .join("resources")
+            .join("runtime")
+            .join("node.exe");
 
-        assert_process_match("kimi-app", true, "Kimi.exe", &[], Some(app));
-        assert_process_match("kimi-cli", false, "Kimi.exe", &[], Some(app));
-        assert_process_match("kimi-app", true, "node.exe", &[], Some(runtime));
-        assert_process_match("kimi-cli", false, "node.exe", &[], Some(runtime));
+        assert_process_match("kimi-app", true, "Kimi.exe", &[], Some(app.as_path()));
+        assert_process_match("kimi-cli", false, "Kimi.exe", &[], Some(app.as_path()));
+        assert_process_match("kimi-app", true, "node.exe", &[], Some(runtime.as_path()));
+        assert_process_match("kimi-cli", false, "node.exe", &[], Some(runtime.as_path()));
         assert_process_match(
             "kimi-app",
             true,
