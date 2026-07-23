@@ -110,7 +110,7 @@ pub(crate) const KIMI_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
 
 pub(crate) const KIMI_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "kimi-app",
-    title: Some("Kimi App"),
+    title: Some("Kimi Work"),
     homes: &[
         &["AppData", "Roaming", "kimi-desktop"],
         &["Library", "Application Support", "kimi-desktop"],
@@ -463,7 +463,7 @@ mod tests {
                 "Claude Code IDE Extension",
             ),
             (&KIMI_CLI_AGENT_ENTRY, "kimi-cli", "Kimi Code"),
-            (&KIMI_APP_AGENT_ENTRY, "kimi-app", "Kimi App"),
+            (&KIMI_APP_AGENT_ENTRY, "kimi-app", "Kimi Work"),
             (
                 &KIMI_CLI_IDE_AGENT_ENTRY,
                 "kimi-cli-ide",
