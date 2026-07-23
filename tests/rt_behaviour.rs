@@ -2341,6 +2341,25 @@ fn user_agents_skills_belong_only_to_general_agent() {
 }
 
 #[test]
+fn cursor_hooks_json_is_memory_not_cron() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".cursor");
+    fs::create_dir_all(&home).unwrap();
+    fs::write(home.join("hooks.json"), r#"{"hooks":{"AfterFileEdit":[]}}"#).unwrap();
+
+    let agents = discover_agents(dir.path());
+    let cursor = agents
+        .iter()
+        .find(|agent| agent.name() == "cursor")
+        .unwrap();
+
+    assert!(cursor.get_assets(AssetType::Cron).unwrap().is_empty());
+    let memories = asset_data(cursor, AssetType::Memory);
+    let items = memories[0].data.as_array().unwrap();
+    assert!(items.iter().any(|item| item["name"] == "hooks.json"));
+}
+
+#[test]
 fn kimi_cli_collects_local_and_plugin_skills() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");

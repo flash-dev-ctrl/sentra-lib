@@ -151,7 +151,6 @@ fn rust_agents_mirror_typescript_agent_object_files() {
             "skill.rs",
             "mcp.rs",
             "memory.rs",
-            "cron.rs",
             "provider.rs",
             "plugin.rs",
             "process.rs",
