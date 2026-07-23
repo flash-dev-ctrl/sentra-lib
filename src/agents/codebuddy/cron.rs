@@ -7,6 +7,22 @@ use crate::SentraResult;
 use crate::interfaces::{CronData, CronType};
 use crate::utils::SqliteDatabase;
 
+const AUTOMATION_COLUMNS: &[&str] = &[
+    "id",
+    "name",
+    "prompt",
+    "status",
+    "schedule_type",
+    "next_run_at",
+    "last_run_at",
+    "cwds",
+    "rrule",
+    "scheduled_at",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+];
+
 pub(super) fn automation_database_crons(database_path: &Path) -> SentraResult<Vec<CronData>> {
     let Some(database) = SqliteDatabase::open_read_only(database_path)? else {
         return Ok(Vec::new());
@@ -14,35 +30,52 @@ pub(super) fn automation_database_crons(database_path: &Path) -> SentraResult<Ve
     if !database.table_exists("automations")? {
         return Ok(Vec::new());
     }
-    let tasks = database.query_map(
-        "SELECT id, name, prompt, status, schedule_type, next_run_at, last_run_at, \
-         cwds, rrule, scheduled_at, created_at, updated_at, deleted_at \
-         FROM automations",
-        rusqlite::params![],
-        |row| {
-            Ok(DatabaseAutomation {
-                id: row_string(row, 0)?,
-                name: row_string(row, 1)?,
-                prompt: row_string(row, 2)?,
-                status: row_string(row, 3)?,
-                schedule_type: row_string(row, 4)?,
-                next_run_at: row_string(row, 5)?,
-                last_run_at: row_string(row, 6)?,
-                cwds: row_string(row, 7)?,
-                rrule: row_string(row, 8)?,
-                scheduled_at: row_string(row, 9)?,
-                created_at: row_string(row, 10)?,
-                updated_at: row_string(row, 11)?,
-                deleted_at: row_string(row, 12)?,
-            })
-        },
-    )?;
+    let sql = automation_select_sql(&database)?;
+    let tasks = database.query_map(&sql, rusqlite::params![], |row| {
+        Ok(DatabaseAutomation {
+            id: row_string(row, 0)?,
+            name: row_string(row, 1)?,
+            prompt: row_string(row, 2)?,
+            status: row_string(row, 3)?,
+            schedule_type: row_string(row, 4)?,
+            next_run_at: row_string(row, 5)?,
+            last_run_at: row_string(row, 6)?,
+            cwds: row_string(row, 7)?,
+            rrule: row_string(row, 8)?,
+            scheduled_at: row_string(row, 9)?,
+            created_at: row_string(row, 10)?,
+            updated_at: row_string(row, 11)?,
+            deleted_at: row_string(row, 12)?,
+        })
+    })?;
     Ok(dedup_crons(
         tasks
             .into_iter()
             .filter_map(|task| cron_from_database_automation(task, database_path))
             .collect(),
     ))
+}
+
+fn automation_select_sql(database: &SqliteDatabase) -> SentraResult<String> {
+    let columns = database.query_map(
+        "PRAGMA table_info(automations)",
+        rusqlite::params![],
+        |row| row.get::<_, String>(1),
+    )?;
+    let selected = AUTOMATION_COLUMNS
+        .iter()
+        .map(|column| {
+            if columns
+                .iter()
+                .any(|existing| existing.eq_ignore_ascii_case(column))
+            {
+                (*column).to_string()
+            } else {
+                format!("NULL AS {column}")
+            }
+        })
+        .collect::<Vec<_>>();
+    Ok(format!("SELECT {} FROM automations", selected.join(", ")))
 }
 
 #[derive(Debug)]
@@ -260,6 +293,66 @@ mod tests {
         assert_eq!(tasks[0].schedule.as_deref(), Some("FREQ=DAILY;BYHOUR=9"));
         assert_eq!(tasks[0].cwds, ["C:/work"]);
         assert_eq!(tasks[0].created_at, Some(1784780299.0));
+    }
+
+    #[test]
+    fn reads_real_codebuddy_ide_schema_without_deleted_at_column() {
+        let dir = tempfile::tempdir().unwrap();
+        let database_path = dir.path().join("automations.db");
+        let database = rusqlite::Connection::open(&database_path).unwrap();
+        database
+            .execute(
+                "CREATE TABLE automations (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    schedule_type TEXT NOT NULL DEFAULT 'recurring',
+                    next_run_at INTEGER,
+                    last_run_at INTEGER,
+                    cwds TEXT NOT NULL DEFAULT '[]',
+                    rrule TEXT NOT NULL DEFAULT '',
+                    scheduled_at TEXT,
+                    valid_from TEXT,
+                    valid_until TEXT,
+                    skills_json TEXT NOT NULL DEFAULT '[]',
+                    model_id TEXT,
+                    model_is_thinking INTEGER NOT NULL DEFAULT 0,
+                    last_conversation_id_map TEXT NOT NULL DEFAULT '{}',
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    push_to_wechat INTEGER NOT NULL DEFAULT 0
+                )",
+                [],
+            )
+            .unwrap();
+        database
+            .execute(
+                "INSERT INTO automations
+                 (id, name, prompt, status, schedule_type, next_run_at, last_run_at, cwds, rrule,
+                  scheduled_at, valid_from, valid_until, skills_json, model_id, model_is_thinking,
+                  last_conversation_id_map, created_at, updated_at, push_to_wechat)
+                 VALUES
+                 ('automation', 'Weekly summary', 'summarize news', 'ACTIVE', 'recurring',
+                  1785113850000, NULL, '[\"C:/Users/me/CodeBuddy/workspace\"]',
+                  'FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0', NULL, NULL, NULL,
+                  '[]', 'hy3', 1, '{}', 1784787357839, 1784787357839, 0)",
+                [],
+            )
+            .unwrap();
+
+        let tasks = automation_database_crons(&database_path).unwrap();
+
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].id, "automation");
+        assert_eq!(tasks[0].name, "Weekly summary");
+        assert_eq!(tasks[0].enabled, true);
+        assert_eq!(tasks[0].cron_type, Some(CronType::Rrule));
+        assert_eq!(
+            tasks[0].schedule.as_deref(),
+            Some("FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0")
+        );
+        assert_eq!(tasks[0].cwds, ["C:/Users/me/CodeBuddy/workspace"]);
     }
 
     fn create_automations_table(database: &rusqlite::Connection) {
