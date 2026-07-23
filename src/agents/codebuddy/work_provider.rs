@@ -209,7 +209,7 @@ fn host_from_url(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::agents::workbuddy::provider::ProviderAsset;
+    use crate::agents::codebuddy::work_provider::ProviderAsset;
     use crate::interfaces::Asset;
 
     #[test]

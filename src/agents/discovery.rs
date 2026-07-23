@@ -54,7 +54,6 @@ pub fn discover_agents(user_home: impl AsRef<Path>) -> Vec<Agent> {
     results.extend(crate::agents::qoder::discover_agents(user_home));
     results.extend(crate::agents::trae::discover_agents(user_home));
     results.extend(crate::agents::vscode::discover_agents(user_home));
-    results.extend(crate::agents::workbuddy::discover_agents(user_home));
     results.extend(crate::agents::general::discover_agents(user_home));
     results
 }

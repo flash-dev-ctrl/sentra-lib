@@ -31,7 +31,7 @@ impl InstallableAgent {
     fn name(self) -> &'static str {
         match self {
             Self::Antigravity => "antigravity",
-            Self::CodeBuddy => "codebuddy",
+            Self::CodeBuddy => "codebuddy-cli",
             Self::Coder => "coder",
             Self::Codex => "codex-cli",
             Self::ClaudeCli => "claude-cli",
@@ -55,7 +55,7 @@ impl InstallableAgent {
 
         match self {
             Self::Antigravity => &ANTIGRAVITY_AGENT_ENTRY,
-            Self::CodeBuddy => &CODEBUDDY_AGENT_ENTRY,
+            Self::CodeBuddy => &CODEBUDDY_CLI_AGENT_ENTRY,
             Self::Coder => &CODER_AGENT_ENTRY,
             Self::Codex => &CODEX_CLI_AGENT_ENTRY,
             Self::ClaudeCli => &CLAUDE_CLI_AGENT_ENTRY,
@@ -448,7 +448,7 @@ fn install_plans_for_platform(
             crate::agents::vscode::install_plans_for_platform(platform, action)
         }
         InstallableAgent::WorkBuddy => {
-            crate::agents::workbuddy::install_plans_for_platform(platform, action)
+            crate::agents::codebuddy::work_install_plans_for_platform(platform, action)
         }
     }
 }
@@ -520,7 +520,7 @@ fn uninstall_plans_for_platform(
             crate::agents::vscode::uninstall_plans_for_platform(platform, options)
         }
         InstallableAgent::WorkBuddy => {
-            crate::agents::workbuddy::uninstall_plans_for_platform(platform, options)
+            crate::agents::codebuddy::work_uninstall_plans_for_platform(platform, options)
         }
     }
 }

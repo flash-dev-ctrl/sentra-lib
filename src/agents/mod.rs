@@ -25,7 +25,6 @@ mod qoder;
 mod sentra;
 mod trae;
 mod vscode;
-mod workbuddy;
 
 pub use base::Agent;
 pub use discovery::discover_agents;
@@ -59,7 +58,9 @@ fn installable_agent(
 ) -> crate::SentraResult<install::InstallableAgent> {
     match agent {
         "antigravity" => Ok(install::InstallableAgent::Antigravity),
-        "codebuddy" => Ok(install::InstallableAgent::CodeBuddy),
+        "codebuddy" | "codebuddy-code" | "codebuddy-cli" => {
+            Ok(install::InstallableAgent::CodeBuddy)
+        }
         "coder" => Ok(install::InstallableAgent::Coder),
         "codex" | "codex-cli" => Ok(install::InstallableAgent::Codex),
         "claude" | "claude-cli" => Ok(install::InstallableAgent::ClaudeCli),
@@ -170,6 +171,8 @@ mod tests {
         for agent in [
             "antigravity",
             "codebuddy",
+            "codebuddy-code",
+            "codebuddy-cli",
             "coder",
             "cursor",
             "kiro",
@@ -190,6 +193,16 @@ mod tests {
             ("qoderwork", install::InstallableAgent::QoderWork),
         ] {
             assert_eq!(installable_agent(agent, "install").unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn codebuddy_install_legacy_aliases_are_supported() {
+        for agent in ["codebuddy", "codebuddy-code"] {
+            assert_eq!(
+                installable_agent(agent, "install").unwrap(),
+                install::InstallableAgent::CodeBuddy
+            );
         }
     }
 
