@@ -333,18 +333,30 @@ fn codebuddy_product_family_discovers_canonical_surfaces() {
     assert_eq!(cn_ide_cron[0].data[0]["id"], "ide-task");
     assert_eq!(cn_ide_cron[0].data[0]["type"], "at");
 
-    let plugin = agents
+    let ide_extension = agents
         .iter()
-        .find(|agent| agent.name() == "codebuddy-ide-plugin")
-        .expect("missing codebuddy-ide-plugin");
-    assert_eq!(plugin.title(), "CodeBuddy IDE Plugin");
-    assert!(plugin.get_assets(AssetType::Mcp).unwrap().is_empty());
-    assert!(plugin.get_assets(AssetType::Provider).unwrap().is_empty());
-    assert_eq!(plugin.get_assets(AssetType::Process).unwrap().len(), 1);
+        .find(|agent| agent.name() == "codebuddy-cli-ide")
+        .expect("missing codebuddy-cli-ide");
+    assert_eq!(ide_extension.title(), "CodeBuddy IDE Extension");
+    assert_eq!(ide_extension.get_assets(AssetType::Mcp).unwrap().len(), 1);
+    assert_eq!(
+        ide_extension.get_assets(AssetType::Provider).unwrap().len(),
+        1
+    );
+    assert!(
+        ide_extension
+            .get_assets(AssetType::Cron)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        ide_extension.get_assets(AssetType::Process).unwrap().len(),
+        1
+    );
 }
 
 #[test]
-fn codebuddy_cli_home_does_not_imply_ide_plugin_installation() {
+fn codebuddy_cli_home_does_not_imply_ide_extension_installation() {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join(".codebuddy")).unwrap();
 
@@ -354,7 +366,7 @@ fn codebuddy_cli_home_does_not_imply_ide_plugin_installation() {
     assert!(
         !agents
             .iter()
-            .any(|agent| agent.name() == "codebuddy-ide-plugin")
+            .any(|agent| agent.name() == "codebuddy-cli-ide")
     );
 }
 

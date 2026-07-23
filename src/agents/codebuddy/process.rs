@@ -13,13 +13,13 @@ pub(crate) fn ide_process_data() -> Vec<ProcessData> {
     crate::agents::process::process_data(matches_any_ide_process)
 }
 
-pub(crate) fn plugin_process_data() -> Vec<ProcessData> {
-    crate::agents::process::process_data(matches_plugin_process)
+pub(crate) fn ide_extension_process_data() -> Vec<ProcessData> {
+    crate::agents::process::process_data(matches_ide_extension_process)
 }
 
 pub(super) fn matcher(agent_name: &str) -> crate::agents::process::ProcessMatcher {
-    if surface::is_ide_plugin(agent_name) {
-        matches_plugin_process
+    if surface::is_ide_extension(agent_name) {
+        matches_ide_extension_process
     } else if surface::is_ide(agent_name) {
         if surface::is_cn(agent_name) {
             matches_cn_ide_process
@@ -66,7 +66,7 @@ fn matches_cn_ide_process(process: &ProcessInfo<'_>) -> bool {
         .is_some_and(|path| path_has_component(path, &["CodeBuddy CN"]))
 }
 
-fn matches_plugin_process(process: &ProcessInfo<'_>) -> bool {
+fn matches_ide_extension_process(process: &ProcessInfo<'_>) -> bool {
     process_has_ide_extension(process, surface::CODEBUDDY_IDE_EXTENSION_ID)
 }
 
@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn matches_ide_plugin_extension_process() {
+    fn matches_ide_extension_process_by_extension_path() {
         let cmdline = vec![
             "node.exe".to_string(),
             r"C:\Users\me\.vscode\extensions\tencent-cloud.coding-copilot-1.0.0\dist\extension.js"
@@ -131,6 +131,6 @@ mod tests {
             path: None,
         };
 
-        assert!(matches_plugin_process(&process));
+        assert!(matches_ide_extension_process(&process));
     }
 }

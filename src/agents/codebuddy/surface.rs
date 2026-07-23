@@ -14,21 +14,21 @@ pub(super) enum CodeBuddyEdition {
 pub(super) enum CodeBuddySurface {
     Cli,
     Ide(CodeBuddyEdition),
-    IdePlugin,
+    IdeExtension,
     Work,
+    Unknown,
 }
 
 pub(super) fn surface(agent_name: &str) -> CodeBuddySurface {
     match agent_name {
+        "codebuddy-cli" | "codebuddy" | "codebuddy-code" => CodeBuddySurface::Cli,
         "workbuddy" => CodeBuddySurface::Work,
         "codebuddy-ide" => CodeBuddySurface::Ide(CodeBuddyEdition::En),
         "codebuddy-cn-ide" | "codebuddy-cn" | "codebuddycn" => {
             CodeBuddySurface::Ide(CodeBuddyEdition::Cn)
         }
-        "codebuddy-ide-plugin" | "codebuddy-plugin" | "coding-copilot" => {
-            CodeBuddySurface::IdePlugin
-        }
-        _ => CodeBuddySurface::Cli,
+        "codebuddy-cli-ide" => CodeBuddySurface::IdeExtension,
+        _ => CodeBuddySurface::Unknown,
     }
 }
 
@@ -37,8 +37,9 @@ pub(super) fn title(agent_name: &str) -> &'static str {
         CodeBuddySurface::Cli => "CodeBuddy CLI",
         CodeBuddySurface::Ide(CodeBuddyEdition::En) => "CodeBuddy IDE",
         CodeBuddySurface::Ide(CodeBuddyEdition::Cn) => "CodeBuddy CN IDE",
-        CodeBuddySurface::IdePlugin => "CodeBuddy IDE Plugin",
+        CodeBuddySurface::IdeExtension => "CodeBuddy IDE Extension",
         CodeBuddySurface::Work => "WorkBuddy",
+        CodeBuddySurface::Unknown => "CodeBuddy",
     }
 }
 
@@ -50,8 +51,8 @@ pub(super) fn is_ide(agent_name: &str) -> bool {
     matches!(surface(agent_name), CodeBuddySurface::Ide(_))
 }
 
-pub(super) fn is_ide_plugin(agent_name: &str) -> bool {
-    surface(agent_name) == CodeBuddySurface::IdePlugin
+pub(super) fn is_ide_extension(agent_name: &str) -> bool {
+    surface(agent_name) == CodeBuddySurface::IdeExtension
 }
 
 pub(super) fn is_work(agent_name: &str) -> bool {

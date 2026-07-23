@@ -488,7 +488,7 @@ fn agent_entries_are_defined_in_shared_entries_file() {
         "CODEBUDDY_CLI_AGENT_ENTRY",
         "CODEBUDDY_IDE_AGENT_ENTRY",
         "CODEBUDDY_CN_IDE_AGENT_ENTRY",
-        "CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY",
+        "CODEBUDDY_CLI_IDE_AGENT_ENTRY",
         "CODER_AGENT_ENTRY",
         "CURSOR_AGENT_ENTRY",
         "GENERAL_AGENT_ENTRIES",
