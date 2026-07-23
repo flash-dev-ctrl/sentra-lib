@@ -22,7 +22,6 @@ mod openclaw;
 mod opencode;
 mod pi;
 mod qoder;
-mod qoderwork;
 mod sentra;
 mod trae;
 mod vscode;
@@ -71,8 +70,8 @@ fn installable_agent(
         "marvis" => Ok(install::InstallableAgent::Marvis),
         "opencode" => Ok(install::InstallableAgent::OpenCode),
         "pi" => Ok(install::InstallableAgent::Pi),
-        "qoder" => Ok(install::InstallableAgent::Qoder),
-        "qoderwork" => Ok(install::InstallableAgent::QoderWork),
+        "qoder" | "qoder-cli" => Ok(install::InstallableAgent::Qoder),
+        "qoderwork" | "qoder-work" => Ok(install::InstallableAgent::QoderWork),
         "trae" => Ok(install::InstallableAgent::Trae),
         "vscode" => Ok(install::InstallableAgent::VsCode),
         "workbuddy" => Ok(install::InstallableAgent::WorkBuddy),
@@ -174,13 +173,23 @@ mod tests {
             "coder",
             "cursor",
             "kiro",
-            "qoder",
-            "qoderwork",
+            "qoder-cli",
+            "qoder-work",
             "trae",
             "vscode",
             "workbuddy",
         ] {
             assert!(installable_agent(agent, "install").is_ok(), "{agent}");
+        }
+    }
+
+    #[test]
+    fn qoder_install_legacy_aliases_are_supported() {
+        for (agent, expected) in [
+            ("qoder", install::InstallableAgent::Qoder),
+            ("qoderwork", install::InstallableAgent::QoderWork),
+        ] {
+            assert_eq!(installable_agent(agent, "install").unwrap(), expected);
         }
     }
 

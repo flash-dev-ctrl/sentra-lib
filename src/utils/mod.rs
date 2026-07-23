@@ -6,6 +6,7 @@ mod memory;
 pub mod protocol;
 mod skill;
 mod source;
+mod sqlite;
 pub mod user;
 
 pub use file::{
@@ -27,3 +28,4 @@ pub use skill::{
     parse_skill_frontmatter, set_skill_data,
 };
 pub use source::stage_skill_source;
+pub(crate) use sqlite::SqliteDatabase;

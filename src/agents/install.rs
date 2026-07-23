@@ -42,8 +42,8 @@ impl InstallableAgent {
             Self::Marvis => "marvis",
             Self::OpenCode => "opencode",
             Self::Pi => "pi",
-            Self::Qoder => "qoder",
-            Self::QoderWork => "qoderwork",
+            Self::Qoder => "qoder-cli",
+            Self::QoderWork => "qoder-work",
             Self::Trae => "trae",
             Self::VsCode => "vscode",
             Self::WorkBuddy => "workbuddy",
@@ -66,8 +66,8 @@ impl InstallableAgent {
             Self::Marvis => &MARVIS_AGENT_ENTRY,
             Self::OpenCode => &OPENCODE_AGENT_ENTRY,
             Self::Pi => &PI_AGENT_ENTRY,
-            Self::Qoder => &QODER_AGENT_ENTRY,
-            Self::QoderWork => &QODERWORK_AGENT_ENTRY,
+            Self::Qoder => &QODER_CLI_AGENT_ENTRY,
+            Self::QoderWork => &QODER_WORK_AGENT_ENTRY,
             Self::Trae => &TRAE_AGENT_ENTRY,
             Self::VsCode => &VSCODE_AGENT_ENTRY,
             Self::WorkBuddy => &WORKBUDDY_AGENT_ENTRY,
@@ -441,7 +441,7 @@ fn install_plans_for_platform(
             crate::agents::qoder::install_plans_for_platform(platform, action)
         }
         InstallableAgent::QoderWork => {
-            crate::agents::qoderwork::install_plans_for_platform(platform, action)
+            crate::agents::qoder::work_install_plans_for_platform(platform, action)
         }
         InstallableAgent::Trae => crate::agents::trae::install_plans_for_platform(platform, action),
         InstallableAgent::VsCode => {
@@ -511,7 +511,7 @@ fn uninstall_plans_for_platform(
             crate::agents::qoder::uninstall_plans_for_platform(platform, options)
         }
         InstallableAgent::QoderWork => {
-            crate::agents::qoderwork::uninstall_plans_for_platform(platform, options)
+            crate::agents::qoder::work_uninstall_plans_for_platform(platform, options)
         }
         InstallableAgent::Trae => {
             crate::agents::trae::uninstall_plans_for_platform(platform, options)
@@ -900,7 +900,7 @@ fn plans_or_unsupported(
                 "no official package source matches the detected product"
             }
             (InstallableAgent::QoderWork, Platform::Linux) => {
-                "the vendor does not publish QoderWork for Linux"
+                "the vendor does not publish Qoder Work for Linux"
             }
             (InstallableAgent::WorkBuddy, Platform::Linux) => {
                 "the vendor does not publish WorkBuddy for Linux"

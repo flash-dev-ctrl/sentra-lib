@@ -16,6 +16,12 @@ pub enum SentraError {
     Yaml(#[from] serde_yaml::Error),
     #[error("TOML parse error: {0}")]
     Toml(#[from] toml::de::Error),
+    #[error("SQLite error at {path:?}: {source}")]
+    Sqlite {
+        path: Option<PathBuf>,
+        #[source]
+        source: rusqlite::Error,
+    },
     #[error("unsupported wire protocol: {0}")]
     UnsupportedProtocol(String),
     #[error("{0}")]
@@ -25,6 +31,13 @@ pub enum SentraError {
 impl SentraError {
     pub fn io(path: impl Into<Option<PathBuf>>, source: std::io::Error) -> Self {
         Self::Io {
+            path: path.into(),
+            source,
+        }
+    }
+
+    pub fn sqlite(path: impl Into<Option<PathBuf>>, source: rusqlite::Error) -> Self {
+        Self::Sqlite {
             path: path.into(),
             source,
         }

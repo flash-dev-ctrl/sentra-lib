@@ -1,5 +1,6 @@
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
+use crate::agents::qoder::surface;
 use crate::interfaces::{Asset, AssetType, CronData, CronType};
 use crate::utils::read_json_file;
 
@@ -27,7 +28,8 @@ impl Asset<Vec<CronData>> for CronAsset {
         let cwd = std::env::current_dir().unwrap_or_default();
         for settings in [
             self.core.agent_home().join("settings.json"),
-            cwd.join(".qoder").join("settings.json"),
+            cwd.join(surface::cli_home_dir(self.core.agent_name()))
+                .join("settings.json"),
         ] {
             let Some(config) = read_json_file(&settings)? else {
                 continue;

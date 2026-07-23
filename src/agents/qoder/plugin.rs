@@ -1,5 +1,6 @@
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
+use crate::agents::qoder::surface;
 use crate::interfaces::{Asset, AssetType, PluginData, PluginInstallSource, PluginSourceKind};
 use crate::utils::{dir_exists, is_directory, read_json_file};
 
@@ -23,18 +24,19 @@ impl_erased_asset!(PluginAsset, AssetType::Plugin, Vec<PluginData>);
 
 impl Asset<Vec<PluginData>> for PluginAsset {
     fn get_data(&self) -> SentraResult<Vec<PluginData>> {
-        plugin_data(self.core.agent_home())
+        plugin_data(self.core.agent_name(), self.core.agent_home())
     }
 }
 
-fn plugin_data(agent_home: &std::path::Path) -> SentraResult<Vec<PluginData>> {
+fn plugin_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Vec<PluginData>> {
     let mut out = Vec::new();
     let cwd = std::env::current_dir().unwrap_or_default();
+    let workspace_home = cwd.join(surface::cli_home_dir(agent_name));
     for root in [
         agent_home.join("plugins"),
         agent_home.join("skills"),
-        cwd.join(".qoder").join("plugins"),
-        cwd.join(".qoder").join("skills"),
+        workspace_home.join("plugins"),
+        workspace_home.join("skills"),
     ] {
         if !dir_exists(&root) {
             continue;
