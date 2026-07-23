@@ -182,15 +182,61 @@ pub(crate) const ANTIGRAVITY_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const CODEBUDDY_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "codebuddy",
-    title: Some("CodeBuddy"),
+pub(crate) const CODEBUDDY_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codebuddy-cli",
+    title: Some("CodeBuddy CLI"),
     homes: &[&[".codebuddy"]],
     asset_for_type: crate::agents::codebuddy::asset_for_type,
     is_installed: crate::agents::codebuddy::is_agent_installed,
     process_provider: crate::agents::codebuddy::process_data,
     process_home_env_vars: &["CODEBUDDY_CONFIG_DIR"],
 };
+
+pub(crate) const CODEBUDDY_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codebuddy-ide",
+    title: Some("CodeBuddy IDE"),
+    homes: &[
+        &["AppData", "Roaming", "CodeBuddy"],
+        &["Library", "Application Support", "CodeBuddy"],
+        &[".config", "CodeBuddy"],
+    ],
+    asset_for_type: crate::agents::codebuddy::asset_for_type,
+    is_installed: crate::agents::codebuddy::is_agent_installed,
+    process_provider: crate::agents::codebuddy::ide_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const CODEBUDDY_CN_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codebuddy-cn-ide",
+    title: Some("CodeBuddy CN IDE"),
+    homes: &[
+        &["AppData", "Roaming", "CodeBuddy CN"],
+        &["Library", "Application Support", "CodeBuddy CN"],
+        &[".config", "CodeBuddy CN"],
+    ],
+    asset_for_type: crate::agents::codebuddy::asset_for_type,
+    is_installed: crate::agents::codebuddy::is_agent_installed,
+    process_provider: crate::agents::codebuddy::ide_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codebuddy-ide-plugin",
+    title: Some("CodeBuddy IDE Plugin"),
+    homes: &[&[".codebuddy"]],
+    asset_for_type: crate::agents::codebuddy::asset_for_type,
+    is_installed: crate::agents::codebuddy::is_agent_installed,
+    process_provider: crate::agents::codebuddy::plugin_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const CODEBUDDY_AGENT_ENTRIES: &[AgentEntry] = &[
+    CODEBUDDY_CLI_AGENT_ENTRY,
+    CODEBUDDY_IDE_AGENT_ENTRY,
+    CODEBUDDY_CN_IDE_AGENT_ENTRY,
+    CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY,
+    WORKBUDDY_AGENT_ENTRY,
+];
 
 pub(crate) const CODER_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "coder",
@@ -345,9 +391,9 @@ pub(crate) const WORKBUDDY_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "workbuddy",
     title: Some("WorkBuddy"),
     homes: &[&[".workbuddy"]],
-    asset_for_type: crate::agents::workbuddy::asset_for_type,
-    is_installed: crate::agents::workbuddy::is_agent_installed,
-    process_provider: crate::agents::workbuddy::process_data,
+    asset_for_type: crate::agents::codebuddy::asset_for_type,
+    is_installed: crate::agents::codebuddy::is_agent_installed,
+    process_provider: crate::agents::codebuddy::work_process_data,
     process_home_env_vars: &[],
 };
 
@@ -437,7 +483,10 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         PI_AGENT_ENTRY.clone(),
         HERMES_SYSTEM_AGENT_ENTRY.clone(),
         ANTIGRAVITY_AGENT_ENTRY.clone(),
-        CODEBUDDY_AGENT_ENTRY.clone(),
+        CODEBUDDY_CLI_AGENT_ENTRY.clone(),
+        CODEBUDDY_IDE_AGENT_ENTRY.clone(),
+        CODEBUDDY_CN_IDE_AGENT_ENTRY.clone(),
+        CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY.clone(),
         CODER_AGENT_ENTRY.clone(),
         CURSOR_AGENT_ENTRY.clone(),
         KIRO_AGENT_ENTRY.clone(),
@@ -519,6 +568,18 @@ mod tests {
                 "kimi-cli-ide",
                 "Kimi Code IDE Extension",
             ),
+            (&CODEBUDDY_CLI_AGENT_ENTRY, "codebuddy-cli", "CodeBuddy CLI"),
+            (&CODEBUDDY_IDE_AGENT_ENTRY, "codebuddy-ide", "CodeBuddy IDE"),
+            (
+                &CODEBUDDY_CN_IDE_AGENT_ENTRY,
+                "codebuddy-cn-ide",
+                "CodeBuddy CN IDE",
+            ),
+            (
+                &CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY,
+                "codebuddy-ide-plugin",
+                "CodeBuddy IDE Plugin",
+            ),
             (&QODER_CLI_AGENT_ENTRY, "qoder-cli", "Qoder CLI"),
             (&QODER_IDE_AGENT_ENTRY, "qoder-ide", "Qoder IDE"),
             (&QODER_WORK_AGENT_ENTRY, "qoder-work", "Qoder Work"),
@@ -549,7 +610,10 @@ mod tests {
             &PI_AGENT_ENTRY,
             &SENTRA_AGENT_ENTRY,
             &ANTIGRAVITY_AGENT_ENTRY,
-            &CODEBUDDY_AGENT_ENTRY,
+            &CODEBUDDY_CLI_AGENT_ENTRY,
+            &CODEBUDDY_IDE_AGENT_ENTRY,
+            &CODEBUDDY_CN_IDE_AGENT_ENTRY,
+            &CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY,
             &CODER_AGENT_ENTRY,
             &CURSOR_AGENT_ENTRY,
             &KIRO_AGENT_ENTRY,

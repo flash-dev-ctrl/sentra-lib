@@ -66,7 +66,7 @@ fn read_servers(path: PathBuf, project: Option<String>) -> SentraResult<Vec<McpD
 
 #[cfg(test)]
 mod tests {
-    use crate::agents::workbuddy::mcp::McpAsset;
+    use crate::agents::codebuddy::work_mcp::McpAsset;
     use crate::interfaces::{Asset, McpData};
 
     #[test]

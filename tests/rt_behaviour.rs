@@ -285,6 +285,80 @@ fn discovery_returns_ide_extension_entries_from_vscode_family_indexes() {
 }
 
 #[test]
+fn codebuddy_product_family_discovers_canonical_surfaces() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".codebuddy")).unwrap();
+    write_ide_extension_index(dir.path(), ".vscode", &["tencent-cloud.coding-copilot"]);
+
+    let cn_ide_home = dir
+        .path()
+        .join("AppData")
+        .join("Roaming")
+        .join("CodeBuddy CN");
+    let automations_dir = cn_ide_home.join("automations");
+    fs::create_dir_all(&automations_dir).unwrap();
+    let database = rusqlite::Connection::open(automations_dir.join("automations.db")).unwrap();
+    create_codebuddy_automations_table(&database);
+    database
+        .execute(
+            "INSERT INTO automations
+             (id, name, prompt, status, schedule_type, next_run_at, last_run_at, cwds, rrule,
+              scheduled_at, created_at, updated_at, deleted_at)
+             VALUES
+             ('ide-task', 'IDE Task', 'run from ide', 'enabled', 'once',
+              NULL, NULL, '[\"C:/workspace\"]', NULL, '2026-07-23T09:00:00Z',
+              NULL, NULL, NULL)",
+            [],
+        )
+        .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let cli = agents
+        .iter()
+        .find(|agent| agent.name() == "codebuddy-cli")
+        .expect("missing codebuddy-cli");
+    assert_eq!(cli.title(), "CodeBuddy CLI");
+    assert_eq!(cli.get_assets(AssetType::Memory).unwrap().len(), 1);
+    assert!(cli.get_assets(AssetType::Cron).unwrap().is_empty());
+    assert_eq!(cli.get_assets(AssetType::Provider).unwrap().len(), 1);
+
+    let cn_ide = agents
+        .iter()
+        .find(|agent| agent.name() == "codebuddy-cn-ide")
+        .expect("missing codebuddy-cn-ide");
+    assert_eq!(cn_ide.title(), "CodeBuddy CN IDE");
+    assert!(cn_ide.get_assets(AssetType::Provider).unwrap().is_empty());
+    assert!(cn_ide.get_assets(AssetType::Memory).unwrap().is_empty());
+    let cn_ide_cron = asset_data(cn_ide, AssetType::Cron);
+    assert_eq!(cn_ide_cron[0].data[0]["id"], "ide-task");
+    assert_eq!(cn_ide_cron[0].data[0]["type"], "at");
+
+    let plugin = agents
+        .iter()
+        .find(|agent| agent.name() == "codebuddy-ide-plugin")
+        .expect("missing codebuddy-ide-plugin");
+    assert_eq!(plugin.title(), "CodeBuddy IDE Plugin");
+    assert!(plugin.get_assets(AssetType::Mcp).unwrap().is_empty());
+    assert!(plugin.get_assets(AssetType::Provider).unwrap().is_empty());
+    assert_eq!(plugin.get_assets(AssetType::Process).unwrap().len(), 1);
+}
+
+#[test]
+fn codebuddy_cli_home_does_not_imply_ide_plugin_installation() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".codebuddy")).unwrap();
+
+    let agents = discover_agents(dir.path());
+
+    assert!(agents.iter().any(|agent| agent.name() == "codebuddy-cli"));
+    assert!(
+        !agents
+            .iter()
+            .any(|agent| agent.name() == "codebuddy-ide-plugin")
+    );
+}
+
+#[test]
 fn module_discovery_returns_agents_that_own_asset_factories() {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join(".codex")).unwrap();
@@ -366,6 +440,43 @@ fn workbuddy_exposes_provider_and_mcp_assets_from_dot_workbuddy_files() {
     assert_eq!(mcps[0].data[0]["name"], "connector-proxy");
     assert_eq!(mcps[0].data[0]["type"], "http");
     assert_eq!(mcps[0].data[0]["url"], "http://127.0.0.1:54384/mcp");
+}
+
+#[test]
+fn workbuddy_exposes_memory_and_automation_assets_from_dot_workbuddy_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".workbuddy");
+    fs::create_dir_all(home.join("memory")).unwrap();
+    fs::write(
+        home.join("memory").join("profile.md"),
+        "Remember the workspace.",
+    )
+    .unwrap();
+    let database = rusqlite::Connection::open(home.join("workbuddy.db")).unwrap();
+    create_codebuddy_automations_table(&database);
+    database
+        .execute(
+            "INSERT INTO automations
+             (id, name, prompt, status, schedule_type, next_run_at, last_run_at, cwds, rrule,
+              scheduled_at, created_at, updated_at, deleted_at)
+             VALUES
+             ('work-task', 'Work Task', 'prepare report', 'enabled', 'recurring',
+              NULL, NULL, '[\"C:/work\"]', 'FREQ=DAILY', NULL, NULL, NULL, NULL)",
+            [],
+        )
+        .unwrap();
+
+    let workbuddy = discover_agents(dir.path())
+        .into_iter()
+        .find(|agent| agent.name() == "workbuddy")
+        .unwrap();
+
+    let memories = asset_data(&workbuddy, AssetType::Memory);
+    assert_eq!(memories[0].data[0]["name"], "profile.md");
+    assert_eq!(memories[0].data[0]["tags"][0], "workbuddy");
+    let crons = asset_data(&workbuddy, AssetType::Cron);
+    assert_eq!(crons[0].data[0]["id"], "work-task");
+    assert_eq!(crons[0].data[0]["type"], "rrule");
 }
 
 #[test]
@@ -3014,6 +3125,29 @@ fn test_binary_name(name: &str) -> String {
     } else {
         name.to_string()
     }
+}
+
+fn create_codebuddy_automations_table(database: &rusqlite::Connection) {
+    database
+        .execute(
+            "CREATE TABLE automations (
+                id text PRIMARY KEY,
+                name text,
+                prompt text,
+                status text,
+                schedule_type text,
+                next_run_at text,
+                last_run_at text,
+                cwds text,
+                rrule text,
+                scheduled_at text,
+                created_at,
+                updated_at,
+                deleted_at
+            )",
+            [],
+        )
+        .unwrap();
 }
 
 fn write_ide_extension_index(user_home: &std::path::Path, ide: &str, ids: &[&str]) {

@@ -109,13 +109,24 @@ fn rust_agents_mirror_typescript_agent_object_files() {
         "codebuddy",
         &[
             "mod.rs",
+            "surface.rs",
             "meta.rs",
             "skill.rs",
             "mcp.rs",
             "memory.rs",
+            "cron.rs",
+            "ide_cron.rs",
             "provider.rs",
             "plugin.rs",
             "process.rs",
+            "work_cron.rs",
+            "work_install.rs",
+            "work_mcp.rs",
+            "work_memory.rs",
+            "work_meta.rs",
+            "work_process.rs",
+            "work_provider.rs",
+            "work_skill.rs",
         ],
     );
     assert_agent_files(
@@ -238,19 +249,6 @@ fn rust_agents_mirror_typescript_agent_object_files() {
     );
     assert_agent_files(
         &src,
-        "workbuddy",
-        &[
-            "mod.rs",
-            "meta.rs",
-            "install.rs",
-            "skill.rs",
-            "mcp.rs",
-            "provider.rs",
-            "process.rs",
-        ],
-    );
-    assert_agent_files(
-        &src,
         "sentra",
         &["mod.rs", "meta.rs", "skill.rs", "provider.rs"],
     );
@@ -282,7 +280,6 @@ fn each_agent_module_owns_discovery() {
         "sentra",
         "trae",
         "vscode",
-        "workbuddy",
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
         assert!(
@@ -321,7 +318,6 @@ fn agent_asset_modules_are_not_public() {
         "sentra",
         "trae",
         "vscode",
-        "workbuddy",
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
         assert!(
@@ -394,7 +390,6 @@ fn agent_module_wrappers_do_not_expose_asset_mutator_shortcuts() {
         "sentra",
         "trae",
         "vscode",
-        "workbuddy",
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
         for forbidden in [
@@ -461,7 +456,6 @@ fn agent_modules_do_not_define_redundant_typed_wrappers() {
         "sentra",
         "trae",
         "vscode",
-        "workbuddy",
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
         assert!(
@@ -490,7 +484,11 @@ fn agent_entries_are_defined_in_shared_entries_file() {
         "CODEX_CLI_AGENT_ENTRY",
         "CODEX_CLI_IDE_AGENT_ENTRY",
         "ANTIGRAVITY_AGENT_ENTRY",
-        "CODEBUDDY_AGENT_ENTRY",
+        "CODEBUDDY_AGENT_ENTRIES",
+        "CODEBUDDY_CLI_AGENT_ENTRY",
+        "CODEBUDDY_IDE_AGENT_ENTRY",
+        "CODEBUDDY_CN_IDE_AGENT_ENTRY",
+        "CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY",
         "CODER_AGENT_ENTRY",
         "CURSOR_AGENT_ENTRY",
         "GENERAL_AGENT_ENTRIES",
@@ -552,7 +550,7 @@ fn agent_modules_reference_entry_registry_directly() {
         ("codex", "CODEX_CLI_AGENT_ENTRY"),
         ("codex", "CODEX_CLI_IDE_AGENT_ENTRY"),
         ("antigravity", "ANTIGRAVITY_AGENT_ENTRY"),
-        ("codebuddy", "CODEBUDDY_AGENT_ENTRY"),
+        ("codebuddy", "CODEBUDDY_AGENT_ENTRIES"),
         ("coder", "CODER_AGENT_ENTRY"),
         ("cursor", "CURSOR_AGENT_ENTRY"),
         ("hermes", "HERMES_AGENT_ENTRY"),
@@ -569,7 +567,6 @@ fn agent_modules_reference_entry_registry_directly() {
         ("sentra", "SENTRA_AGENT_ENTRY"),
         ("trae", "TRAE_AGENT_ENTRY"),
         ("vscode", "VSCODE_AGENT_ENTRY"),
-        ("workbuddy", "WORKBUDDY_AGENT_ENTRY"),
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
         assert!(
@@ -699,9 +696,9 @@ fn migrated_agents_keep_asset_logic_in_each_asset_module() {
         &["meta.rs", "mcp.rs", "provider.rs"],
     );
     assert_asset_logic_is_colocated(
-        &root.join("src").join("agents").join("workbuddy"),
+        &root.join("src").join("agents").join("codebuddy"),
         &["fn meta_data", "fn mcp_data", "fn provider_data"],
-        &["meta.rs", "mcp.rs", "provider.rs"],
+        &["work_meta.rs", "work_mcp.rs", "work_provider.rs"],
     );
 }
 
