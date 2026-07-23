@@ -56,20 +56,23 @@ fn meta_data(agent_name: &str, agent_home: &Path) -> SentraResult<Option<MetaDat
 fn description(agent_name: &str) -> &'static str {
     if surface::is_ide(agent_name) {
         "CodeBuddy desktop AI code editor configuration and automation state."
-    } else if surface::is_ide_plugin(agent_name) {
-        "CodeBuddy IDE plugin installed in VS Code-compatible extension indexes."
+    } else if surface::is_ide_extension(agent_name) {
+        "CodeBuddy IDE extension installed in VS Code-compatible extension indexes."
     } else {
         "CodeBuddy CLI user configuration, providers, MCP servers, skills, plugins, and memory."
     }
 }
 
 pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
-    if surface::is_ide_plugin(agent_name) {
+    if surface::is_ide_extension(agent_name) {
         return is_ide_extension_installed(agent_home, surface::CODEBUDDY_IDE_EXTENSION_ID);
     }
     if surface::is_ide(agent_name) {
         let probe = InstallStatusProbe::real(surface::ide_user_home(agent_home));
         return is_codebuddy_ide_installed_with(agent_name, agent_home, &probe);
+    }
+    if !surface::is_cli(agent_name) {
+        return false;
     }
     let probe = InstallStatusProbe::real(user_home_for_agent_home(agent_home, &[".codebuddy"]));
     is_named_cli_agent_installed_with("codebuddy", agent_home, &probe)

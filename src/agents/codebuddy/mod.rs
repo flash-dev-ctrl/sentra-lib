@@ -32,7 +32,7 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
     let user_home = user_home.as_ref();
     let entries = crate::agents::entries::CODEBUDDY_AGENT_ENTRIES
         .iter()
-        .filter(|entry| entry.name != crate::agents::entries::CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY.name)
+        .filter(|entry| entry.name != crate::agents::entries::CODEBUDDY_CLI_IDE_AGENT_ENTRY.name)
         .cloned()
         .collect::<Vec<_>>();
     let mut agents = crate::agents::discovery::discover_entry_agents(user_home, &entries);
@@ -40,7 +40,7 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
         crate::agents::entries::CODEBUDDY_CLI_AGENT_ENTRY.name,
     ));
     if meta::is_agent_installed(
-        crate::agents::entries::CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY.name,
+        crate::agents::entries::CODEBUDDY_CLI_IDE_AGENT_ENTRY.name,
         &default_cli_home,
     ) {
         let mut plugin_homes = agents
@@ -53,7 +53,7 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
         }
         for home in plugin_homes {
             agents.push(crate::agents::Agent::new(
-                &crate::agents::entries::CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY,
+                &crate::agents::entries::CODEBUDDY_CLI_IDE_AGENT_ENTRY,
                 home,
             ));
         }
@@ -77,8 +77,8 @@ pub(crate) fn ide_process_data() -> Vec<crate::interfaces::ProcessData> {
     process::ide_process_data()
 }
 
-pub(crate) fn plugin_process_data() -> Vec<crate::interfaces::ProcessData> {
-    process::plugin_process_data()
+pub(crate) fn ide_extension_process_data() -> Vec<crate::interfaces::ProcessData> {
+    process::ide_extension_process_data()
 }
 
 pub(crate) fn work_process_data() -> Vec<crate::interfaces::ProcessData> {
@@ -90,17 +90,6 @@ pub(crate) fn asset_for_type(
     agent_home: &Path,
     asset_type: AssetType,
 ) -> Vec<Box<dyn ErasedAsset>> {
-    if surface::is_ide_plugin(agent_name) {
-        return match asset_type {
-            AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
-            AssetType::Process => vec![Box::new(crate::agents::process::ProcessAsset::new(
-                agent_name,
-                agent_home,
-                process::matcher(agent_name),
-            ))],
-            _ => Vec::new(),
-        };
-    }
     if surface::is_ide(agent_name) {
         return match asset_type {
             AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
@@ -135,7 +124,7 @@ pub(crate) fn asset_for_type(
             _ => Vec::new(),
         };
     }
-    if surface::is_cli(agent_name) {
+    if surface::is_cli(agent_name) || surface::is_ide_extension(agent_name) {
         return match asset_type {
             AssetType::Meta => vec![Box::new(meta::MetaAsset::new(agent_name, agent_home))],
             AssetType::Skill => vec![Box::new(skill::SkillAsset::new(agent_name, agent_home))],
@@ -197,13 +186,22 @@ mod tests {
             }
         }
 
-        for asset_type in [AssetType::Meta, AssetType::Process] {
+        for asset_type in [
+            AssetType::Meta,
+            AssetType::Skill,
+            AssetType::Mcp,
+            AssetType::Memory,
+            AssetType::Provider,
+            AssetType::Plugin,
+            AssetType::Process,
+        ] {
             assert_eq!(
-                asset_for_type("codebuddy-ide-plugin", home, asset_type).len(),
-                1
+                asset_for_type("codebuddy-cli-ide", home, asset_type).len(),
+                1,
+                "{asset_type:?}"
             );
         }
-        assert!(asset_for_type("codebuddy-ide-plugin", home, AssetType::Mcp).is_empty());
+        assert!(asset_for_type("codebuddy-cli-ide", home, AssetType::Cron).is_empty());
 
         for asset_type in [
             AssetType::Meta,

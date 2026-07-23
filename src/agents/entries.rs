@@ -220,13 +220,13 @@ pub(crate) const CODEBUDDY_CN_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "codebuddy-ide-plugin",
-    title: Some("CodeBuddy IDE Plugin"),
+pub(crate) const CODEBUDDY_CLI_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codebuddy-cli-ide",
+    title: Some("CodeBuddy IDE Extension"),
     homes: &[&[".codebuddy"]],
     asset_for_type: crate::agents::codebuddy::asset_for_type,
     is_installed: crate::agents::codebuddy::is_agent_installed,
-    process_provider: crate::agents::codebuddy::plugin_process_data,
+    process_provider: crate::agents::codebuddy::ide_extension_process_data,
     process_home_env_vars: &[],
 };
 
@@ -234,7 +234,7 @@ pub(crate) const CODEBUDDY_AGENT_ENTRIES: &[AgentEntry] = &[
     CODEBUDDY_CLI_AGENT_ENTRY,
     CODEBUDDY_IDE_AGENT_ENTRY,
     CODEBUDDY_CN_IDE_AGENT_ENTRY,
-    CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY,
+    CODEBUDDY_CLI_IDE_AGENT_ENTRY,
     WORKBUDDY_AGENT_ENTRY,
 ];
 
@@ -486,7 +486,7 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         CODEBUDDY_CLI_AGENT_ENTRY.clone(),
         CODEBUDDY_IDE_AGENT_ENTRY.clone(),
         CODEBUDDY_CN_IDE_AGENT_ENTRY.clone(),
-        CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY.clone(),
+        CODEBUDDY_CLI_IDE_AGENT_ENTRY.clone(),
         CODER_AGENT_ENTRY.clone(),
         CURSOR_AGENT_ENTRY.clone(),
         KIRO_AGENT_ENTRY.clone(),
@@ -576,9 +576,9 @@ mod tests {
                 "CodeBuddy CN IDE",
             ),
             (
-                &CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY,
-                "codebuddy-ide-plugin",
-                "CodeBuddy IDE Plugin",
+                &CODEBUDDY_CLI_IDE_AGENT_ENTRY,
+                "codebuddy-cli-ide",
+                "CodeBuddy IDE Extension",
             ),
             (&QODER_CLI_AGENT_ENTRY, "qoder-cli", "Qoder CLI"),
             (&QODER_IDE_AGENT_ENTRY, "qoder-ide", "Qoder IDE"),
@@ -613,7 +613,7 @@ mod tests {
             &CODEBUDDY_CLI_AGENT_ENTRY,
             &CODEBUDDY_IDE_AGENT_ENTRY,
             &CODEBUDDY_CN_IDE_AGENT_ENTRY,
-            &CODEBUDDY_IDE_PLUGIN_AGENT_ENTRY,
+            &CODEBUDDY_CLI_IDE_AGENT_ENTRY,
             &CODER_AGENT_ENTRY,
             &CURSOR_AGENT_ENTRY,
             &KIRO_AGENT_ENTRY,
