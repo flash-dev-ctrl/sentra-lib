@@ -51,7 +51,7 @@ fn mcp_data(agent_home: &std::path::Path) -> SentraResult<Vec<McpData>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::agents::claude_cli::mcp::mcp_data;
+    use crate::agents::claude::mcp::mcp_data;
 
     #[test]
     fn reads_root_claude_configuration() {

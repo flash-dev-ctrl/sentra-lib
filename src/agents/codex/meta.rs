@@ -4,6 +4,7 @@ use crate::SentraResult;
 use crate::agents::install_status::{
     InstallStatusProbe, any_command_exists_with, any_existing_dir_with, any_existing_file_with,
     binary_paths, env_path, hidden_home_parent, is_ide_extension_installed,
+    user_home_for_agent_home,
 };
 use crate::agents::object::AssetCore;
 use crate::interfaces::{Asset, AssetType, ErasedAsset, MetaData};
@@ -68,7 +69,7 @@ impl Asset<Option<MetaData>> for MetaAsset {
         }
         Ok(Some(MetaData {
             id: Some(agent_name.to_string()),
-            name: agent_name.to_string(),
+            name: crate::agents::discovery::get_agent_title(agent_name),
             description: Some(
                 "Cloud-based AI coding agent by OpenAI that runs sandboxed tasks and writes, tests, and fixes code autonomously."
                     .to_string(),
@@ -84,27 +85,23 @@ impl Asset<Option<MetaData>> for MetaAsset {
 }
 
 pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
-    if agent_name == crate::agents::entries::CODEX_IDE_AGENT_ENTRY.name {
+    if agent_name == crate::agents::entries::CODEX_CLI_IDE_AGENT_ENTRY.name {
         return is_ide_extension_installed(
             agent_home,
             crate::agents::codex::CODEX_IDE_EXTENSION_ID,
         );
     }
-    let probe = InstallStatusProbe::real();
+    let probe = InstallStatusProbe::real(user_home_for_agent_home(agent_home, &[".codex"]));
     if agent_name == crate::agents::entries::CODEX_APP_AGENT_ENTRY.name {
         is_codex_app_installed_with(agent_home, &probe)
     } else {
-        is_codex_cli_installed_with(agent_name, agent_home, &probe)
+        is_codex_cli_installed_with(agent_home, &probe)
     }
 }
 
-fn is_codex_cli_installed_with(
-    agent_name: &str,
-    agent_home: &Path,
-    probe: &InstallStatusProbe,
-) -> bool {
-    any_command_exists_with(&[agent_name], probe)
-        || any_existing_file_with(codex_install_paths(agent_name, agent_home), probe)
+fn is_codex_cli_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
+    any_command_exists_with(&["codex"], probe)
+        || any_existing_file_with(codex_install_paths(agent_home), probe)
 }
 
 fn is_codex_app_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {
@@ -112,9 +109,9 @@ fn is_codex_app_installed_with(agent_home: &Path, probe: &InstallStatusProbe) ->
         || any_existing_dir_with(codex_app_dir_paths(agent_home), probe)
 }
 
-fn codex_install_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
+fn codex_install_paths(agent_home: &Path) -> Vec<PathBuf> {
     let user_home = hidden_home_parent(agent_home);
-    let mut paths = binary_paths(user_home.join(".local").join("bin"), agent_name);
+    let mut paths = binary_paths(user_home.join(".local").join("bin"), "codex");
     if let Some(local_app_data) = env_path("LOCALAPPDATA") {
         paths.extend(binary_paths(
             local_app_data
@@ -122,11 +119,11 @@ fn codex_install_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
                 .join("OpenAI")
                 .join("Codex")
                 .join("bin"),
-            agent_name,
+            "codex",
         ));
     }
     if let Some(install_dir) = env_path("CODEX_INSTALL_DIR") {
-        paths.extend(binary_paths(install_dir, agent_name));
+        paths.extend(binary_paths(install_dir, "codex"));
     }
     paths
 }
@@ -205,7 +202,7 @@ mod tests {
             path_never_exists,
         );
 
-        assert!(is_codex_cli_installed_with("codex", &codex_home, &probe));
+        assert!(is_codex_cli_installed_with(&codex_home, &probe));
     }
 
     #[test]
@@ -216,7 +213,7 @@ mod tests {
         std::fs::create_dir_all(&app_home).unwrap();
         let probe = InstallStatusProbe::test(command_never_exists, path_never_exists, path_is_dir);
 
-        assert!(!is_codex_cli_installed_with("codex", &codex_home, &probe));
+        assert!(!is_codex_cli_installed_with(&codex_home, &probe));
         assert!(is_codex_app_installed_with(&codex_home, &probe));
     }
 
@@ -230,7 +227,7 @@ mod tests {
             only_codex_store_package_exists,
         );
 
-        assert!(!is_codex_cli_installed_with("codex", &codex_home, &probe));
+        assert!(!is_codex_cli_installed_with(&codex_home, &probe));
         assert!(is_codex_app_installed_with(&codex_home, &probe));
     }
 

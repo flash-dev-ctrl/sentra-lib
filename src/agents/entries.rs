@@ -23,8 +23,8 @@ pub(crate) struct SystemAgentPath {
     pub(crate) system_path: &'static str,
 }
 
-pub(crate) const CODEX_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "codex",
+pub(crate) const CODEX_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codex-cli",
     title: Some("Codex CLI"),
     homes: &[&[".codex"]],
     asset_for_type: crate::agents::codex::asset_for_type,
@@ -43,8 +43,8 @@ pub(crate) const CODEX_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const CODEX_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "codex-ide",
+pub(crate) const CODEX_CLI_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "codex-cli-ide",
     title: Some("Codex IDE Extension"),
     homes: &[&[".codex"]],
     asset_for_type: crate::agents::codex::asset_for_type,
@@ -57,19 +57,19 @@ pub(crate) const CLAUDE_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "claude-cli",
     title: Some("Claude Code"),
     homes: &[&[".claude"]],
-    asset_for_type: crate::agents::claude_cli::asset_for_type,
-    is_installed: crate::agents::claude_cli::is_agent_installed,
-    process_provider: crate::agents::claude_cli::process_data,
+    asset_for_type: crate::agents::claude::asset_for_type,
+    is_installed: crate::agents::claude::is_agent_installed,
+    process_provider: crate::agents::claude::process_data,
     process_home_env_vars: &[],
 };
 
-pub(crate) const CLAUDE_CODE_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "claude-code-ide",
+pub(crate) const CLAUDE_CLI_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "claude-cli-ide",
     title: Some("Claude Code IDE Extension"),
     homes: &[&[".claude"]],
-    asset_for_type: crate::agents::claude_cli::asset_for_type,
-    is_installed: crate::agents::claude_cli::is_agent_installed,
-    process_provider: crate::agents::claude_cli::ide_process_data,
+    asset_for_type: crate::agents::claude::asset_for_type,
+    is_installed: crate::agents::claude::is_agent_installed,
+    process_provider: crate::agents::claude::ide_process_data,
     process_home_env_vars: &[],
 };
 
@@ -82,9 +82,9 @@ pub(crate) const CLAUDE_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
         &["Library", "Application Support", "Claude"],
         &["Library", "Application Support", "Claude-3p"],
     ],
-    asset_for_type: crate::agents::claude_app::asset_for_type,
-    is_installed: crate::agents::claude_app::is_agent_installed,
-    process_provider: crate::agents::claude_app::process_data,
+    asset_for_type: crate::agents::claude::asset_for_type,
+    is_installed: crate::agents::claude::is_agent_installed,
+    process_provider: crate::agents::claude::app_process_data,
     process_home_env_vars: &[],
 };
 
@@ -98,13 +98,37 @@ pub(crate) const HERMES_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const KIMI_CODE_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "kimi-code",
+pub(crate) const KIMI_CLI_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "kimi-cli",
     title: Some("Kimi Code"),
     homes: &[&[".kimi-code"]],
-    asset_for_type: crate::agents::kimi_code::asset_for_type,
-    is_installed: crate::agents::kimi_code::is_agent_installed,
-    process_provider: crate::agents::kimi_code::process_data,
+    asset_for_type: crate::agents::kimi::asset_for_type,
+    is_installed: crate::agents::kimi::is_agent_installed,
+    process_provider: crate::agents::kimi::process_data,
+    process_home_env_vars: &["KIMI_CODE_HOME"],
+};
+
+pub(crate) const KIMI_APP_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "kimi-app",
+    title: Some("Kimi App"),
+    homes: &[
+        &["AppData", "Roaming", "kimi-desktop"],
+        &["Library", "Application Support", "kimi-desktop"],
+        &[".config", "kimi-desktop"],
+    ],
+    asset_for_type: crate::agents::kimi::asset_for_type,
+    is_installed: crate::agents::kimi::is_agent_installed,
+    process_provider: crate::agents::kimi::app_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const KIMI_CLI_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "kimi-cli-ide",
+    title: Some("Kimi Code IDE Extension"),
+    homes: &[&[".kimi-code"]],
+    asset_for_type: crate::agents::kimi::asset_for_type,
+    is_installed: crate::agents::kimi::is_agent_installed,
+    process_provider: crate::agents::kimi::ide_process_data,
     process_home_env_vars: &["KIMI_CODE_HOME"],
 };
 
@@ -312,7 +336,6 @@ pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
     general("codemaker", &[&[".codemaker"]]),
     general("codestudio", &[&[".codestudio"]]),
     general("command-code", &[&[".commandcode"]]),
-    general("continue", &[&[".continue"]]),
     general("cortex", &[&[".snowflake", "cortex"]]),
     general("crush", &[&[".config", "crush"]]),
     general("deepagents", &[&[".deepagents", "agent"]]),
@@ -352,14 +375,16 @@ pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
 pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
     let mut entries = vec![
         SENTRA_AGENT_ENTRY.clone(),
-        CODEX_AGENT_ENTRY.clone(),
+        CODEX_CLI_AGENT_ENTRY.clone(),
         CODEX_APP_AGENT_ENTRY.clone(),
-        CODEX_IDE_AGENT_ENTRY.clone(),
+        CODEX_CLI_IDE_AGENT_ENTRY.clone(),
         CLAUDE_CLI_AGENT_ENTRY.clone(),
-        CLAUDE_CODE_IDE_AGENT_ENTRY.clone(),
+        CLAUDE_CLI_IDE_AGENT_ENTRY.clone(),
         CLAUDE_APP_AGENT_ENTRY.clone(),
         HERMES_AGENT_ENTRY.clone(),
-        KIMI_CODE_AGENT_ENTRY.clone(),
+        KIMI_CLI_AGENT_ENTRY.clone(),
+        KIMI_APP_AGENT_ENTRY.clone(),
+        KIMI_CLI_IDE_AGENT_ENTRY.clone(),
         OPENCLAW_AGENT_ENTRY.clone(),
         OPENCODE_AGENT_ENTRY.clone(),
         PI_AGENT_ENTRY.clone(),
@@ -405,16 +430,64 @@ mod tests {
     use super::*;
 
     #[test]
+    fn agent_entry_names_use_lowercase_kebab_case() {
+        for entry in builtin_agent_entries() {
+            assert!(
+                entry.name.split('-').all(|part| {
+                    !part.is_empty()
+                        && part
+                            .bytes()
+                            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+                }),
+                "{}",
+                entry.name
+            );
+        }
+    }
+
+    #[test]
+    fn multi_surface_entries_use_canonical_names_and_titles() {
+        for (entry, name, title) in [
+            (&CODEX_CLI_AGENT_ENTRY, "codex-cli", "Codex CLI"),
+            (&CODEX_APP_AGENT_ENTRY, "codex-app", "Codex App"),
+            (
+                &CODEX_CLI_IDE_AGENT_ENTRY,
+                "codex-cli-ide",
+                "Codex IDE Extension",
+            ),
+            (&CLAUDE_CLI_AGENT_ENTRY, "claude-cli", "Claude Code"),
+            (&CLAUDE_APP_AGENT_ENTRY, "claude-app", "Claude App"),
+            (
+                &CLAUDE_CLI_IDE_AGENT_ENTRY,
+                "claude-cli-ide",
+                "Claude Code IDE Extension",
+            ),
+            (&KIMI_CLI_AGENT_ENTRY, "kimi-cli", "Kimi Code"),
+            (&KIMI_APP_AGENT_ENTRY, "kimi-app", "Kimi App"),
+            (
+                &KIMI_CLI_IDE_AGENT_ENTRY,
+                "kimi-cli-ide",
+                "Kimi Code IDE Extension",
+            ),
+        ] {
+            assert_eq!(entry.name, name);
+            assert_eq!(entry.title, Some(title));
+        }
+    }
+
+    #[test]
     fn concrete_agent_entries_route_process_assets() {
         for entry in [
-            &CODEX_AGENT_ENTRY,
+            &CODEX_CLI_AGENT_ENTRY,
             &CODEX_APP_AGENT_ENTRY,
-            &CODEX_IDE_AGENT_ENTRY,
+            &CODEX_CLI_IDE_AGENT_ENTRY,
             &CLAUDE_CLI_AGENT_ENTRY,
-            &CLAUDE_CODE_IDE_AGENT_ENTRY,
+            &CLAUDE_CLI_IDE_AGENT_ENTRY,
             &CLAUDE_APP_AGENT_ENTRY,
             &HERMES_AGENT_ENTRY,
-            &KIMI_CODE_AGENT_ENTRY,
+            &KIMI_CLI_AGENT_ENTRY,
+            &KIMI_APP_AGENT_ENTRY,
+            &KIMI_CLI_IDE_AGENT_ENTRY,
             &OPENCLAW_AGENT_ENTRY,
             &OPENCODE_AGENT_ENTRY,
             &PI_AGENT_ENTRY,

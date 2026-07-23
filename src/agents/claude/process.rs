@@ -13,7 +13,7 @@ pub(crate) fn ide_process_data() -> Vec<ProcessData> {
 }
 
 pub(super) fn matcher(agent_name: &str) -> crate::agents::process::ProcessMatcher {
-    if agent_name == crate::agents::entries::CLAUDE_CODE_IDE_AGENT_ENTRY.name {
+    if agent_name == crate::agents::entries::CLAUDE_CLI_IDE_AGENT_ENTRY.name {
         matches_ide_process
     } else {
         matches_cli_process
@@ -26,18 +26,12 @@ fn matches_cli_process(process: &ProcessInfo<'_>) -> bool {
             && cmdline_has_path_components(process, &["@anthropic-ai", "claude-code"]));
     is_cli
         && !process.path.is_some_and(is_claude_desktop_path)
-        && !process_has_ide_extension(
-            process,
-            crate::agents::claude_cli::CLAUDE_CODE_IDE_EXTENSION_ID,
-        )
+        && !process_has_ide_extension(process, crate::agents::claude::CLAUDE_CODE_IDE_EXTENSION_ID)
 }
 
 fn matches_ide_process(process: &ProcessInfo<'_>) -> bool {
     matches_binary_names(process, &["claude", "claude.exe"])
-        && process_has_ide_extension(
-            process,
-            crate::agents::claude_cli::CLAUDE_CODE_IDE_EXTENSION_ID,
-        )
+        && process_has_ide_extension(process, crate::agents::claude::CLAUDE_CODE_IDE_EXTENSION_ID)
 }
 
 fn is_claude_desktop_path(path: &std::path::Path) -> bool {
@@ -64,10 +58,10 @@ mod tests {
             .join("claude.exe");
         let cli_path = Path::new("usr").join("local").join("bin").join("claude");
 
-        assert_process_match("claude-code-ide", true, Some(&ide_path));
+        assert_process_match("claude-cli-ide", true, Some(&ide_path));
         assert_process_match("claude-cli", false, Some(&ide_path));
         assert_process_match("claude-cli", true, Some(&cli_path));
-        assert_process_match("claude-code-ide", false, Some(&cli_path));
+        assert_process_match("claude-cli-ide", false, Some(&cli_path));
     }
 
     #[test]

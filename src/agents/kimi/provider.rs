@@ -236,7 +236,7 @@ fn delete_provider_data(
     Ok(AssetMutationResult::changed())
 }
 
-fn provider_data(
+pub(super) fn provider_data(
     agent_home: &std::path::Path,
     mask_secrets: bool,
 ) -> SentraResult<Vec<ProviderData>> {
@@ -439,12 +439,12 @@ fn maybe_mask_secret(value: String, mask_secrets: bool) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::agents::kimi_code::provider::ProviderAsset;
+    use crate::agents::kimi::provider::ProviderAsset;
     use crate::utils::protocol::WireProtocol;
 
     #[test]
     fn probe_requests_cover_supported_protocols() {
-        let provider = ProviderAsset::new("kimi-code", ".kimi-code");
+        let provider = ProviderAsset::new("kimi-cli", ".kimi-code");
         let requests = provider.get_request("kimi-k2");
 
         assert_eq!(requests.len(), 3);

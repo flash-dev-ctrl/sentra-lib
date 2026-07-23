@@ -71,7 +71,7 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
     }
     Ok(Some(MetaData {
         id: Some(agent_name.to_string()),
-        name: agent_name.to_string(),
+        name: crate::agents::discovery::get_agent_title(agent_name),
         description: Some(
             "Claude Code is Anthropic's AI-powered coding agent with skills, MCP, and scheduled task support."
                 .to_string(),
@@ -86,13 +86,13 @@ fn meta_data(agent_name: &str, agent_home: &std::path::Path) -> SentraResult<Opt
 }
 
 pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
-    if agent_name == crate::agents::entries::CLAUDE_CODE_IDE_AGENT_ENTRY.name {
+    if agent_name == crate::agents::entries::CLAUDE_CLI_IDE_AGENT_ENTRY.name {
         return is_ide_extension_installed(
             agent_home,
-            crate::agents::claude_cli::CLAUDE_CODE_IDE_EXTENSION_ID,
+            crate::agents::claude::CLAUDE_CODE_IDE_EXTENSION_ID,
         );
     }
-    let probe = InstallStatusProbe::real();
+    let probe = InstallStatusProbe::real(hidden_home_parent(agent_home));
     is_agent_installed_with(agent_home, &probe)
 }
 

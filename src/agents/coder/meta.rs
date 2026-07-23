@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::SentraResult;
 use crate::agents::install_status::{
     InstallStatusProbe, any_command_exists_with, any_existing_file_with, binary_paths, env_path,
+    user_home_for_agent_home,
 };
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
@@ -45,13 +46,22 @@ impl Asset<Option<MetaData>> for MetaAsset {
 }
 
 pub(super) fn is_agent_installed(_agent_name: &str, agent_home: &Path) -> bool {
-    let probe = InstallStatusProbe::real();
+    let probe = InstallStatusProbe::real(user_home_for_agent_home(
+        agent_home,
+        &[".config", "coderv2"],
+    ));
     is_install_target_installed_with(agent_home, &probe)
         || any_command_exists_with(&["code-server"], &probe)
 }
 
 pub(super) fn is_install_target_installed(agent_home: &Path) -> bool {
-    is_install_target_installed_with(agent_home, &InstallStatusProbe::real())
+    is_install_target_installed_with(
+        agent_home,
+        &InstallStatusProbe::real(user_home_for_agent_home(
+            agent_home,
+            &[".config", "coderv2"],
+        )),
+    )
 }
 
 fn is_install_target_installed_with(agent_home: &Path, probe: &InstallStatusProbe) -> bool {

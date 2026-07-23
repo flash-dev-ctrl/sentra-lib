@@ -33,10 +33,10 @@ impl InstallableAgent {
             Self::Antigravity => "antigravity",
             Self::CodeBuddy => "codebuddy",
             Self::Coder => "coder",
-            Self::Codex => "codex",
+            Self::Codex => "codex-cli",
             Self::ClaudeCli => "claude-cli",
             Self::Cursor => "cursor",
-            Self::KimiCode => "kimi-code",
+            Self::KimiCode => "kimi-cli",
             Self::Kiro => "kiro",
             Self::LingCode => "lingcode",
             Self::Marvis => "marvis",
@@ -57,10 +57,10 @@ impl InstallableAgent {
             Self::Antigravity => &ANTIGRAVITY_AGENT_ENTRY,
             Self::CodeBuddy => &CODEBUDDY_AGENT_ENTRY,
             Self::Coder => &CODER_AGENT_ENTRY,
-            Self::Codex => &CODEX_AGENT_ENTRY,
+            Self::Codex => &CODEX_CLI_AGENT_ENTRY,
             Self::ClaudeCli => &CLAUDE_CLI_AGENT_ENTRY,
             Self::Cursor => &CURSOR_AGENT_ENTRY,
-            Self::KimiCode => &KIMI_CODE_AGENT_ENTRY,
+            Self::KimiCode => &KIMI_CLI_AGENT_ENTRY,
             Self::Kiro => &KIRO_AGENT_ENTRY,
             Self::LingCode => &LINGCODE_AGENT_ENTRY,
             Self::Marvis => &MARVIS_AGENT_ENTRY,
@@ -423,13 +423,13 @@ fn install_plans_for_platform(
             crate::agents::codex::install_plans_for_platform(platform, action)
         }
         InstallableAgent::ClaudeCli => {
-            crate::agents::claude_cli::install_plans_for_platform(platform, action)
+            crate::agents::claude::install_plans_for_platform(platform, action)
         }
         InstallableAgent::Cursor => {
             crate::agents::cursor::install_plans_for_platform(platform, action)
         }
         InstallableAgent::KimiCode => {
-            crate::agents::kimi_code::install_plans_for_platform(platform, action)
+            crate::agents::kimi::install_plans_for_platform(platform, action)
         }
         InstallableAgent::Kiro => crate::agents::kiro::install_plans_for_platform(platform, action),
         InstallableAgent::LingCode | InstallableAgent::Marvis => Vec::new(),
@@ -487,13 +487,13 @@ fn uninstall_plans_for_platform(
             )]
         }
         InstallableAgent::ClaudeCli => {
-            crate::agents::claude_cli::uninstall_plans_for_platform(platform, options)
+            crate::agents::claude::uninstall_plans_for_platform(platform, options)
         }
         InstallableAgent::Cursor => {
             crate::agents::cursor::uninstall_plans_for_platform(platform, options)
         }
         InstallableAgent::KimiCode => {
-            vec![crate::agents::kimi_code::uninstall_plan_for_platform(
+            vec![crate::agents::kimi::uninstall_plan_for_platform(
                 platform, options,
             )]
         }
@@ -1083,7 +1083,7 @@ mod tests {
         assert_eq!(progress[1].stage, AgentInstallProgressStage::Trying);
         assert_eq!(progress[2].current, 2);
         assert_eq!(progress[2].total, 2);
-        assert_eq!(progress[2].method, "codex");
+        assert_eq!(progress[2].method, "codex-cli");
         assert_eq!(progress[2].stage, AgentInstallProgressStage::Verifying);
     }
 

@@ -312,7 +312,7 @@ mod tests {
         let assets = value.as_array().unwrap();
         let skills: Vec<_> = assets.iter().filter(|a| a["type"] == "skill").collect();
         assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0]["agent"], "codex");
+        assert_eq!(skills[0]["agent"], "codex-cli");
     }
 
     #[test]

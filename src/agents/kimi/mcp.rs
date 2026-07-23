@@ -31,14 +31,14 @@ impl Asset<Vec<McpData>> for McpAsset {
     }
 }
 
-fn mcp_data(agent_home: &std::path::Path) -> SentraResult<Vec<McpData>> {
+pub(super) fn mcp_data(agent_home: &std::path::Path) -> SentraResult<Vec<McpData>> {
     let mut results = Vec::new();
     if let Some(config) = read_json_file(agent_home.join("mcp.json"))? {
         results.extend(parse_kimi_mcp_servers(
             config.get("mcpServers").unwrap_or(&Value::Null),
         ));
     }
-    for manifest in crate::agents::kimi_code::plugin::plugin_manifests(agent_home)? {
+    for manifest in crate::agents::kimi::plugin::plugin_manifests(agent_home)? {
         if manifest.enabled {
             results.extend(parse_kimi_mcp_servers(
                 manifest.value.get("mcpServers").unwrap_or(&Value::Null),
@@ -161,7 +161,7 @@ fn dedup_mcp(items: Vec<McpData>) -> Vec<McpData> {
 
 #[cfg(test)]
 mod tests {
-    use crate::agents::kimi_code::mcp::parse_kimi_mcp_servers;
+    use crate::agents::kimi::mcp::parse_kimi_mcp_servers;
 
     #[test]
     fn redacts_custom_mcp_secrets() {

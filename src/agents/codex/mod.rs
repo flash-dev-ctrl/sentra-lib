@@ -20,13 +20,13 @@ pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents:
     let user_home = user_home.as_ref();
     let mut agents = crate::agents::discovery::discover_entry_agents(
         user_home,
-        std::slice::from_ref(&crate::agents::entries::CODEX_AGENT_ENTRY),
+        std::slice::from_ref(&crate::agents::entries::CODEX_CLI_AGENT_ENTRY),
     );
     agents.extend(crate::agents::discovery::discover_installed_entry_agents(
         user_home,
         &[
             &crate::agents::entries::CODEX_APP_AGENT_ENTRY,
-            &crate::agents::entries::CODEX_IDE_AGENT_ENTRY,
+            &crate::agents::entries::CODEX_CLI_IDE_AGENT_ENTRY,
         ],
     ));
     agents
@@ -89,7 +89,7 @@ mod tests {
             AssetType::Plugin,
             AssetType::Process,
         ] {
-            assert_eq!(asset_for_type("codex-ide", home, asset_type).len(), 1);
+            assert_eq!(asset_for_type("codex-cli-ide", home, asset_type).len(), 1);
         }
     }
 
@@ -97,7 +97,7 @@ mod tests {
     fn desktop_app_uses_shared_asset_factories() {
         let home = Path::new(".codex");
 
-        for agent_name in ["codex", "codex-app"] {
+        for agent_name in ["codex-cli", "codex-app"] {
             for asset_type in [
                 AssetType::Meta,
                 AssetType::Skill,

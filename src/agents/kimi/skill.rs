@@ -45,14 +45,15 @@ impl Asset<Vec<SkillData>, SkillData> for SkillAsset {
     }
 }
 
-fn skill_data(agent_home: &std::path::Path) -> SentraResult<Vec<SkillData>> {
+pub(super) fn skill_data(agent_home: &std::path::Path) -> SentraResult<Vec<SkillData>> {
     let mut results = collect_skills_from_dir(agent_home.join("skills"))?;
-    if let Some(user_home) = crate::agents::kimi_code::default_user_home(agent_home) {
-        results.extend(collect_skills_from_dir(
-            user_home.join(".agents").join("skills"),
-        )?);
-    }
-    for manifest in crate::agents::kimi_code::plugin::plugin_manifests(agent_home)? {
+    results.extend(plugin_skill_data(agent_home)?);
+    Ok(dedup_skills(results))
+}
+
+pub(super) fn plugin_skill_data(agent_home: &std::path::Path) -> SentraResult<Vec<SkillData>> {
+    let mut results = Vec::new();
+    for manifest in crate::agents::kimi::plugin::plugin_manifests(agent_home)? {
         if !manifest.enabled {
             continue;
         }
@@ -68,7 +69,7 @@ fn skill_data(agent_home: &std::path::Path) -> SentraResult<Vec<SkillData>> {
             }
         }
     }
-    Ok(dedup_skills(results))
+    Ok(results)
 }
 
 fn skill_dirs(manifest: &Value, root: &std::path::Path) -> Vec<std::path::PathBuf> {
@@ -103,7 +104,7 @@ fn author_name(plugin: &Value) -> Option<String> {
     })
 }
 
-fn dedup_skills(skills: Vec<SkillData>) -> Vec<SkillData> {
+pub(super) fn dedup_skills(skills: Vec<SkillData>) -> Vec<SkillData> {
     let mut seen = HashSet::new();
     let mut results = Vec::new();
     for skill in skills {

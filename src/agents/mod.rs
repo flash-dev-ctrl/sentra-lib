@@ -7,15 +7,14 @@ mod object;
 mod process;
 
 mod antigravity;
-mod claude_app;
-mod claude_cli;
+mod claude;
 mod codebuddy;
 mod coder;
 mod codex;
 mod cursor;
 mod general;
 mod hermes;
-mod kimi_code;
+mod kimi;
 mod kiro;
 mod lingcode;
 mod marvis;
@@ -32,6 +31,29 @@ mod workbuddy;
 pub use base::Agent;
 pub use discovery::discover_agents;
 
+pub(crate) fn workspace_agents_dir(user_home: &std::path::Path) -> Option<std::path::PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    let current_home = home::home_dir();
+    workspace_agents_dir_from(user_home, current_home.as_deref(), &cwd)
+}
+
+fn workspace_agents_dir_from(
+    user_home: &std::path::Path,
+    current_home: Option<&std::path::Path>,
+    cwd: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    if same_location(cwd, user_home) || current_home.is_some_and(|home| same_location(cwd, home)) {
+        return None;
+    }
+    Some(cwd.join(".agents"))
+}
+
+fn same_location(left: &std::path::Path, right: &std::path::Path) -> bool {
+    let left = left.canonicalize().unwrap_or_else(|_| left.to_path_buf());
+    let right = right.canonicalize().unwrap_or_else(|_| right.to_path_buf());
+    left == right
+}
+
 fn installable_agent(
     agent: &str,
     operation: &str,
@@ -40,10 +62,10 @@ fn installable_agent(
         "antigravity" => Ok(install::InstallableAgent::Antigravity),
         "codebuddy" => Ok(install::InstallableAgent::CodeBuddy),
         "coder" => Ok(install::InstallableAgent::Coder),
-        "codex" => Ok(install::InstallableAgent::Codex),
+        "codex" | "codex-cli" => Ok(install::InstallableAgent::Codex),
         "claude" | "claude-cli" => Ok(install::InstallableAgent::ClaudeCli),
         "cursor" => Ok(install::InstallableAgent::Cursor),
-        "kimi-code" => Ok(install::InstallableAgent::KimiCode),
+        "kimi" | "kimi-code" | "kimi-cli" => Ok(install::InstallableAgent::KimiCode),
         "kiro" => Ok(install::InstallableAgent::Kiro),
         "lingcode" => Ok(install::InstallableAgent::LingCode),
         "marvis" => Ok(install::InstallableAgent::Marvis),
@@ -117,11 +139,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn kimi_code_is_installable() {
-        assert_eq!(
-            installable_agent("kimi-code", "installable").unwrap(),
-            install::InstallableAgent::KimiCode
-        );
+    fn codex_cli_and_legacy_alias_are_installable() {
+        for agent in ["codex-cli", "codex"] {
+            assert_eq!(
+                installable_agent(agent, "installable").unwrap(),
+                install::InstallableAgent::Codex
+            );
+        }
+    }
+
+    #[test]
+    fn kimi_cli_and_legacy_aliases_are_installable() {
+        for agent in ["kimi-cli", "kimi-code", "kimi"] {
+            assert_eq!(
+                installable_agent(agent, "installable").unwrap(),
+                install::InstallableAgent::KimiCode
+            );
+        }
     }
 
     #[test]
@@ -159,6 +193,38 @@ mod tests {
         assert_eq!(
             installable_agent("marvis", "install").unwrap(),
             install::InstallableAgent::Marvis
+        );
+    }
+
+    #[test]
+    fn workspace_agents_dir_excludes_user_homes() {
+        let scanned_home = tempfile::tempdir().unwrap();
+        let current_home = tempfile::tempdir().unwrap();
+        let workspace = tempfile::tempdir().unwrap();
+
+        assert!(
+            workspace_agents_dir_from(
+                scanned_home.path(),
+                Some(current_home.path()),
+                scanned_home.path(),
+            )
+            .is_none()
+        );
+        assert!(
+            workspace_agents_dir_from(
+                scanned_home.path(),
+                Some(current_home.path()),
+                current_home.path(),
+            )
+            .is_none()
+        );
+        assert_eq!(
+            workspace_agents_dir_from(
+                scanned_home.path(),
+                Some(current_home.path()),
+                workspace.path(),
+            ),
+            Some(workspace.path().join(".agents"))
         );
     }
 }

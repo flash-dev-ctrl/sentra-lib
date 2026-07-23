@@ -23,11 +23,10 @@ impl_erased_asset!(SkillAsset, AssetType::Skill, Vec<SkillData>);
 
 impl Asset<Vec<SkillData>> for SkillAsset {
     fn get_data(&self) -> SentraResult<Vec<SkillData>> {
-        collect_skills_from_dir(
-            std::env::current_dir()
-                .unwrap_or_default()
-                .join(".agents")
-                .join("skills"),
-        )
+        let user_home = crate::agents::coder::user_home(self.core.agent_home());
+        let Some(workspace_agents) = crate::agents::workspace_agents_dir(user_home) else {
+            return Ok(Vec::new());
+        };
+        collect_skills_from_dir(workspace_agents.join("skills"))
     }
 }

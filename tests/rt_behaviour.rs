@@ -59,7 +59,7 @@ fn schema_round_trips_plugin_data() {
 #[test]
 fn schema_round_trips_meta_installed_status() {
     let meta = MetaData {
-        id: Some("codex".to_string()),
+        id: Some("codex-cli".to_string()),
         name: "Codex".to_string(),
         installed: true,
         home: Some("/tmp/.codex".into()),
@@ -166,15 +166,14 @@ fn agent_discovery_finds_codex_home_and_title() {
 
     let agents = discover_agents(dir.path());
 
-    assert!(agents.iter().any(|agent| agent.name() == "codex"));
-    assert_eq!(
-        agents
-            .iter()
-            .find(|agent| agent.name() == "codex")
-            .unwrap()
-            .title(),
-        "Codex CLI"
-    );
+    let codex = agents
+        .iter()
+        .find(|agent| agent.name() == "codex-cli")
+        .unwrap();
+    assert_eq!(codex.title(), "Codex CLI");
+    let meta = asset_data(codex, AssetType::Meta);
+    assert_eq!(meta[0].data["id"], "codex-cli");
+    assert_eq!(meta[0].data["name"], "Codex CLI");
 }
 
 #[test]
@@ -190,7 +189,7 @@ fn codex_and_opencode_meta_report_detected_install_markers() {
     fs::write(bin_dir.join(test_binary_name("opencode")), "").unwrap();
 
     let agents = discover_agents(dir.path());
-    for agent_name in ["codex", "opencode"] {
+    for agent_name in ["codex-cli", "opencode"] {
         let agent = agents
             .iter()
             .find(|agent| agent.name() == agent_name)
@@ -212,7 +211,10 @@ fn discovery_returns_installed_agent_without_initialized_home() {
     assert!(!expected_home.exists());
 
     let agents = discover_agents(dir.path());
-    let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+    let codex = agents
+        .iter()
+        .find(|agent| agent.name() == "codex-cli")
+        .unwrap();
 
     assert_eq!(codex.home(), expected_home.as_path());
     let meta = asset_data(codex, AssetType::Meta);
@@ -238,6 +240,8 @@ fn discovery_returns_codex_desktop_app_entry_without_initialized_home() {
     assert_eq!(codex.title(), "Codex App");
     let meta = asset_data(codex, AssetType::Meta);
     assert_eq!(meta[0].data["installed"], true);
+    assert_eq!(meta[0].data["id"], "codex-app");
+    assert_eq!(meta[0].data["name"], "Codex App");
 }
 
 #[test]
@@ -253,8 +257,8 @@ fn discovery_returns_ide_extension_entries_from_vscode_family_indexes() {
 
     let agents = discover_agents(dir.path());
     for (name, title, home) in [
-        ("codex-ide", "Codex IDE Extension", ".codex"),
-        ("claude-code-ide", "Claude Code IDE Extension", ".claude"),
+        ("codex-cli-ide", "Codex IDE Extension", ".codex"),
+        ("claude-cli-ide", "Claude Code IDE Extension", ".claude"),
     ] {
         let matches = agents
             .iter()
@@ -264,16 +268,16 @@ fn discovery_returns_ide_extension_entries_from_vscode_family_indexes() {
         let agent = matches[0];
         assert_eq!(agent.title(), title);
         assert_eq!(agent.home(), dir.path().join(home));
-        assert_eq!(
-            asset_data(agent, AssetType::Meta)[0].data["installed"],
-            true
-        );
+        let meta = asset_data(agent, AssetType::Meta);
+        assert_eq!(meta[0].data["installed"], true);
+        assert_eq!(meta[0].data["id"], name);
+        assert_eq!(meta[0].data["name"], title);
         assert_eq!(agent.get_assets(AssetType::Process).unwrap().len(), 1);
     }
 
     let claude_ide = agents
         .iter()
-        .find(|agent| agent.name() == "claude-code-ide")
+        .find(|agent| agent.name() == "claude-cli-ide")
         .unwrap();
     assert_eq!(claude_ide.get_assets(AssetType::Skill).unwrap().len(), 1);
     assert_eq!(claude_ide.get_assets(AssetType::Mcp).unwrap().len(), 1);
@@ -287,10 +291,10 @@ fn module_discovery_returns_agents_that_own_asset_factories() {
 
     let agents: Vec<_> = discover_agents(dir.path())
         .into_iter()
-        .filter(|agent| agent.name() == "codex")
+        .filter(|agent| agent.name() == "codex-cli")
         .collect();
     assert_eq!(agents.len(), 1);
-    assert_eq!(agents[0].name(), "codex");
+    assert_eq!(agents[0].name(), "codex-cli");
     assert_eq!(agents[0].title(), "Codex CLI");
     assert_eq!(agents[0].get_assets(AssetType::Mcp).unwrap().len(), 1);
 }
@@ -415,7 +419,10 @@ base_url = "https://api.openai.com/v1"
     .unwrap();
 
     let agents = discover_agents(dir.path());
-    let codex_agent = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+    let codex_agent = agents
+        .iter()
+        .find(|agent| agent.name() == "codex-cli")
+        .unwrap();
     let sentra_agent = agents
         .iter()
         .find(|agent| agent.name() == "sentra")
@@ -477,7 +484,7 @@ env_key = "SENTRA_RT_CODEX_TEST_KEY"
 
     let codex = discover_agents(dir.path())
         .into_iter()
-        .find(|agent| agent.name() == "codex")
+        .find(|agent| agent.name() == "codex-cli")
         .unwrap();
 
     let mcp = asset_data(&codex, AssetType::Mcp);
@@ -584,7 +591,7 @@ fn codex_skill_asset_reads_enabled_config_and_plugin_cache() {
 
     let codex = discover_agents(dir.path())
         .into_iter()
-        .find(|agent| agent.name() == "codex")
+        .find(|agent| agent.name() == "codex-cli")
         .unwrap();
     let skills = asset_data(&codex, AssetType::Skill);
     let skills = skills[0].data.as_array().unwrap();
@@ -634,7 +641,7 @@ fn codex_plugin_asset_reads_cache_manifest_without_raw_secrets() {
 
     let codex = discover_agents(dir.path())
         .into_iter()
-        .find(|agent| agent.name() == "codex")
+        .find(|agent| agent.name() == "codex-cli")
         .unwrap();
     let plugins = asset_data(&codex, AssetType::Plugin);
     let items = plugins[0].data.as_array().unwrap();
@@ -768,7 +775,7 @@ fn skill_collection_matches_ts_boundaries_and_memory_keeps_empty_files() {
 
     let codex = discover_agents(dir.path())
         .into_iter()
-        .find(|agent| agent.name() == "codex")
+        .find(|agent| agent.name() == "codex-cli")
         .unwrap();
 
     let skills = asset_data(&codex, AssetType::Skill);
@@ -801,7 +808,7 @@ fn malformed_skill_frontmatter_does_not_break_asset_listing() {
 
     let codex = discover_agents(dir.path())
         .into_iter()
-        .find(|agent| agent.name() == "codex")
+        .find(|agent| agent.name() == "codex-cli")
         .unwrap();
     let skills = asset_data(&codex, AssetType::Skill);
     let skills = skills[0].data.as_array().unwrap();
@@ -1870,7 +1877,7 @@ fn opencode_does_not_expose_memory_assets() {
 }
 
 #[test]
-fn kimi_code_discovers_default_home() {
+fn kimi_cli_discovers_default_home() {
     let dir = tempfile::tempdir().unwrap();
     let default_home = dir.path().join(".kimi-code");
     fs::create_dir_all(&default_home).unwrap();
@@ -1879,22 +1886,29 @@ fn kimi_code_discovers_default_home() {
 
     let kimi_homes = agents
         .iter()
-        .filter(|agent| agent.name() == "kimi-code")
+        .filter(|agent| agent.name() == "kimi-cli")
         .map(|agent| agent.home().to_path_buf())
         .collect::<Vec<_>>();
 
     assert_eq!(kimi_homes, vec![default_home.clone()]);
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code" && agent.home() == default_home)
+        .find(|agent| agent.name() == "kimi-cli" && agent.home() == default_home)
         .unwrap();
     assert_eq!(kimi.title(), "Kimi Code");
-    assert!(kimi.get_assets(AssetType::Cron).unwrap().is_empty());
+    assert!(
+        asset_data(kimi, AssetType::Cron)[0]
+            .data
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(kimi.get_assets(AssetType::Memory).unwrap().is_empty());
     assert_eq!(kimi.get_assets(AssetType::Process).unwrap().len(), 1);
 }
 
 #[test]
-fn kimi_code_provider_parses_config_and_masks_secrets() {
+fn kimi_cli_provider_parses_config_and_masks_secrets() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     fs::create_dir_all(home.join("credentials")).unwrap();
@@ -1923,7 +1937,7 @@ model = "kimi-k2-0711-preview"
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let providers = asset_data(kimi, AssetType::Provider);
     let provider = &providers[0].data[0];
@@ -1959,7 +1973,7 @@ model = "kimi-k2-0711-preview"
 }
 
 #[test]
-fn kimi_code_provider_set_data_writes_config_toml() {
+fn kimi_cli_provider_set_data_writes_config_toml() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     fs::create_dir_all(&home).unwrap();
@@ -1967,7 +1981,7 @@ fn kimi_code_provider_set_data_writes_config_toml() {
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let provider_asset = kimi
         .get_assets(AssetType::Provider)
@@ -2022,7 +2036,7 @@ fn kimi_code_provider_set_data_writes_config_toml() {
 }
 
 #[test]
-fn kimi_code_provider_delete_removes_provider_config() {
+fn kimi_cli_provider_delete_removes_provider_config() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     fs::create_dir_all(&home).unwrap();
@@ -2055,7 +2069,7 @@ model = "claude"
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let provider_asset = kimi
         .get_assets(AssetType::Provider)
@@ -2088,7 +2102,7 @@ model = "claude"
 }
 
 #[test]
-fn kimi_code_mcp_maps_http_sse_stdio_and_plugin_servers() {
+fn kimi_cli_mcp_maps_http_sse_stdio_and_plugin_servers() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     let plugin_root = home.join("plugins").join("managed").join("demo");
@@ -2118,7 +2132,7 @@ fn kimi_code_mcp_maps_http_sse_stdio_and_plugin_servers() {
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let mcps = asset_data(kimi, AssetType::Mcp);
     let items = mcps[0].data.as_array().unwrap();
@@ -2151,11 +2165,63 @@ fn kimi_code_mcp_maps_http_sse_stdio_and_plugin_servers() {
 }
 
 #[test]
-fn kimi_code_collects_skills_plugins_and_memory_without_credentials() {
+fn user_agents_skills_belong_only_to_general_agent() {
+    let dir = tempfile::tempdir().unwrap();
+    let global_skill = dir
+        .path()
+        .join(".agents")
+        .join("skills")
+        .join("general-only-skill");
+    fs::create_dir_all(&global_skill).unwrap();
+    fs::write(
+        global_skill.join("SKILL.md"),
+        "---\nname: general-only-skill\n---\nbody",
+    )
+    .unwrap();
+    for home in [
+        dir.path().join(".config").join("coderv2"),
+        dir.path().join(".cursor"),
+        dir.path().join(".kimi-code"),
+        dir.path().join(".trae"),
+        dir.path().join(".vscode"),
+    ] {
+        fs::create_dir_all(home).unwrap();
+    }
+
+    let agents = discover_agents(dir.path());
+    for agent_name in ["coder", "cursor", "kimi-cli", "trae", "vscode"] {
+        let agent = agents
+            .iter()
+            .find(|agent| agent.name() == agent_name)
+            .unwrap();
+        let skills = asset_data(agent, AssetType::Skill);
+        let items = skills[0].data.as_array().unwrap();
+        assert!(
+            !items
+                .iter()
+                .any(|item| item["name"] == "general-only-skill"),
+            "{agent_name} must not collect user-home .agents skills"
+        );
+    }
+
+    let general = agents
+        .iter()
+        .find(|agent| agent.name() == "agents")
+        .unwrap();
+    let skills = asset_data(general, AssetType::Skill);
+    let items = skills[0].data.as_array().unwrap();
+    assert!(
+        items
+            .iter()
+            .any(|item| item["name"] == "general-only-skill")
+    );
+}
+
+#[test]
+fn kimi_cli_collects_local_and_plugin_skills() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join(".kimi-code");
     let local_skill = home.join("skills").join("local");
-    let global_skill = dir.path().join(".agents").join("skills").join("global");
     let plugin_root = home
         .join("plugins")
         .join("managed")
@@ -2163,19 +2229,8 @@ fn kimi_code_collects_skills_plugins_and_memory_without_credentials() {
         .join("plugin");
     let plugin_skill = plugin_root.join("skills").join("plugin-skill");
     fs::create_dir_all(&local_skill).unwrap();
-    fs::create_dir_all(&global_skill).unwrap();
     fs::create_dir_all(&plugin_skill).unwrap();
-    fs::create_dir_all(home.join("credentials")).unwrap();
-    fs::create_dir_all(home.join("bin")).unwrap();
-    fs::create_dir_all(home.join("updates")).unwrap();
-    fs::create_dir_all(home.join("logs")).unwrap();
-    fs::create_dir_all(home.join("sessions").join("2026")).unwrap();
     fs::write(local_skill.join("SKILL.md"), "---\nname: local\n---\nbody").unwrap();
-    fs::write(
-        global_skill.join("SKILL.md"),
-        "---\nname: global\n---\nbody",
-    )
-    .unwrap();
     fs::write(
         plugin_skill.join("SKILL.md"),
         "---\nname: plugin-skill\n---\nbody",
@@ -2194,36 +2249,14 @@ fn kimi_code_collects_skills_plugins_and_memory_without_credentials() {
         }"#,
     )
     .unwrap();
-    fs::write(home.join("config.toml"), "default_model = \"kimi\"\n").unwrap();
-    fs::write(home.join("tui.toml"), "theme = \"dark\"\n").unwrap();
-    fs::write(home.join("AGENTS.md"), "User instructions").unwrap();
-    fs::write(home.join("mcp.json"), r#"{"mcpServers":{}}"#).unwrap();
-    fs::create_dir_all(home.join("plugins")).unwrap();
-    fs::write(home.join("plugins").join("installed.json"), "{}").unwrap();
-    fs::write(home.join("session_index.jsonl"), "{}\n").unwrap();
-    fs::write(home.join("logs").join("kimi-code.log"), "log").unwrap();
-    fs::write(
-        home.join("sessions").join("2026").join("thread.jsonl"),
-        "{}\n",
-    )
-    .unwrap();
-    fs::write(
-        home.join("credentials").join("oauth.json"),
-        r#"{"access_token":"oauth-kimi-secret"}"#,
-    )
-    .unwrap();
-    fs::write(home.join("bin").join("tool.json"), "{}").unwrap();
-    fs::write(home.join("updates").join("update.json"), "{}").unwrap();
-
     let agents = discover_agents(dir.path());
     let kimi = agents
         .iter()
-        .find(|agent| agent.name() == "kimi-code")
+        .find(|agent| agent.name() == "kimi-cli")
         .unwrap();
     let skills = asset_data(kimi, AssetType::Skill);
     let skill_items = skills[0].data.as_array().unwrap();
     assert!(skill_items.iter().any(|item| item["name"] == "local"));
-    assert!(skill_items.iter().any(|item| item["name"] == "global"));
     let plugin_skill = skill_items
         .iter()
         .find(|item| item["name"] == "plugin-skill")
@@ -2247,22 +2280,165 @@ fn kimi_code_collects_skills_plugins_and_memory_without_credentials() {
             .any(|item| item == "skills")
     );
     assert!(!plugin_json.contains("sk-plugin-secret"));
+}
 
-    let memories = asset_data(kimi, AssetType::Memory);
-    let memory_json = memories[0].data.to_string();
-    let memory_names = memories[0]
-        .data
-        .as_array()
-        .unwrap()
+#[test]
+fn kimi_cli_ide_shares_cli_assets_without_memory_collector() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join(".kimi-code");
+    fs::create_dir_all(home.join("skills").join("shared")).unwrap();
+    fs::write(
+        home.join("skills").join("shared").join("SKILL.md"),
+        "---\nname: shared\n---\nbody",
+    )
+    .unwrap();
+    write_ide_extension_index(dir.path(), ".vscode", &["moonshot-ai.kimi-code"]);
+
+    let agents = discover_agents(dir.path());
+    let cli = agents
         .iter()
-        .map(|item| item["name"].as_str().unwrap().to_string())
-        .collect::<Vec<_>>();
-    assert!(memory_names.contains(&"config.toml".to_string()));
-    assert!(memory_names.contains(&"kimi.plugin.json".to_string()));
-    assert!(memory_names.contains(&"thread.jsonl".to_string()));
-    assert!(!memory_names.contains(&"oauth.json".to_string()));
-    assert!(!memory_json.contains("credentials"));
-    assert!(!memory_json.contains("oauth-kimi-secret"));
+        .find(|agent| agent.name() == "kimi-cli")
+        .unwrap();
+    let ide = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-cli-ide")
+        .unwrap();
+
+    assert_eq!(ide.title(), "Kimi Code IDE Extension");
+    assert_eq!(ide.home(), cli.home());
+    assert_eq!(
+        asset_data(ide, AssetType::Skill)[0].data[0]["name"],
+        "shared"
+    );
+    assert!(ide.get_assets(AssetType::Memory).unwrap().is_empty());
+    assert_eq!(ide.get_assets(AssetType::Process).unwrap().len(), 1);
+}
+
+#[test]
+fn kimi_app_collects_daimon_assets_and_masks_credentials() {
+    let dir = tempfile::tempdir().unwrap();
+    let app_home = dir
+        .path()
+        .join("AppData")
+        .join("Roaming")
+        .join("kimi-desktop");
+    let daimon = app_home.join("daimon-share").join("daimon");
+    let builtin_skill = daimon.join("skills").join("builtin");
+    let runtime_home = daimon.join("runtime").join("kimi-code").join("home");
+    let plugin = runtime_home.join("plugins").join("managed").join("demo");
+    let plugin_skill = plugin.join("skills").join("plugin-skill");
+    let vault = daimon
+        .join("agents")
+        .join("main")
+        .join("memory")
+        .join("vault");
+    let automation = daimon
+        .join("agents")
+        .join("main")
+        .join("blueprint")
+        .join("automations")
+        .join("automation_daily");
+    for path in [&builtin_skill, &plugin_skill, &vault, &automation] {
+        fs::create_dir_all(path).unwrap();
+    }
+    fs::write(
+        builtin_skill.join("SKILL.md"),
+        "---\nname: builtin\n---\nbody",
+    )
+    .unwrap();
+    fs::write(
+        plugin_skill.join("SKILL.md"),
+        "---\nname: plugin-skill\n---\nbody",
+    )
+    .unwrap();
+    fs::write(
+        plugin.join("kimi.plugin.json"),
+        r#"{
+          "name":"demo",
+          "skills":"skills",
+          "mcpServers":{"demo-mcp":{"command":"server","env":{"TOKEN":"secret-mcp"}}}
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        runtime_home.join("plugins").join("installed.json"),
+        r#"{"version":1,"plugins":[{"id":"demo","enabled":true}]}"#,
+    )
+    .unwrap();
+    fs::write(vault.join("profile.md"), "private memory").unwrap();
+    fs::write(
+        daimon.join("config.json"),
+        r#"{
+          "model": {
+            "current": "k3-agent",
+            "providers": {
+              "daimon-kimi-code": {"type":"kimi","baseUrl":"https://api.example.test","credential":"kimiCode"}
+            },
+            "models": {
+              "k3-agent": {"provider":"daimon-kimi-code","model":"k3-agent"}
+            }
+          },
+          "credentials": {"kimiCode":{"apiKey":"secret-provider"}}
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        automation.join("automation.json"),
+        r#"{
+          "version":1,
+          "automation": {
+            "automationId":"automation_daily",
+            "title":"Daily",
+            "enabled":true,
+            "trigger":{"kind":"schedule","cron":"0 9 * * *"},
+            "execution":{"kind":"agent","prompt":"report"},
+            "createdAt":"2026-07-22T00:00:00Z",
+            "updatedAt":"2026-07-22T01:00:00Z"
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let agents = discover_agents(dir.path());
+    let app = agents
+        .iter()
+        .find(|agent| agent.name() == "kimi-app")
+        .unwrap();
+
+    assert_eq!(app.title(), "Kimi App");
+    assert_eq!(
+        asset_data(app, AssetType::Skill)[0]
+            .data
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        asset_data(app, AssetType::Plugin)[0].data[0]["name"],
+        "demo"
+    );
+    assert_eq!(
+        asset_data(app, AssetType::Mcp)[0].data[0]["env"]["TOKEN"],
+        "****"
+    );
+    let providers = asset_data(app, AssetType::Provider);
+    assert_eq!(providers[0].data[0]["providerId"], "daimon-kimi-code");
+    assert_eq!(providers[0].data[0]["apiKey"], "****");
+    assert!(!providers[0].data.to_string().contains("secret-provider"));
+    assert_eq!(
+        asset_data(app, AssetType::Memory)[0]
+            .data
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        asset_data(app, AssetType::Cron)[0].data[0]["schedule"],
+        "0 9 * * *"
+    );
+    assert_eq!(app.get_assets(AssetType::Process).unwrap().len(), 1);
 }
 
 #[test]
@@ -2394,7 +2570,10 @@ name = "DeepSeek"
     .unwrap();
 
     let agents = discover_agents(dir.path());
-    let codex = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+    let codex = agents
+        .iter()
+        .find(|agent| agent.name() == "codex-cli")
+        .unwrap();
     let providers = asset_data(codex, AssetType::Provider);
     let provider = &providers[0].data[0];
     assert_eq!(provider["rawProviderId"], "deepseek");
@@ -2547,7 +2726,10 @@ experimental_bearer_token = "sk-test"
     .unwrap();
 
     let agents = discover_agents(dir.path());
-    let codex_agent = agents.iter().find(|agent| agent.name() == "codex").unwrap();
+    let codex_agent = agents
+        .iter()
+        .find(|agent| agent.name() == "codex-cli")
+        .unwrap();
     let provider = codex_agent
         .get_assets(AssetType::Provider)
         .unwrap()

@@ -331,7 +331,7 @@ rule WorkspaceRule {
     let value = call_scan(&request);
     let results = value.as_array().expect("scan must return an array");
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0]["agentName"], "codex");
+    assert_eq!(results[0]["agentName"], "codex-cli");
     assert_eq!(results[0]["data"]["name"], "workspace-rule-skill");
     assert_eq!(
         results[0]["report"]["findings"][0]["title"],

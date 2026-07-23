@@ -1,7 +1,9 @@
 use std::path::Path;
 
 use crate::SentraResult;
-use crate::agents::install_status::{InstallStatusProbe, is_named_cli_agent_installed_with};
+use crate::agents::install_status::{
+    InstallStatusProbe, is_named_cli_agent_installed_with, user_home_for_agent_home,
+};
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, MetaData};
 use crate::utils::dir_exists;
@@ -45,5 +47,9 @@ impl Asset<Option<MetaData>> for MetaAsset {
 }
 
 pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
-    is_named_cli_agent_installed_with(agent_name, agent_home, &InstallStatusProbe::real())
+    is_named_cli_agent_installed_with(
+        agent_name,
+        agent_home,
+        &InstallStatusProbe::real(user_home_for_agent_home(agent_home, &[".codebuddy"])),
+    )
 }
