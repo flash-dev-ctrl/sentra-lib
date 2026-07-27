@@ -8,7 +8,7 @@ use crate::agents::install_status::{
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::agents::trae::surface;
 use crate::interfaces::{Asset, AssetType, MetaData};
-use crate::utils::{dir_exists, read_json_file};
+use crate::utils::dir_exists;
 
 #[derive(Debug, Clone)]
 pub(super) struct MetaAsset {
@@ -36,32 +36,28 @@ impl Asset<Option<MetaData>> for MetaAsset {
             id: Some(self.core.agent_name().to_string()),
             name: surface::title(self.core.agent_name()).to_string(),
             description: Some(
-                "Trae IDE local VS Code-compatible configuration and Agent assets.".to_string(),
+                "Trae Work local workbench configuration and Agent assets.".to_string(),
             ),
-            version: version(self.core.agent_name(), home)?,
+            version: None,
             author: Some(surface::author(self.core.agent_name()).to_string()),
             installed,
             home: Some(home.to_path_buf()),
-            updated_at: updated_at(self.core.agent_name(), home)?,
             ..MetaData::default()
         }))
     }
 }
 
 pub(super) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
-    is_ide_installed(agent_name, agent_home)
-}
-
-fn is_ide_installed(agent_name: &str, agent_home: &Path) -> bool {
     let user_home = surface::user_home(agent_name, agent_home);
     let probe = InstallStatusProbe::real(&user_home);
     let commands: &[&str] = if surface::is_cn(agent_name) {
-        &["trae-cn", "TraeCN", "Trae CN"]
+        &["traeworkcn", "TraeWorkCN", "Trae CN Work", "Trae Work CN"]
     } else {
-        &["trae"]
+        &["traework", "TraeWork", "Trae Work", "TRAE SOLO"]
     };
     any_command_exists_with(commands, &probe)
         || any_existing_file_with(install_paths(agent_name, agent_home), &probe)
+        || any_existing_dir_with(work_state_paths(agent_name, agent_home), &probe)
         || any_existing_dir_with(app_paths(agent_name, agent_home), &probe)
         || probe.product_installed(product_names(agent_name), publishers(agent_name))
 }
@@ -69,50 +65,56 @@ fn is_ide_installed(agent_name: &str, agent_home: &Path) -> bool {
 fn install_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
     let user_home = surface::user_home(agent_name, agent_home);
     let command = if surface::is_cn(agent_name) {
-        "TraeCN"
+        "TraeWorkCN"
     } else {
-        "Trae"
+        "TraeWork"
     };
     let mut paths = binary_paths(user_home.join(".local").join("bin"), command);
     if let Some(local_app_data) = env_path("LOCALAPPDATA") {
-        for app_name in surface::ide_app_names(agent_name) {
+        for app_name in surface::work_app_names(agent_name) {
             paths.extend(binary_paths(
                 local_app_data.join("Programs").join(app_name),
                 command,
             ));
         }
     }
-    #[cfg(unix)]
-    paths.extend([
-        PathBuf::from("/usr/bin").join(command),
-        PathBuf::from("/usr/local/bin").join(command),
-        PathBuf::from("/usr/share/trae").join(command),
-    ]);
     paths
 }
 
 fn app_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
     let user_home = surface::user_home(agent_name, agent_home);
     let mut paths = Vec::new();
-    for app_name in surface::ide_app_names(agent_name) {
+    for app_name in surface::work_app_names(agent_name) {
         paths.extend([
             user_home
                 .join("Applications")
                 .join(format!("{app_name}.app")),
             PathBuf::from("/Applications").join(format!("{app_name}.app")),
-            PathBuf::from("/usr/share").join(app_name),
-            PathBuf::from("/opt").join(app_name),
         ]);
     }
-    paths.extend(surface::ide_data_roots(agent_name, agent_home));
+    paths.extend(surface::work_data_roots(agent_name, agent_home));
     paths
+}
+
+fn work_state_paths(agent_name: &str, agent_home: &Path) -> Vec<PathBuf> {
+    let state_home = surface::state_home(agent_name, agent_home);
+    vec![
+        state_home.join("work"),
+        state_home.join("worktrees"),
+        state_home.join("builtin").join("work"),
+    ]
 }
 
 fn product_names(agent_name: &str) -> &'static [&'static str] {
     if surface::is_cn(agent_name) {
-        &["Trae CN"]
+        &[
+            "Trae CN Work",
+            "Trae Work CN",
+            "TRAE Work CN",
+            "TRAE SOLO CN",
+        ]
     } else {
-        &["Trae"]
+        &["Trae Work", "TRAE Work", "TraeWork", "TRAE SOLO"]
     }
 }
 
@@ -124,74 +126,16 @@ fn publishers(agent_name: &str) -> &'static [&'static str] {
     }
 }
 
-fn version(agent_name: &str, agent_home: &Path) -> SentraResult<Option<String>> {
-    Ok(version_value(agent_name, agent_home)?.and_then(|value| string_field(&value, "version")))
-}
-
-fn updated_at(agent_name: &str, agent_home: &Path) -> SentraResult<Option<String>> {
-    Ok(
-        version_value(agent_name, agent_home)?
-            .and_then(|value| string_field(&value, "releaseDate")),
-    )
-}
-
-fn version_value(agent_name: &str, agent_home: &Path) -> SentraResult<Option<serde_json::Value>> {
-    let state_home = surface::state_home(agent_name, agent_home);
-    for path in [
-        state_home.join("builtin").join("ide_version.json"),
-        state_home.join("builtin").join("version.json"),
-        agent_home.join("builtin").join("ide_version.json"),
-        agent_home.join("builtin").join("version.json"),
-    ] {
-        if let Some(value) = read_json_file(path)? {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
-}
-
-fn string_field(value: &serde_json::Value, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(|value| value.as_str())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn trae_cli_alone_does_not_count_as_the_desktop_product() {
+    fn work_state_path_counts_as_work_installation() {
         let dir = tempfile::tempdir().unwrap();
-        let probe = InstallStatusProbe::test(|binary| binary == "trae-cli", |_| false, |_| false);
+        let home = dir.path().join(".trae").join("work");
+        std::fs::create_dir_all(&home).unwrap();
 
-        assert!(
-            !(any_command_exists_with(&["trae"], &probe)
-                || any_existing_file_with(install_paths("trae-ide", dir.path()), &probe)
-                || any_existing_dir_with(app_paths("trae-ide", dir.path()), &probe))
-        );
-    }
-
-    #[test]
-    fn reads_trae_builtin_version_metadata() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(dir.path().join("builtin")).unwrap();
-        std::fs::write(
-            dir.path().join("builtin").join("ide_version.json"),
-            r#"{"version":"1.0.23","releaseDate":"2026-05-12"}"#,
-        )
-        .unwrap();
-
-        assert_eq!(
-            version("trae-ide", dir.path()).unwrap().as_deref(),
-            Some("1.0.23")
-        );
-        assert_eq!(
-            updated_at("trae-ide", dir.path()).unwrap().as_deref(),
-            Some("2026-05-12")
-        );
+        assert!(is_agent_installed("trae-work", &home));
     }
 }

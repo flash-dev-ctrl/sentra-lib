@@ -1,5 +1,6 @@
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
+use crate::agents::trae::surface;
 use crate::interfaces::{Asset, AssetType, ProviderData, ProviderModel};
 use crate::utils::{mask_secret, read_text_file};
 
@@ -23,28 +24,43 @@ impl_erased_asset!(ProviderAsset, AssetType::Provider, Vec<ProviderData>);
 
 impl Asset<Vec<ProviderData>> for ProviderAsset {
     fn get_data(&self) -> SentraResult<Vec<ProviderData>> {
-        read_provider_data(true)
+        read_provider_data(self.core.agent_name(), self.core.agent_home(), true)
     }
 
     fn get_runtime_data(&self) -> SentraResult<Vec<ProviderData>> {
-        read_provider_data(false)
+        read_provider_data(self.core.agent_name(), self.core.agent_home(), false)
     }
 }
 
-fn read_provider_data(mask_secrets: bool) -> SentraResult<Vec<ProviderData>> {
-    let Some(path) = crate::agents::trae::workspace_path("trae_config.yaml") else {
-        return Ok(Vec::new());
-    };
-    let Some(content) = read_text_file(path)? else {
-        return Ok(Vec::new());
-    };
-    let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content) else {
-        return Ok(Vec::new());
-    };
-    Ok(provider_data(&config, mask_secrets))
+fn read_provider_data(
+    agent_name: &str,
+    agent_home: &std::path::Path,
+    mask_secrets: bool,
+) -> SentraResult<Vec<ProviderData>> {
+    let state_home = surface::state_home(agent_name, agent_home);
+    for path in [
+        state_home.join("trae_config.yaml"),
+        agent_home.join("trae_config.yaml"),
+    ] {
+        let Some(content) = read_text_file(path)? else {
+            continue;
+        };
+        let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content) else {
+            continue;
+        };
+        return Ok(provider_data(&config, mask_secrets));
+    }
+    if let Some(path) = crate::agents::trae::workspace_path("trae_config.yaml") {
+        if let Some(content) = read_text_file(path)? {
+            if let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content) {
+                return Ok(provider_data(&config, mask_secrets));
+            }
+        }
+    }
+    Ok(Vec::new())
 }
 
-fn provider_data(config: &serde_yaml::Value, mask_secrets: bool) -> Vec<ProviderData> {
+pub(super) fn provider_data(config: &serde_yaml::Value, mask_secrets: bool) -> Vec<ProviderData> {
     let Some(providers) = config
         .get("model_providers")
         .and_then(|value| value.as_mapping())

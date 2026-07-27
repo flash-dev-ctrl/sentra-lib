@@ -367,15 +367,107 @@ pub(crate) const QODER_AGENT_ENTRIES: &[AgentEntry] = &[
     QODER_CN_WORK_AGENT_ENTRY,
 ];
 
-pub(crate) const TRAE_AGENT_ENTRY: AgentEntry = AgentEntry {
-    name: "trae",
-    title: Some("Trae"),
-    homes: &[&[".trae"]],
+pub(crate) const TRAE_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "trae-ide",
+    title: Some("Trae IDE"),
+    homes: &[
+        &["AppData", "Roaming", "Trae"],
+        &["Library", "Application Support", "Trae"],
+        &[".config", "Trae"],
+    ],
     asset_for_type: crate::agents::trae::asset_for_type,
     is_installed: crate::agents::trae::is_agent_installed,
     process_provider: crate::agents::trae::process_data,
     process_home_env_vars: &[],
 };
+
+pub(crate) const TRAE_AGENT_ENTRY: AgentEntry = TRAE_IDE_AGENT_ENTRY;
+
+pub(crate) const TRAE_CN_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "trae-cn-ide",
+    title: Some("Trae CN IDE"),
+    homes: &[
+        &["AppData", "Roaming", "Trae CN"],
+        &["AppData", "Roaming", "TraeCN"],
+        &["Library", "Application Support", "Trae CN"],
+        &["Library", "Application Support", "TraeCN"],
+        &[".config", "Trae CN"],
+        &[".config", "TraeCN"],
+    ],
+    asset_for_type: crate::agents::trae::asset_for_type,
+    is_installed: crate::agents::trae::is_agent_installed,
+    process_provider: crate::agents::trae::process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const TRAE_WORK_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "trae-work",
+    title: Some("Trae Work"),
+    homes: &[
+        &["AppData", "Roaming", "Trae Work"],
+        &["AppData", "Roaming", "TRAE Work"],
+        &["AppData", "Roaming", "TraeWork"],
+        &["AppData", "Roaming", "TRAE SOLO"],
+        &["Library", "Application Support", "Trae Work"],
+        &["Library", "Application Support", "TRAE Work"],
+        &["Library", "Application Support", "TraeWork"],
+        &["Library", "Application Support", "TRAE SOLO"],
+        &[".config", "Trae Work"],
+        &[".config", "TRAE Work"],
+        &[".config", "TraeWork"],
+        &[".config", "TRAE SOLO"],
+        &[".trae", "work"],
+    ],
+    asset_for_type: crate::agents::trae::asset_for_type,
+    is_installed: crate::agents::trae::is_agent_installed,
+    process_provider: crate::agents::trae::work_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const TRAE_CN_WORK_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "trae-cn-work",
+    title: Some("Trae CN Work"),
+    homes: &[
+        &["AppData", "Roaming", "Trae CN Work"],
+        &["AppData", "Roaming", "Trae Work CN"],
+        &["AppData", "Roaming", "TRAE Work CN"],
+        &["AppData", "Roaming", "TraeWorkCN"],
+        &["AppData", "Roaming", "TRAE SOLO CN"],
+        &["Library", "Application Support", "Trae CN Work"],
+        &["Library", "Application Support", "Trae Work CN"],
+        &["Library", "Application Support", "TRAE Work CN"],
+        &["Library", "Application Support", "TraeWorkCN"],
+        &["Library", "Application Support", "TRAE SOLO CN"],
+        &[".config", "Trae CN Work"],
+        &[".config", "Trae Work CN"],
+        &[".config", "TRAE Work CN"],
+        &[".config", "TraeWorkCN"],
+        &[".config", "TRAE SOLO CN"],
+        &[".trae-cn", "work"],
+    ],
+    asset_for_type: crate::agents::trae::asset_for_type,
+    is_installed: crate::agents::trae::is_agent_installed,
+    process_provider: crate::agents::trae::work_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const TRAE_VSCODE_PLUGIN_AGENT_ENTRY: AgentEntry = AgentEntry {
+    name: "trae-vscode-plugin",
+    title: Some("TRAE VS Code Plugin"),
+    homes: &[&[".vscode"]],
+    asset_for_type: crate::agents::trae::asset_for_type,
+    is_installed: crate::agents::trae::is_agent_installed,
+    process_provider: crate::agents::trae::vscode_plugin_process_data,
+    process_home_env_vars: &[],
+};
+
+pub(crate) const TRAE_AGENT_ENTRIES: &[AgentEntry] = &[
+    TRAE_IDE_AGENT_ENTRY,
+    TRAE_CN_IDE_AGENT_ENTRY,
+    TRAE_WORK_AGENT_ENTRY,
+    TRAE_CN_WORK_AGENT_ENTRY,
+    TRAE_VSCODE_PLUGIN_AGENT_ENTRY,
+];
 
 pub(crate) const VSCODE_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "vscode",
@@ -459,7 +551,6 @@ pub(crate) const GENERAL_AGENT_ENTRIES: &[AgentEntry] = &[
     general("tabnine-cli", &[&[".tabnine", "agent"]]),
     general("terramind", &[&[".terramind"]]),
     general("tinycloud", &[&[".tinycloud"]]),
-    general("trae-cn", &[&[".trae-cn"]]),
     general("windsurf", &[&[".codeium", "windsurf"]]),
     general("zencoder", &[&[".zencoder"]]),
     general("zenflow", &[&[".zencoder"]]),
@@ -498,10 +589,9 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         QODER_CN_CLI_AGENT_ENTRY.clone(),
         QODER_CN_IDE_AGENT_ENTRY.clone(),
         QODER_CN_WORK_AGENT_ENTRY.clone(),
-        TRAE_AGENT_ENTRY.clone(),
-        VSCODE_AGENT_ENTRY.clone(),
-        WORKBUDDY_AGENT_ENTRY.clone(),
     ];
+    entries.extend(TRAE_AGENT_ENTRIES.iter().cloned());
+    entries.extend([VSCODE_AGENT_ENTRY.clone(), WORKBUDDY_AGENT_ENTRY.clone()]);
     entries.extend_from_slice(GENERAL_AGENT_ENTRIES);
     entries
 }
@@ -586,6 +676,15 @@ mod tests {
             (&QODER_CN_CLI_AGENT_ENTRY, "qoder-cn-cli", "Qoder CN CLI"),
             (&QODER_CN_IDE_AGENT_ENTRY, "qoder-cn-ide", "Qoder CN IDE"),
             (&QODER_CN_WORK_AGENT_ENTRY, "qoder-cn-work", "Qoder CN Work"),
+            (&TRAE_IDE_AGENT_ENTRY, "trae-ide", "Trae IDE"),
+            (&TRAE_CN_IDE_AGENT_ENTRY, "trae-cn-ide", "Trae CN IDE"),
+            (&TRAE_WORK_AGENT_ENTRY, "trae-work", "Trae Work"),
+            (&TRAE_CN_WORK_AGENT_ENTRY, "trae-cn-work", "Trae CN Work"),
+            (
+                &TRAE_VSCODE_PLUGIN_AGENT_ENTRY,
+                "trae-vscode-plugin",
+                "TRAE VS Code Plugin",
+            ),
         ] {
             assert_eq!(entry.name, name);
             assert_eq!(entry.title, Some(title));
@@ -625,7 +724,11 @@ mod tests {
             &QODER_CN_CLI_AGENT_ENTRY,
             &QODER_CN_IDE_AGENT_ENTRY,
             &QODER_CN_WORK_AGENT_ENTRY,
-            &TRAE_AGENT_ENTRY,
+            &TRAE_IDE_AGENT_ENTRY,
+            &TRAE_CN_IDE_AGENT_ENTRY,
+            &TRAE_WORK_AGENT_ENTRY,
+            &TRAE_CN_WORK_AGENT_ENTRY,
+            &TRAE_VSCODE_PLUGIN_AGENT_ENTRY,
             &VSCODE_AGENT_ENTRY,
             &WORKBUDDY_AGENT_ENTRY,
         ] {
