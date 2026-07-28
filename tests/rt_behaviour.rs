@@ -2305,6 +2305,7 @@ fn user_agents_skills_belong_only_to_general_agent() {
         dir.path().join(".config").join("coderv2"),
         dir.path().join(".cursor"),
         dir.path().join(".kimi-code"),
+        dir.path().join(".config").join("Trae"),
         dir.path().join(".trae"),
         dir.path().join(".vscode"),
     ] {
@@ -2316,7 +2317,7 @@ fn user_agents_skills_belong_only_to_general_agent() {
         let agent = agents
             .iter()
             .find(|agent| agent.name() == agent_name)
-            .unwrap();
+            .unwrap_or_else(|| panic!("missing {agent_name} agent"));
         let skills = asset_data(agent, AssetType::Skill);
         let items = skills[0].data.as_array().unwrap();
         assert!(
