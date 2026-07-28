@@ -2312,7 +2312,7 @@ fn user_agents_skills_belong_only_to_general_agent() {
     }
 
     let agents = discover_agents(dir.path());
-    for agent_name in ["coder", "cursor", "kimi-cli", "trae", "vscode"] {
+    for agent_name in ["coder", "cursor", "kimi-cli", "trae-ide", "vscode"] {
         let agent = agents
             .iter()
             .find(|agent| agent.name() == agent_name)
