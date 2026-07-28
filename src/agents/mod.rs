@@ -73,7 +73,12 @@ fn installable_agent(
         "pi" => Ok(install::InstallableAgent::Pi),
         "qoder" | "qoder-cli" => Ok(install::InstallableAgent::Qoder),
         "qoderwork" | "qoder-work" => Ok(install::InstallableAgent::QoderWork),
-        "trae" => Ok(install::InstallableAgent::Trae),
+        "trae" | "trae-ide" => Ok(install::InstallableAgent::Trae),
+        "trae-cn" | "trae-cn-ide" => Ok(install::InstallableAgent::TraeCn),
+        "traework" | "trae-work" | "trae-solo" => Ok(install::InstallableAgent::TraeWork),
+        "traeworkcn" | "trae-cn-work" | "trae-work-cn" | "trae-solo-cn" => {
+            Ok(install::InstallableAgent::TraeCnWork)
+        }
         "vscode" => Ok(install::InstallableAgent::VsCode),
         "workbuddy" => Ok(install::InstallableAgent::WorkBuddy),
         other => Err(crate::SentraError::Message(format!(
@@ -179,6 +184,9 @@ mod tests {
             "qoder-cli",
             "qoder-work",
             "trae",
+            "trae-cn-ide",
+            "trae-work",
+            "trae-cn-work",
             "vscode",
             "workbuddy",
         ] {
@@ -203,6 +211,25 @@ mod tests {
                 installable_agent(agent, "install").unwrap(),
                 install::InstallableAgent::CodeBuddy
             );
+        }
+    }
+
+    #[test]
+    fn trae_install_aliases_are_supported() {
+        for (agent, expected) in [
+            ("trae", install::InstallableAgent::Trae),
+            ("trae-ide", install::InstallableAgent::Trae),
+            ("trae-cn", install::InstallableAgent::TraeCn),
+            ("trae-cn-ide", install::InstallableAgent::TraeCn),
+            ("traework", install::InstallableAgent::TraeWork),
+            ("trae-work", install::InstallableAgent::TraeWork),
+            ("trae-solo", install::InstallableAgent::TraeWork),
+            ("traeworkcn", install::InstallableAgent::TraeCnWork),
+            ("trae-cn-work", install::InstallableAgent::TraeCnWork),
+            ("trae-work-cn", install::InstallableAgent::TraeCnWork),
+            ("trae-solo-cn", install::InstallableAgent::TraeCnWork),
+        ] {
+            assert_eq!(installable_agent(agent, "install").unwrap(), expected);
         }
     }
 

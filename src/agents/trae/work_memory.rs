@@ -25,16 +25,12 @@ impl_erased_asset!(MemoryAsset, AssetType::Memory, Vec<MemoryData>);
 impl Asset<Vec<MemoryData>> for MemoryAsset {
     fn get_data(&self) -> SentraResult<Vec<MemoryData>> {
         let state_home = surface::state_home(self.core.agent_name(), self.core.agent_home());
-        let mut paths = vec![state_home.join("memory")];
-        if let Some(path) = crate::agents::trae::workspace_path(".trae/rules") {
-            paths.push(path);
-        }
-        if let Some(path) = crate::agents::trae::workspace_path("AGENTS.md") {
-            paths.push(path);
-        }
         Ok(collect_memory_paths(
-            &paths,
-            &["trae".to_string(), "memory".to_string()],
+            &[
+                self.core.agent_home().join("memory"),
+                state_home.join("work").join("memory"),
+            ],
+            &[self.core.agent_name().to_string(), "memory".to_string()],
         ))
     }
 }

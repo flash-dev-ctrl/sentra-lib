@@ -1,6 +1,6 @@
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
-use crate::agents::trae::{scheduled_task_db, surface};
+use crate::agents::trae::{scheduled_task_cloud, scheduled_task_db, surface};
 use crate::interfaces::{Asset, AssetType, CronData};
 use crate::utils::read_text_file;
 
@@ -25,10 +25,10 @@ impl_erased_asset!(CronAsset, AssetType::Cron, Vec<CronData>);
 impl Asset<Vec<CronData>> for CronAsset {
     fn get_data(&self) -> SentraResult<Vec<CronData>> {
         let state_home = surface::state_home(self.core.agent_name(), self.core.agent_home());
-        let mut files = vec![state_home.join("hooks.json")];
-        if let Some(path) = crate::agents::trae::workspace_path(".trae/hooks.json") {
-            files.push(path);
-        }
+        let files = [
+            self.core.agent_home().join("hooks.json"),
+            state_home.join("work").join("hooks.json"),
+        ];
         let mut results = Vec::new();
         for path in files {
             let Some(content) = read_text_file(&path)? else {
@@ -46,10 +46,14 @@ impl Asset<Vec<CronData>> for CronAsset {
                 ..CronData::default()
             });
         }
-        results.extend(scheduled_task_db::cron_data(surface::ide_data_roots(
+        results.extend(scheduled_task_db::cron_data(surface::work_data_roots(
             self.core.agent_name(),
             self.core.agent_home(),
         ))?);
+        results.extend(scheduled_task_cloud::cron_data(
+            self.core.agent_name(),
+            self.core.agent_home(),
+        ));
         results = dedup_crons(results);
         Ok(results)
     }

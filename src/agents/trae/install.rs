@@ -6,7 +6,32 @@ use crate::agents::install::{
 use crate::interfaces::{AgentInstallAction, AgentUninstallOptions};
 
 const ID: &str = "ByteDance.Trae";
+const CN_ID: &str = "ByteDance.Trae.CN";
+const WORK_ID: &str = "ByteDance.TraeWork";
+const CN_WORK_ID: &str = "ByteDance.TraeWork.CN";
 const CONFIG: &[&str] = &["$env:USERPROFILE\\.trae", "$env:APPDATA\\Trae"];
+const CN_CONFIG: &[&str] = &[
+    "$env:USERPROFILE\\.trae-cn",
+    "$env:APPDATA\\Trae CN",
+    "$env:APPDATA\\TraeCN",
+];
+const WORK_CONFIG: &[&str] = &[
+    "$env:USERPROFILE\\.trae\\work",
+    "$env:USERPROFILE\\.trae\\worktrees",
+    "$env:APPDATA\\Trae Work",
+    "$env:APPDATA\\TRAE Work",
+    "$env:APPDATA\\TraeWork",
+    "$env:APPDATA\\TRAE SOLO",
+];
+const CN_WORK_CONFIG: &[&str] = &[
+    "$env:USERPROFILE\\.trae-cn\\work",
+    "$env:USERPROFILE\\.trae-cn\\worktrees",
+    "$env:APPDATA\\Trae CN Work",
+    "$env:APPDATA\\Trae Work CN",
+    "$env:APPDATA\\TRAE Work CN",
+    "$env:APPDATA\\TraeWorkCN",
+    "$env:APPDATA\\TRAE SOLO CN",
+];
 const MACOS_CONFIG: &[&str] = &[
     "\"$HOME/.trae\"",
     "\"$HOME/Library/Application Support/Trae\"",
@@ -35,6 +60,72 @@ pub(crate) fn uninstall_plans_for_platform(
             macos_app_uninstall_plan("Trae", options, MACOS_CONFIG),
         ],
         Platform::Linux => vec![linux_package_uninstall_plan("trae", options, LINUX_CONFIG)],
+    }
+}
+
+pub(crate) fn cn_install_plans_for_platform(
+    platform: Platform,
+    action: AgentInstallAction,
+) -> Vec<InstallCommandPlan> {
+    match platform {
+        Platform::Windows => winget_install_plans_for_platform(platform, action, CN_ID),
+        Platform::MacOS | Platform::Linux => Vec::new(),
+    }
+}
+
+pub(crate) fn cn_uninstall_plans_for_platform(
+    platform: Platform,
+    options: AgentUninstallOptions,
+) -> Vec<InstallCommandPlan> {
+    match platform {
+        Platform::Windows => {
+            winget_uninstall_plans_for_platform(platform, options, CN_ID, CN_CONFIG)
+        }
+        Platform::MacOS | Platform::Linux => Vec::new(),
+    }
+}
+
+pub(crate) fn work_install_plans_for_platform(
+    platform: Platform,
+    action: AgentInstallAction,
+) -> Vec<InstallCommandPlan> {
+    match platform {
+        Platform::Windows => winget_install_plans_for_platform(platform, action, WORK_ID),
+        Platform::MacOS | Platform::Linux => Vec::new(),
+    }
+}
+
+pub(crate) fn work_uninstall_plans_for_platform(
+    platform: Platform,
+    options: AgentUninstallOptions,
+) -> Vec<InstallCommandPlan> {
+    match platform {
+        Platform::Windows => {
+            winget_uninstall_plans_for_platform(platform, options, WORK_ID, WORK_CONFIG)
+        }
+        Platform::MacOS | Platform::Linux => Vec::new(),
+    }
+}
+
+pub(crate) fn cn_work_install_plans_for_platform(
+    platform: Platform,
+    action: AgentInstallAction,
+) -> Vec<InstallCommandPlan> {
+    match platform {
+        Platform::Windows => winget_install_plans_for_platform(platform, action, CN_WORK_ID),
+        Platform::MacOS | Platform::Linux => Vec::new(),
+    }
+}
+
+pub(crate) fn cn_work_uninstall_plans_for_platform(
+    platform: Platform,
+    options: AgentUninstallOptions,
+) -> Vec<InstallCommandPlan> {
+    match platform {
+        Platform::Windows => {
+            winget_uninstall_plans_for_platform(platform, options, CN_WORK_ID, CN_WORK_CONFIG)
+        }
+        Platform::MacOS | Platform::Linux => Vec::new(),
     }
 }
 
@@ -132,5 +223,40 @@ mod tests {
         assert!(command.contains("x64.deb"));
         assert!(command.contains("arm64.rpm"));
         assert!(!command.contains("trae-cli"));
+    }
+
+    #[test]
+    fn windows_supports_trae_cn_and_work_packages() {
+        for (plans, id) in [
+            (
+                cn_install_plans_for_platform(Platform::Windows, AgentInstallAction::Install),
+                CN_ID,
+            ),
+            (
+                work_install_plans_for_platform(Platform::Windows, AgentInstallAction::Install),
+                WORK_ID,
+            ),
+            (
+                cn_work_install_plans_for_platform(Platform::Windows, AgentInstallAction::Install),
+                CN_WORK_ID,
+            ),
+        ] {
+            assert_eq!(plans.len(), 1);
+            assert!(plans[0].command_line().contains(id));
+        }
+    }
+
+    #[test]
+    fn work_uninstall_keeps_shared_trae_home_root() {
+        let command = work_uninstall_plans_for_platform(
+            Platform::Windows,
+            AgentUninstallOptions {
+                delete_config: true,
+            },
+        )[0]
+        .command_line();
+
+        assert!(command.contains("$env:USERPROFILE\\.trae\\work"));
+        assert!(!command.contains("\"$env:USERPROFILE\\.trae\""));
     }
 }

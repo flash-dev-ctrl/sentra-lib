@@ -23,6 +23,9 @@ pub(crate) enum InstallableAgent {
     Qoder,
     QoderWork,
     Trae,
+    TraeCn,
+    TraeWork,
+    TraeCnWork,
     VsCode,
     WorkBuddy,
 }
@@ -44,7 +47,10 @@ impl InstallableAgent {
             Self::Pi => "pi",
             Self::Qoder => "qoder-cli",
             Self::QoderWork => "qoder-work",
-            Self::Trae => "trae",
+            Self::Trae => "trae-ide",
+            Self::TraeCn => "trae-cn-ide",
+            Self::TraeWork => "trae-work",
+            Self::TraeCnWork => "trae-cn-work",
             Self::VsCode => "vscode",
             Self::WorkBuddy => "workbuddy",
         }
@@ -69,6 +75,9 @@ impl InstallableAgent {
             Self::Qoder => &QODER_CLI_AGENT_ENTRY,
             Self::QoderWork => &QODER_WORK_AGENT_ENTRY,
             Self::Trae => &TRAE_AGENT_ENTRY,
+            Self::TraeCn => &TRAE_CN_IDE_AGENT_ENTRY,
+            Self::TraeWork => &TRAE_WORK_AGENT_ENTRY,
+            Self::TraeCnWork => &TRAE_CN_WORK_AGENT_ENTRY,
             Self::VsCode => &VSCODE_AGENT_ENTRY,
             Self::WorkBuddy => &WORKBUDDY_AGENT_ENTRY,
         }
@@ -444,6 +453,15 @@ fn install_plans_for_platform(
             crate::agents::qoder::work_install_plans_for_platform(platform, action)
         }
         InstallableAgent::Trae => crate::agents::trae::install_plans_for_platform(platform, action),
+        InstallableAgent::TraeCn => {
+            crate::agents::trae::cn_install_plans_for_platform(platform, action)
+        }
+        InstallableAgent::TraeWork => {
+            crate::agents::trae::work_install_plans_for_platform(platform, action)
+        }
+        InstallableAgent::TraeCnWork => {
+            crate::agents::trae::cn_work_install_plans_for_platform(platform, action)
+        }
         InstallableAgent::VsCode => {
             crate::agents::vscode::install_plans_for_platform(platform, action)
         }
@@ -515,6 +533,15 @@ fn uninstall_plans_for_platform(
         }
         InstallableAgent::Trae => {
             crate::agents::trae::uninstall_plans_for_platform(platform, options)
+        }
+        InstallableAgent::TraeCn => {
+            crate::agents::trae::cn_uninstall_plans_for_platform(platform, options)
+        }
+        InstallableAgent::TraeWork => {
+            crate::agents::trae::work_uninstall_plans_for_platform(platform, options)
+        }
+        InstallableAgent::TraeCnWork => {
+            crate::agents::trae::cn_work_uninstall_plans_for_platform(platform, options)
         }
         InstallableAgent::VsCode => {
             crate::agents::vscode::uninstall_plans_for_platform(platform, options)
@@ -1208,6 +1235,9 @@ mod tests {
             (InstallableAgent::Qoder, "Alibaba.Qoder"),
             (InstallableAgent::QoderWork, "Alibaba.QoderWork"),
             (InstallableAgent::Trae, "ByteDance.Trae"),
+            (InstallableAgent::TraeCn, "ByteDance.Trae.CN"),
+            (InstallableAgent::TraeWork, "ByteDance.TraeWork"),
+            (InstallableAgent::TraeCnWork, "ByteDance.TraeWork.CN"),
             (InstallableAgent::VsCode, "Microsoft.VisualStudioCode"),
             (InstallableAgent::WorkBuddy, "Tencent.WorkBuddy"),
         ] {
@@ -1259,6 +1289,9 @@ mod tests {
             InstallableAgent::Qoder,
             InstallableAgent::QoderWork,
             InstallableAgent::Trae,
+            InstallableAgent::TraeCn,
+            InstallableAgent::TraeWork,
+            InstallableAgent::TraeCnWork,
             InstallableAgent::VsCode,
             InstallableAgent::WorkBuddy,
         ] {
@@ -1366,6 +1399,12 @@ mod tests {
         }
         for (agent, platform) in [
             (InstallableAgent::QoderWork, Platform::Linux),
+            (InstallableAgent::TraeCn, Platform::MacOS),
+            (InstallableAgent::TraeCn, Platform::Linux),
+            (InstallableAgent::TraeWork, Platform::MacOS),
+            (InstallableAgent::TraeWork, Platform::Linux),
+            (InstallableAgent::TraeCnWork, Platform::MacOS),
+            (InstallableAgent::TraeCnWork, Platform::Linux),
             (InstallableAgent::WorkBuddy, Platform::Linux),
         ] {
             assert!(
