@@ -43,7 +43,6 @@ pub enum FileCategory {
     Script,
     Exe,
     Binary,
-    Mcp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -167,16 +166,8 @@ pub struct McpToolDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct McpToolInput {
-    pub source: String,
-    pub tools: Vec<McpToolDef>,
-    pub file_cat: Option<FileCategory>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CheckInput {
     Content(ContentInput),
-    McpTools(McpToolInput),
 }
 
 impl CheckInput {
@@ -197,10 +188,6 @@ impl CheckInput {
                 content.file_ext = Some(file_ext);
                 Self::Content(content)
             }
-            Self::McpTools(mut input) => {
-                input.file_cat = Some(file_cat);
-                Self::McpTools(input)
-            }
         }
     }
 
@@ -213,21 +200,18 @@ impl CheckInput {
                 );
                 Self::Content(content)
             }
-            Self::McpTools(input) => Self::McpTools(input),
         }
     }
 
     pub fn source(&self) -> &str {
         match self {
             Self::Content(content) => &content.source,
-            Self::McpTools(input) => &input.source,
         }
     }
 
     pub fn file_category(&self) -> Option<FileCategory> {
         match self {
             Self::Content(content) => content.file_cat,
-            Self::McpTools(input) => input.file_cat,
         }
     }
 }
@@ -433,6 +417,8 @@ pub struct McpData {
     pub env: Option<HashMap<String, String>>,
     pub enabled: Option<bool>,
     pub project: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<McpToolDef>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

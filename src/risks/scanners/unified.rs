@@ -8,12 +8,14 @@ use serde::{Deserialize, Serialize};
 use crate::SentraResult;
 use crate::i18n::{category_zh, severity_zh};
 use crate::interfaces::{
-    CheckInput, CronData, Finding, MemoryData, ProviderData, RiskSeverity, Scanner, SkillData,
+    CheckInput, CronData, Finding, McpData, MemoryData, ProviderData, RiskSeverity, Scanner,
+    SkillData,
 };
 use crate::risks::checkers::{CheckError, RiskChecker};
 use crate::risks::types::{RuleLoadSummary, RuleType, ScanOptions};
 
 use super::cron::CronScanner;
+use super::mcp::McpScanner;
 use super::memory::MemoryScanner;
 use super::provider::ProviderScanner;
 use super::skill::SkillScanner;
@@ -44,6 +46,7 @@ pub struct ScanReport {
 
 pub enum RiskAsset<'a> {
     Skill(&'a SkillData),
+    Mcp(&'a McpData),
     Cron(&'a CronData),
     Memory(&'a MemoryData),
     Provider(&'a ProviderData),
@@ -53,6 +56,7 @@ pub enum RiskAsset<'a> {
 
 enum ScannerSelection<'a> {
     Skill(&'a SkillData),
+    Mcp(&'a McpData),
     Cron(&'a CronData),
     Memory(&'a MemoryData),
     Provider(&'a ProviderData),
@@ -62,6 +66,12 @@ enum ScannerSelection<'a> {
 impl<'a> From<&'a SkillData> for RiskAsset<'a> {
     fn from(asset: &'a SkillData) -> Self {
         Self::Skill(asset)
+    }
+}
+
+impl<'a> From<&'a McpData> for RiskAsset<'a> {
+    fn from(asset: &'a McpData) -> Self {
+        Self::Mcp(asset)
     }
 }
 
@@ -92,6 +102,7 @@ impl From<CheckInput> for RiskAsset<'_> {
 pub struct RiskScanner {
     checker: Arc<RiskChecker>,
     cron_scanner: CronScanner,
+    mcp_scanner: McpScanner,
     memory_scanner: MemoryScanner,
     provider_scanner: ProviderScanner,
     skill_scanner: SkillScanner,
@@ -122,6 +133,7 @@ impl RiskScanner {
     fn from_checker(checker: Arc<RiskChecker>) -> Self {
         Self {
             cron_scanner: CronScanner::new(Arc::clone(&checker)),
+            mcp_scanner: McpScanner::new(Arc::clone(&checker)),
             memory_scanner: MemoryScanner::new(Arc::clone(&checker)),
             provider_scanner: ProviderScanner::new(Arc::clone(&checker)),
             skill_scanner: SkillScanner::new(Arc::clone(&checker)),
@@ -136,6 +148,10 @@ impl RiskScanner {
             Some(ScannerSelection::Skill(asset)) => {
                 let scanner = self.skill_scanner.id().to_string();
                 (scanner, self.skill_scanner.scan_asset(asset).await?)
+            }
+            Some(ScannerSelection::Mcp(asset)) => {
+                let scanner = self.mcp_scanner.id().to_string();
+                (scanner, self.mcp_scanner.scan_asset(asset).await?)
             }
             Some(ScannerSelection::Cron(asset)) => {
                 let scanner = self.cron_scanner.id().to_string();
@@ -168,6 +184,7 @@ impl RiskScanner {
 fn select_scanner(asset: RiskAsset<'_>) -> Option<ScannerSelection<'_>> {
     match asset {
         RiskAsset::Skill(asset) => Some(ScannerSelection::Skill(asset)),
+        RiskAsset::Mcp(asset) => Some(ScannerSelection::Mcp(asset)),
         RiskAsset::Cron(asset) => Some(ScannerSelection::Cron(asset)),
         RiskAsset::Memory(asset) => Some(ScannerSelection::Memory(asset)),
         RiskAsset::Provider(asset) => Some(ScannerSelection::Provider(asset)),

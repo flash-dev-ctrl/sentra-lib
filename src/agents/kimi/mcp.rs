@@ -79,6 +79,7 @@ fn parse_kimi_mcp_servers(raw: &Value) -> Vec<McpData> {
                 env: env_map(value),
                 enabled: Some(enabled(value)),
                 project: None,
+                ..McpData::default()
             };
             sanitize_mcp_data(&mut data);
             data

@@ -332,12 +332,8 @@ impl Checker for LlmChecker {
                 return Ok(error_result(self.id(), "missing apiUrl / apiKey / model"));
             }
 
-            match input {
-                CheckInput::Content(content) => {
-                    Ok(self.check_content(content, options, &params).await)
-                }
-                CheckInput::McpTools(_) => Ok(skipped(self.id(), "not a content input")),
-            }
+            let CheckInput::Content(content) = input;
+            Ok(self.check_content(content, options, &params).await)
         })
     }
 }

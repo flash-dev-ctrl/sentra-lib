@@ -99,6 +99,7 @@ fn parse_opencode_mcp_servers(raw: &Value) -> Vec<McpData> {
                     }),
                 enabled: Some(enabled(value)),
                 project: None,
+                ..McpData::default()
             };
             sanitize_mcp_data(&mut data);
             data

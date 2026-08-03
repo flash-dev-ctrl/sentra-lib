@@ -329,11 +329,11 @@ async fn run_scan(checker: &mut RiskChecker) -> CheckOutput {
 }
 
 fn block_on<T>(future: impl std::future::Future<Output = T>) -> T {
-    tokio::runtime::Builder::new_current_thread()
+    let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .unwrap()
-        .block_on(future)
+        .unwrap();
+    runtime.block_on(future)
 }
 
 fn llm_title(output: &CheckOutput) -> &str {

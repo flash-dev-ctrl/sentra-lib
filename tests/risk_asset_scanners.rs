@@ -1,6 +1,12 @@
 use std::fs;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
-use sentra_lib::interfaces::{CronData, MemoryData, ProviderData};
+use sentra_lib::interfaces::{CronData, McpData, McpType, MemoryData, ProviderData};
 use sentra_lib::risks::{RiskAsset, RiskScanner, RuleDirectoryConfig, RuleType, ScanOptions};
 
 const MARKER_RULE: &str = r#"
@@ -53,6 +59,36 @@ fn unified_scanner_dispatches_memory_asset_to_memory_scanner() {
     assert_eq!(
         report.findings[0].file,
         memory_path.to_string_lossy().to_string()
+    );
+}
+
+#[test]
+fn unified_scanner_dispatches_mcp_asset_to_mcp_scanner() {
+    let dir = tempfile::tempdir().unwrap();
+    let rules_dir = write_rule_dir(dir.path());
+    let server = TestMcpToolsServer::start_sse();
+    let scanner = scanner_with_yara(&rules_dir);
+    let asset = McpData {
+        name: "mcp-demo".to_string(),
+        mcp_type: Some(McpType::Sse),
+        url: Some(server.url()),
+        enabled: Some(true),
+        ..McpData::default()
+    };
+
+    let report = block_on(scanner.scan(RiskAsset::from(&asset))).unwrap();
+
+    let requests = server.requests();
+    assert!(requests.iter().any(|body| body.contains("\"tools/list\"")));
+    assert_eq!(report.metadata.scanner, "mcp-scanner");
+    assert_eq!(report.findings.len(), 1);
+    assert_eq!(report.findings[0].file, "mcp:mcp-demo:tools");
+    assert!(
+        report.findings[0]
+            .context
+            .as_deref()
+            .unwrap_or_default()
+            .contains("scanner-risk-marker")
     );
 }
 
@@ -176,9 +212,148 @@ fn scanner_with_yara(rules_dir: &std::path::Path) -> RiskScanner {
 }
 
 fn block_on<T>(future: impl std::future::Future<Output = T>) -> T {
-    tokio::runtime::Builder::new_current_thread()
+    let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .unwrap()
-        .block_on(future)
+        .unwrap();
+    runtime.block_on(future)
+}
+
+struct TestMcpToolsServer {
+    url: String,
+    addr: String,
+    stop: Arc<AtomicBool>,
+    requests: Arc<Mutex<Vec<String>>>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl TestMcpToolsServer {
+    fn start_sse() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let addr = listener.local_addr().unwrap();
+        let addr = addr.to_string();
+        let stop = Arc::new(AtomicBool::new(false));
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let thread_stop = Arc::clone(&stop);
+        let thread_requests = Arc::clone(&requests);
+        let handle = thread::spawn(move || {
+            while !thread_stop.load(Ordering::SeqCst) {
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        handle_mcp_tools_request(stream, &thread_requests);
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        Self {
+            url: format!("http://{addr}/mcp"),
+            addr,
+            stop,
+            requests,
+            handle: Some(handle),
+        }
+    }
+
+    fn url(&self) -> String {
+        self.url.clone()
+    }
+
+    fn requests(&self) -> Vec<String> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+impl Drop for TestMcpToolsServer {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        let _ = TcpStream::connect(&self.addr);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+fn handle_mcp_tools_request(mut stream: TcpStream, requests: &Arc<Mutex<Vec<String>>>) {
+    let body = read_http_request(&mut stream);
+    requests.lock().unwrap().push(body.clone());
+    let response_body = if body.contains("\"tools/list\"") {
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "tools": [{
+                    "name": "lookup",
+                    "description": "Search docs with scanner-risk-marker"
+                }]
+            }
+        })
+    } else {
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": null,
+            "error": { "code": -32601, "message": "method not found" }
+        })
+    };
+    let response_body = format!("event: message\ndata: {}\n\n", response_body);
+    let response = format!(
+        "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+        response_body.len(),
+        response_body
+    );
+    let _ = stream.write_all(response.as_bytes());
+    let _ = stream.flush();
+}
+
+fn read_http_request(stream: &mut TcpStream) -> String {
+    stream
+        .set_read_timeout(Some(Duration::from_secs(1)))
+        .unwrap();
+    let mut bytes = Vec::new();
+    let mut buffer = [0_u8; 1024];
+    loop {
+        match stream.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(count) => {
+                bytes.extend_from_slice(&buffer[..count]);
+                if request_body_complete(&bytes) {
+                    break;
+                }
+            }
+            Err(err)
+                if matches!(
+                    err.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                break;
+            }
+            Err(_) => break,
+        }
+    }
+    String::from_utf8_lossy(&bytes).to_string()
+}
+
+fn request_body_complete(bytes: &[u8]) -> bool {
+    let Some(header_end) = bytes.windows(4).position(|window| window == b"\r\n\r\n") else {
+        return false;
+    };
+    let headers = String::from_utf8_lossy(&bytes[..header_end]);
+    let content_length = headers.lines().find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        if name.eq_ignore_ascii_case("content-length") {
+            value.trim().parse::<usize>().ok()
+        } else {
+            None
+        }
+    });
+    let Some(content_length) = content_length else {
+        return true;
+    };
+    bytes.len() >= header_end + 4 + content_length
 }

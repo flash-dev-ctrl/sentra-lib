@@ -43,6 +43,7 @@ impl Asset<Vec<McpData>> for McpAsset {
                 env: None,
                 enabled: Some(true),
                 project: None,
+                ..McpData::default()
             });
         }
         for settings in [
@@ -88,6 +89,7 @@ fn parse_servers(raw: Option<&serde_yaml::Value>) -> Vec<McpData> {
                 env: env(value),
                 enabled: Some(!bool_field(value, "disabled").unwrap_or(false)),
                 project: None,
+                ..McpData::default()
             };
             sanitize_mcp_data(&mut data);
             Some(data)

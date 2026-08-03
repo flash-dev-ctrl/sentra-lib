@@ -19,8 +19,8 @@ pub(crate) use file::{
     read_jsonc_file, sanitize_command_args, sanitize_env_value, sanitize_url_credentials,
 };
 pub use hashing::{Hashes, compute_content_hashes};
-pub use mcp::parse_mcp_servers;
 pub(crate) use mcp::sanitize_mcp_data;
+pub use mcp::{hydrate_mcp_tools, parse_mcp_servers, parse_mcp_servers_json};
 pub use memory::collect_memory_paths;
 pub use skill::{
     collect_skill_files, collect_skill_manifests_from_dir, collect_skill_manifests_from_dir_async,
