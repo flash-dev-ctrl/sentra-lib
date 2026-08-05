@@ -136,7 +136,7 @@ pub(crate) fn discover_entry_agents_with_options(
                 .unwrap_or(false);
             if home_exists {
                 home_found = true;
-                if !home_is_owned_by_earlier_entry(user_home, entries, entry_index, &home)
+                if !home_is_owned_by_earlier_entry(user_home, entries, entry_index, entry, &home)
                     || should_probe_installed_entries(options)
                         && (entry.is_installed)(entry.name, &home)
                 {
@@ -170,13 +170,15 @@ fn home_is_owned_by_earlier_entry(
     user_home: &Path,
     entries: &[AgentEntry],
     entry_index: usize,
+    current_entry: &AgentEntry,
     home: &Path,
 ) -> bool {
     entries[..entry_index].iter().any(|entry| {
-        entry
-            .homes
-            .iter()
-            .any(|segments| same_home(&entry_home(user_home, segments), home))
+        std::ptr::fn_addr_eq(entry.asset_for_type, current_entry.asset_for_type)
+            && entry
+                .homes
+                .iter()
+                .any(|segments| same_home(&entry_home(user_home, segments), home))
     })
 }
 
