@@ -265,10 +265,19 @@ fn rust_agents_mirror_typescript_agent_object_files() {
 }
 
 #[test]
-fn each_agent_module_owns_discovery() {
+fn shared_discovery_owns_entry_based_discovery() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let src = root.join("src").join("agents");
     let shared_discovery = std::fs::read_to_string(src.join("discovery.rs")).unwrap();
+
+    assert!(
+        shared_discovery.contains("builtin_agent_entries()"),
+        "shared discovery must load entries from the centralized registry"
+    );
+    assert!(
+        shared_discovery.contains("discover_entry_agents(user_home, &entries)"),
+        "shared discovery must route centralized entries through discover_entry_agents"
+    );
 
     for module in [
         "claude",
@@ -293,12 +302,12 @@ fn each_agent_module_owns_discovery() {
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
         assert!(
-            content.contains("pub(crate) fn discover_agents"),
-            "{module}/mod.rs must keep discover_agents crate-internal"
+            !content.contains("pub(crate) fn discover_agents"),
+            "{module}/mod.rs must not define a redundant discover_agents wrapper"
         );
         assert!(
-            shared_discovery.contains(&format!("{module}::discover_agents")),
-            "shared discover_agents must aggregate {module}::discover_agents"
+            !shared_discovery.contains(&format!("{module}::discover_agents")),
+            "shared discovery must not aggregate per-module discover_agents wrappers"
         );
     }
 }
@@ -494,7 +503,6 @@ fn agent_entries_are_defined_in_shared_entries_file() {
         "CODEX_CLI_AGENT_ENTRY",
         "CODEX_CLI_IDE_AGENT_ENTRY",
         "ANTIGRAVITY_AGENT_ENTRY",
-        "CODEBUDDY_AGENT_ENTRIES",
         "CODEBUDDY_CLI_AGENT_ENTRY",
         "CODEBUDDY_IDE_AGENT_ENTRY",
         "CODEBUDDY_CN_IDE_AGENT_ENTRY",
@@ -518,7 +526,6 @@ fn agent_entries_are_defined_in_shared_entries_file() {
         "QODER_CN_CLI_AGENT_ENTRY",
         "QODER_CN_IDE_AGENT_ENTRY",
         "QODER_CN_WORK_AGENT_ENTRY",
-        "QODER_AGENT_ENTRIES",
         "SENTRA_AGENT_ENTRY",
         "TRAE_AGENT_ENTRY",
         "TRAE_IDE_AGENT_ENTRY",
@@ -526,7 +533,6 @@ fn agent_entries_are_defined_in_shared_entries_file() {
         "TRAE_WORK_AGENT_ENTRY",
         "TRAE_CN_WORK_AGENT_ENTRY",
         "TRAE_VSCODE_PLUGIN_AGENT_ENTRY",
-        "TRAE_AGENT_ENTRIES",
         "VSCODE_AGENT_ENTRY",
         "WORKBUDDY_AGENT_ENTRY",
     ] {
@@ -555,61 +561,51 @@ fn agent_entries_are_defined_in_shared_entries_file() {
 }
 
 #[test]
-fn agent_modules_reference_entry_registry_directly() {
+fn agent_modules_do_not_own_entry_registry_or_discovery() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let src = root.join("src").join("agents");
 
-    for (module, symbol) in [
-        ("claude", "CLAUDE_APP_AGENT_ENTRY"),
-        ("claude", "CLAUDE_CLI_IDE_AGENT_ENTRY"),
-        ("claude", "CLAUDE_CLI_AGENT_ENTRY"),
-        ("codex", "CODEX_CLI_AGENT_ENTRY"),
-        ("codex", "CODEX_CLI_IDE_AGENT_ENTRY"),
-        ("antigravity", "ANTIGRAVITY_AGENT_ENTRY"),
-        ("codebuddy", "CODEBUDDY_AGENT_ENTRIES"),
-        ("coder", "CODER_AGENT_ENTRY"),
-        ("cursor", "CURSOR_AGENT_ENTRY"),
-        ("hermes", "HERMES_AGENT_ENTRY"),
-        ("kimi", "KIMI_APP_AGENT_ENTRY"),
-        ("kimi", "KIMI_CLI_AGENT_ENTRY"),
-        ("kimi", "KIMI_CLI_IDE_AGENT_ENTRY"),
-        ("kiro", "KIRO_AGENT_ENTRY"),
-        ("lingcode", "LINGCODE_AGENT_ENTRY"),
-        ("marvis", "MARVIS_AGENT_ENTRY"),
-        ("openclaw", "OPENCLAW_AGENT_ENTRY"),
-        ("opencode", "OPENCODE_AGENT_ENTRY"),
-        ("pi", "PI_AGENT_ENTRY"),
-        ("qoder", "QODER_AGENT_ENTRIES"),
-        ("sentra", "SENTRA_AGENT_ENTRY"),
-        ("trae", "TRAE_IDE_AGENT_ENTRY"),
-        ("trae", "TRAE_CN_IDE_AGENT_ENTRY"),
-        ("trae", "TRAE_WORK_AGENT_ENTRY"),
-        ("trae", "TRAE_CN_WORK_AGENT_ENTRY"),
-        ("trae", "TRAE_VSCODE_PLUGIN_AGENT_ENTRY"),
-        ("vscode", "VSCODE_AGENT_ENTRY"),
+    for module in [
+        "claude",
+        "codex",
+        "antigravity",
+        "codebuddy",
+        "coder",
+        "cursor",
+        "general",
+        "hermes",
+        "kimi",
+        "kiro",
+        "lingcode",
+        "marvis",
+        "openclaw",
+        "opencode",
+        "pi",
+        "qoder",
+        "sentra",
+        "trae",
+        "vscode",
     ] {
         let content = std::fs::read_to_string(src.join(module).join("mod.rs")).unwrap();
         assert!(
-            content.contains(&format!("crate::agents::entries::{symbol}")),
-            "{module}/mod.rs must reference {symbol} through the private entries module"
+            !content.contains("AgentEntry"),
+            "{module}/mod.rs must not define or assemble AgentEntry values"
         );
         assert!(
-            !content.contains(&format!("crate::agents::{symbol}")),
-            "{module}/mod.rs must not rely on agents/mod.rs re-exporting {symbol}"
+            !content.contains("discover_entry_agents"),
+            "{module}/mod.rs must not call shared entry discovery directly"
         );
     }
 
-    let general = std::fs::read_to_string(src.join("general").join("mod.rs")).unwrap();
-    for symbol in ["GENERAL_AGENT_ENTRIES", "SYSTEM_AGENT_PATHS"] {
-        assert!(
-            general.contains(&format!("crate::agents::entries::{symbol}")),
-            "general/mod.rs must reference {symbol} through the private entries module"
-        );
-        assert!(
-            !general.contains(&format!("crate::agents::{symbol}")),
-            "general/mod.rs must not rely on agents/mod.rs re-exporting {symbol}"
-        );
-    }
+    let entries = std::fs::read_to_string(src.join("entries.rs")).unwrap();
+    assert!(
+        entries.contains("pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry>"),
+        "entries.rs must expose the centralized built-in entry registry"
+    );
+    assert!(
+        entries.contains("entries.extend_from_slice(GENERAL_AGENT_ENTRIES)"),
+        "entries.rs must append general entries from the centralized registry"
+    );
 }
 
 #[test]
