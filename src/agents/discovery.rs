@@ -548,8 +548,8 @@ mod tests {
         let names = agents.iter().map(|agent| agent.name()).collect::<Vec<_>>();
 
         assert!(names.contains(&"codex-cli"));
-        assert!(names.contains(&"codex-app"));
-        assert!(names.contains(&"codex-cli-ide"));
+        assert!(!names.contains(&"codex-app"));
+        assert!(!names.contains(&"codex-cli-ide"));
         assert!(!names.contains(&"agents"));
     }
 
