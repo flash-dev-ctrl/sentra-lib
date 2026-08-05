@@ -145,13 +145,9 @@ impl RiskChecker {
                 let checkers = checkers.clone();
                 let llm_checker = llm_checker.clone();
                 async move {
-                    tokio::spawn(async move {
-                        let input_output =
-                            scan_one_with(&input, &checkers, llm_checker.as_deref()).await?;
-                        Ok::<_, crate::SentraError>((index, cache_key, input_output))
-                    })
-                    .await
-                    .map_err(|err| crate::SentraError::Message(err.to_string()))?
+                    let input_output =
+                        scan_one_with(&input, &checkers, llm_checker.as_deref()).await?;
+                    Ok::<_, crate::SentraError>((index, cache_key, input_output))
                 }
             }))
             .buffer_unordered(self.concurrency());
@@ -570,9 +566,7 @@ rule DemoRule {
 }
 
 fn fill_meta(input: &CheckInput) -> CheckInput {
-    let CheckInput::Content(content) = input else {
-        return input.clone();
-    };
+    let CheckInput::Content(content) = input;
     if content.file_cat.is_some() && content.file_ext.is_some() {
         return input.clone();
     }
@@ -588,9 +582,7 @@ fn fill_meta(input: &CheckInput) -> CheckInput {
 }
 
 fn read_sha256(input: &CheckInput) -> Option<String> {
-    let CheckInput::Content(content) = input else {
-        return None;
-    };
+    let CheckInput::Content(content) = input;
     content
         .other
         .get("hashes")

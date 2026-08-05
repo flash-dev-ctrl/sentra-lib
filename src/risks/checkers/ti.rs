@@ -81,9 +81,7 @@ impl Checker for ThreatIntelChecker {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = SentraResult<CheckResult>> + Send + 'a>>
     {
         Box::pin(async move {
-            let CheckInput::Content(content) = input else {
-                return Ok(skipped(self.id(), "not a content input"));
-            };
+            let CheckInput::Content(content) = input;
             if !self
                 .categories()
                 .contains(&content.file_cat.unwrap_or(FileCategory::Unknown))
@@ -433,7 +431,6 @@ fn file_category_name(category: FileCategory) -> &'static str {
         FileCategory::Script => "script",
         FileCategory::Exe => "exe",
         FileCategory::Binary => "binary",
-        FileCategory::Mcp => "mcp",
     }
 }
 

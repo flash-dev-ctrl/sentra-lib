@@ -18,3 +18,4 @@ pub use crate::utils::collect_skill_manifests_from_dir_async;
 pub use crate::utils::collect_skills_from_dir;
 pub use crate::utils::collect_skills_from_dir_async;
 pub use crate::utils::stage_skill_source;
+pub use crate::utils::{hydrate_mcp_tools, parse_mcp_servers_json};

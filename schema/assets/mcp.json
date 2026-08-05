@@ -69,6 +69,33 @@
                 "null"
             ],
             "description": "模型上下文协议服务关联的项目路径，允许为空。"
+        },
+        "tools": {
+            "type": "array",
+            "description": "从远程 MCP 服务获取到的工具定义列表。",
+            "items": {
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "additionalProperties": true,
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "工具名称。"
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "工具描述，允许为空。"
+                    },
+                    "parameters": {
+                        "description": "工具参数 schema，允许为空。"
+                    }
+                }
+            }
         }
     }
 }

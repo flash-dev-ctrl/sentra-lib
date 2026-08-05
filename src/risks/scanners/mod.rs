@@ -1,4 +1,5 @@
 mod cron;
+mod mcp;
 mod memory;
 mod provider;
 mod skill;

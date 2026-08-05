@@ -1,11 +1,15 @@
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use crate::SentraResult;
 use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, ProcessData};
-use crate::utils::{sanitize_command_args, sanitize_env_value};
+use crate::utils::sanitize_command_args;
+use crate::utils::sanitize_env_value;
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 pub(crate) type ProcessMatcher = fn(&ProcessInfo<'_>) -> bool;
 
@@ -44,19 +48,87 @@ impl Asset<Vec<ProcessData>> for ProcessAsset {
 }
 
 pub(crate) fn process_data(matcher: ProcessMatcher) -> Vec<ProcessData> {
-    let mut system = sysinfo::System::new_all();
-    system.refresh_all();
-
-    let mut results = system
-        .processes()
-        .values()
-        .filter_map(|process| process_record(process, matcher))
+    let mut results = process_snapshot()
+        .iter()
+        .filter(|process| {
+            let info = ProcessInfo {
+                name: &process.name,
+                cmdline: &process.cmdline,
+                path: process.path.as_deref(),
+            };
+            matcher(&info)
+        })
+        .map(|process| process.data.clone())
         .collect::<Vec<_>>();
     results.sort_by_key(|process| process.pid);
     results
 }
 
-fn process_record(process: &sysinfo::Process, matcher: ProcessMatcher) -> Option<ProcessData> {
+const PROCESS_SNAPSHOT_TTL: Duration = Duration::from_secs(2);
+
+static PROCESS_SNAPSHOT_CACHE: OnceLock<Mutex<ProcessSnapshotCache>> = OnceLock::new();
+
+#[derive(Debug, Default)]
+struct ProcessSnapshotCache {
+    collected_at: Option<Instant>,
+    snapshots: Vec<ProcessSnapshot>,
+}
+
+impl ProcessSnapshotCache {
+    fn snapshot(&mut self) -> Vec<ProcessSnapshot> {
+        self.snapshot_with(Instant::now(), collect_process_snapshot)
+    }
+
+    fn snapshot_with(
+        &mut self,
+        now: Instant,
+        collect: impl FnOnce() -> Vec<ProcessSnapshot>,
+    ) -> Vec<ProcessSnapshot> {
+        if self
+            .collected_at
+            .is_none_or(|collected_at| now.duration_since(collected_at) >= PROCESS_SNAPSHOT_TTL)
+        {
+            self.snapshots = collect();
+            self.collected_at = Some(now);
+        }
+        self.snapshots.clone()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ProcessSnapshot {
+    name: String,
+    cmdline: Vec<String>,
+    path: Option<PathBuf>,
+    data: ProcessData,
+}
+
+fn process_snapshot() -> Vec<ProcessSnapshot> {
+    let cache = PROCESS_SNAPSHOT_CACHE.get_or_init(|| Mutex::new(ProcessSnapshotCache::default()));
+    let mut cache = cache.lock().unwrap_or_else(|err| err.into_inner());
+    cache.snapshot()
+}
+
+fn collect_process_snapshot() -> Vec<ProcessSnapshot> {
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing()
+            .with_cmd(UpdateKind::Always)
+            .with_exe(UpdateKind::Always)
+            .with_environ(UpdateKind::Always)
+            .without_tasks(),
+    );
+
+    system
+        .processes()
+        .values()
+        .map(process_record)
+        .collect::<Vec<_>>()
+}
+
+fn process_record(process: &sysinfo::Process) -> ProcessSnapshot {
     let name = os_to_string(process.name());
     let cmdline = process
         .cmd()
@@ -64,25 +136,21 @@ fn process_record(process: &sysinfo::Process, matcher: ProcessMatcher) -> Option
         .map(|arg| os_to_string(arg))
         .collect::<Vec<_>>();
     let path = process.exe().map(Path::to_path_buf);
-    let info = ProcessInfo {
-        name: &name,
-        cmdline: &cmdline,
-        path: path.as_deref(),
-    };
-
-    if !matcher(&info) {
-        return None;
-    }
-
-    Some(ProcessData {
+    let data = ProcessData {
         pid: process.pid().as_u32(),
-        name,
+        name: name.clone(),
         cmdline: sanitize_command_args(&cmdline),
         started_at: process.start_time(),
         run_time_seconds: process.run_time(),
-        path,
+        path: path.clone(),
         env: sanitized_env(process.environ()),
-    })
+    };
+    ProcessSnapshot {
+        name,
+        cmdline,
+        path,
+        data,
+    }
 }
 
 pub(crate) fn matches_binary_names(process: &ProcessInfo<'_>, binary_names: &[&str]) -> bool {
@@ -301,6 +369,24 @@ mod tests {
         assert_eq!(api_key, "****");
     }
 
+    #[test]
+    fn process_snapshot_cache_refreshes_after_ttl() {
+        let now = Instant::now();
+        let mut cache = ProcessSnapshotCache::default();
+
+        let first = cache.snapshot_with(now, || vec![test_snapshot(1)]);
+        let second =
+            cache.snapshot_with(now + Duration::from_millis(500), || vec![test_snapshot(2)]);
+        let third = cache.snapshot_with(
+            now + PROCESS_SNAPSHOT_TTL + Duration::from_millis(1),
+            || vec![test_snapshot(3)],
+        );
+
+        assert_eq!(first[0].data.pid, 1);
+        assert_eq!(second[0].data.pid, 1);
+        assert_eq!(third[0].data.pid, 3);
+    }
+
     fn assert_matches_binary_names(
         name: &str,
         cmdline: &[&str],
@@ -335,5 +421,22 @@ mod tests {
             path,
         };
         assert!(!matches_binary_names(&process, binary_names));
+    }
+
+    fn test_snapshot(pid: u32) -> ProcessSnapshot {
+        ProcessSnapshot {
+            name: "codex".to_string(),
+            cmdline: vec!["codex".to_string()],
+            path: None,
+            data: ProcessData {
+                pid,
+                name: "codex".to_string(),
+                cmdline: vec!["codex".to_string()],
+                started_at: 0,
+                run_time_seconds: 0,
+                path: None,
+                env: BTreeMap::new(),
+            },
+        }
     }
 }

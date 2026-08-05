@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::OnceLock;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub(crate) struct InstallStatusProbe {
@@ -104,28 +106,23 @@ fn command_exists_with_context(
     {
         return true;
     }
-    let Some(user_home) = probe.target_user_home.as_deref() else {
-        return false;
-    };
-    common_cli_install_paths(
-        binary_name,
-        &CliPathContext {
-            user_home,
-            include_current_user_env: probe_targets_current_user(probe),
-            platform,
-            env,
-        },
-    )
-    .iter()
-    .any(|path| (probe.path_is_file)(path))
+    false
 }
 
 pub(crate) fn any_existing_file_with(paths: Vec<PathBuf>, probe: &InstallStatusProbe) -> bool {
-    paths.iter().any(|path| (probe.path_is_file)(path))
+    let env = CliPathEnv::current();
+    let platform = HostPlatform::current();
+    paths.iter().any(|path| {
+        known_install_path_is_in_scope(path, probe, platform, &env) && (probe.path_is_file)(path)
+    })
 }
 
 pub(crate) fn any_existing_dir_with(paths: Vec<PathBuf>, probe: &InstallStatusProbe) -> bool {
-    paths.iter().any(|path| (probe.path_is_dir)(path))
+    let env = CliPathEnv::current();
+    let platform = HostPlatform::current();
+    paths.iter().any(|path| {
+        known_install_path_is_in_scope(path, probe, platform, &env) && (probe.path_is_dir)(path)
+    })
 }
 
 pub(crate) fn windows_product_installed(display_names: &[&str], publishers: &[&str]) -> bool {
@@ -207,24 +204,9 @@ fn product_name_matches(actual: &str, expected: &str) -> bool {
 }
 
 fn command_path(binary: &str) -> Option<PathBuf> {
-    let output = if cfg!(windows) {
-        Command::new("where").arg(binary).output()
-    } else {
-        Command::new("sh")
-            .args(["-c", "command -v \"$1\"", "sentra"])
-            .arg(binary)
-            .output()
-    };
-    let output = output.ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
+    path_command_candidates(binary)
+        .into_iter()
+        .find(|path| path.is_file())
 }
 
 fn command_never_exists(_: &str) -> bool {
@@ -244,6 +226,455 @@ fn path_is_dir(path: &Path) -> bool {
     path.is_dir()
 }
 
+fn path_command_candidates(binary: &str) -> Vec<PathBuf> {
+    path_command_candidates_from_values(
+        binary,
+        effective_path_values(HostPlatform::current()),
+        HostPlatform::current(),
+    )
+}
+
+fn path_command_candidates_from_values(
+    binary: &str,
+    path_values: Vec<String>,
+    platform: HostPlatform,
+) -> Vec<PathBuf> {
+    if binary.trim().is_empty()
+        || binary.contains(std::path::MAIN_SEPARATOR)
+        || binary.contains('/')
+        || binary.contains('\\')
+    {
+        return Vec::new();
+    }
+    path_values
+        .into_iter()
+        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+        .flat_map(|dir| platform_command_candidates(&dir, binary, platform))
+        .collect()
+}
+
+fn effective_path_values(platform: HostPlatform) -> Vec<String> {
+    let process_path = env_string("PATH").or_else(|| env_string("Path"));
+    effective_path_values_from(
+        process_path,
+        declared_path_values(platform),
+        shell_initialized_path_values(platform),
+        platform,
+    )
+}
+
+fn effective_path_values_from(
+    process_path: Option<String>,
+    declared_paths: Vec<String>,
+    shell_paths: Vec<String>,
+    platform: HostPlatform,
+) -> Vec<String> {
+    let mut values = Vec::new();
+    if let Some(path) = process_path {
+        push_path_value_if_missing(&mut values, path);
+    }
+    for path in declared_paths {
+        push_path_value_if_missing(&mut values, path);
+    }
+    for path in shell_paths {
+        push_path_value_if_missing(&mut values, path);
+    }
+    let _ = platform;
+    values
+}
+
+fn declared_path_values(platform: HostPlatform) -> Vec<String> {
+    match platform {
+        HostPlatform::Windows => windows_registry_path_values(),
+        HostPlatform::MacOS => macos_declared_path_values(),
+        HostPlatform::Unix => linux_declared_path_values(),
+    }
+}
+
+fn push_path_value_if_missing(values: &mut Vec<String>, value: String) {
+    let value = value.trim();
+    if value.is_empty() {
+        return;
+    }
+    if !values
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(value))
+    {
+        values.push(value.to_string());
+    }
+}
+
+fn env_string(name: &str) -> Option<String> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string_lossy().to_string())
+}
+
+static SHELL_ENV_CACHE: OnceLock<Vec<(String, String)>> = OnceLock::new();
+
+fn shell_initialized_path_values(platform: HostPlatform) -> Vec<String> {
+    let env = SHELL_ENV_CACHE.get_or_init(|| collect_shell_initialized_env(platform));
+    ["PATH", "Path"]
+        .into_iter()
+        .filter_map(|key| shell_env_value(env, key))
+        .collect()
+}
+
+fn shell_env_value(env: &[(String, String)], key: &str) -> Option<String> {
+    env.iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(key))
+        .map(|(_, value)| value.clone())
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn collect_shell_initialized_env(platform: HostPlatform) -> Vec<(String, String)> {
+    shell_env_commands(platform)
+        .into_iter()
+        .find_map(run_env_command)
+        .unwrap_or_default()
+}
+
+fn shell_env_commands(platform: HostPlatform) -> Vec<EnvCommand> {
+    match platform {
+        HostPlatform::Windows => {
+            let cmd = std::env::var_os("ComSpec")
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("cmd.exe"));
+            vec![EnvCommand {
+                program: cmd,
+                args: vec!["/c".to_string(), "set".to_string()],
+            }]
+        }
+        HostPlatform::MacOS | HostPlatform::Unix => unix_shell_env_commands(),
+    }
+}
+
+fn unix_shell_env_commands() -> Vec<EnvCommand> {
+    let mut commands = Vec::new();
+    if let Some(shell) = std::env::var_os("SHELL").filter(|value| !value.is_empty()) {
+        commands.push(unix_shell_env_command(PathBuf::from(shell)));
+    }
+    for shell in ["bash", "zsh", "sh"] {
+        commands.push(unix_shell_env_command(PathBuf::from(shell)));
+    }
+    commands
+}
+
+fn unix_shell_env_command(program: PathBuf) -> EnvCommand {
+    let shell_name = program
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let flag = if shell_name.contains("bash") || shell_name.contains("zsh") {
+        "-ic"
+    } else {
+        "-c"
+    };
+    EnvCommand {
+        program,
+        args: vec![flag.to_string(), "env".to_string()],
+    }
+}
+
+struct EnvCommand {
+    program: PathBuf,
+    args: Vec<String>,
+}
+
+const SHELL_ENV_TIMEOUT: Duration = Duration::from_millis(1200);
+
+fn run_env_command(command: EnvCommand) -> Option<Vec<(String, String)>> {
+    let mut child = Command::new(command.program)
+        .args(command.args)
+        .env("SENTRA_ENV_SNAPSHOT", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let started_at = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => break,
+            Ok(Some(_)) => return None,
+            Ok(None) if started_at.elapsed() >= SHELL_ENV_TIMEOUT => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(_) => return None,
+        }
+    }
+    let output = child.wait_with_output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let env = parse_env_output(&stdout);
+    (!env.is_empty()).then_some(env)
+}
+
+fn parse_env_output(output: &str) -> Vec<(String, String)> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let (key, value) = line.split_once('=')?;
+            if key.trim().is_empty() {
+                return None;
+            }
+            Some((key.to_string(), value.to_string()))
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+fn windows_registry_path_values() -> Vec<String> {
+    use winreg::RegKey;
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+
+    const USER_ENV: &str = "Environment";
+    const SYSTEM_ENV: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+
+    [
+        (HKEY_CURRENT_USER, USER_ENV),
+        (HKEY_LOCAL_MACHINE, SYSTEM_ENV),
+    ]
+    .into_iter()
+    .filter_map(|(hive, key)| {
+        RegKey::predef(hive)
+            .open_subkey_with_flags(key, KEY_READ)
+            .ok()
+            .and_then(|env| env.get_value::<String, _>("Path").ok())
+    })
+    .map(|value| expand_windows_env_vars(&value))
+    .filter(|value| !value.trim().is_empty())
+    .collect()
+}
+
+#[cfg(not(windows))]
+fn windows_registry_path_values() -> Vec<String> {
+    Vec::new()
+}
+
+#[cfg(target_os = "macos")]
+fn macos_declared_path_values() -> Vec<String> {
+    let mut paths = Vec::new();
+    if let Ok(content) = fs::read_to_string("/etc/paths") {
+        paths.extend(
+            content
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .map(str::to_string),
+        );
+    }
+    if let Ok(entries) = fs::read_dir("/etc/paths.d") {
+        let mut files = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file())
+            .collect::<Vec<_>>();
+        files.sort();
+        for file in files {
+            if let Ok(content) = fs::read_to_string(file) {
+                paths.extend(
+                    content
+                        .lines()
+                        .map(str::trim)
+                        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                        .map(str::to_string),
+                );
+            }
+        }
+    }
+    if paths.is_empty() {
+        return Vec::new();
+    }
+    vec![std::env::join_paths(paths).map_or_else(
+        |_| String::new(),
+        |value| value.to_string_lossy().to_string(),
+    )]
+    .into_iter()
+    .filter(|value| !value.trim().is_empty())
+    .collect()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn macos_declared_path_values() -> Vec<String> {
+    Vec::new()
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn linux_declared_path_values() -> Vec<String> {
+    fs::read_to_string("/etc/environment")
+        .ok()
+        .and_then(|content| parse_environment_assignment(&content, "PATH"))
+        .into_iter()
+        .collect()
+}
+
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+fn linux_declared_path_values() -> Vec<String> {
+    Vec::new()
+}
+
+#[cfg(any(test, all(unix, not(target_os = "macos"))))]
+fn parse_environment_assignment(content: &str, key: &str) -> Option<String> {
+    content.lines().find_map(|line| {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            return None;
+        }
+        let (name, value) = line.split_once('=')?;
+        (name.trim() == key).then(|| unquote_environment_value(value.trim()))
+    })
+}
+
+#[cfg(any(test, all(unix, not(target_os = "macos"))))]
+fn unquote_environment_value(value: &str) -> String {
+    if value.len() >= 2
+        && ((value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\'')))
+    {
+        return value[1..value.len() - 1].to_string();
+    }
+    value.to_string()
+}
+
+fn expand_windows_env_vars(value: &str) -> String {
+    expand_windows_env_vars_with(value, windows_env_value)
+}
+
+fn windows_env_value(name: &str) -> Option<String> {
+    env_string(name)
+        .or_else(|| windows_registry_env_value(name))
+        .or_else(|| windows_known_env_value(name))
+}
+
+#[cfg(windows)]
+fn windows_registry_env_value(name: &str) -> Option<String> {
+    use winreg::RegKey;
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+
+    const USER_ENV: &str = "Environment";
+    const SYSTEM_ENV: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+
+    [
+        (HKEY_CURRENT_USER, USER_ENV),
+        (HKEY_LOCAL_MACHINE, SYSTEM_ENV),
+    ]
+    .into_iter()
+    .filter_map(|(hive, key)| {
+        RegKey::predef(hive)
+            .open_subkey_with_flags(key, KEY_READ)
+            .ok()
+            .and_then(|env| env.get_value::<String, _>(name).ok())
+    })
+    .find(|value| !value.trim().is_empty())
+}
+
+#[cfg(not(windows))]
+fn windows_registry_env_value(_: &str) -> Option<String> {
+    None
+}
+
+fn windows_known_env_value(name: &str) -> Option<String> {
+    if name.eq_ignore_ascii_case("USERPROFILE") {
+        return home::home_dir().map(|path| path.to_string_lossy().to_string());
+    }
+    let user_home = home::home_dir()?;
+    if name.eq_ignore_ascii_case("LOCALAPPDATA") {
+        return Some(
+            user_home
+                .join("AppData")
+                .join("Local")
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
+    if name.eq_ignore_ascii_case("APPDATA") {
+        return Some(
+            user_home
+                .join("AppData")
+                .join("Roaming")
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
+    None
+}
+
+fn expand_windows_env_vars_with(
+    value: &str,
+    mut resolve: impl FnMut(&str) -> Option<String>,
+) -> String {
+    let mut expanded = String::new();
+    let mut rest = value;
+    loop {
+        let Some(start) = rest.find('%') else {
+            expanded.push_str(rest);
+            break;
+        };
+        expanded.push_str(&rest[..start]);
+        let after_start = &rest[start + 1..];
+        let Some(end) = after_start.find('%') else {
+            expanded.push('%');
+            expanded.push_str(after_start);
+            break;
+        };
+        let name = &after_start[..end];
+        if name.is_empty() {
+            expanded.push_str("%%");
+        } else if let Some(value) = resolve(name) {
+            expanded.push_str(&value);
+        } else {
+            expanded.push('%');
+            expanded.push_str(name);
+            expanded.push('%');
+        }
+        rest = &after_start[end + 1..];
+    }
+    expanded
+}
+
+fn platform_command_candidates(dir: &Path, binary: &str, platform: HostPlatform) -> Vec<PathBuf> {
+    if platform != HostPlatform::Windows || Path::new(binary).extension().is_some() {
+        return vec![dir.join(binary)];
+    }
+    windows_path_extensions()
+        .into_iter()
+        .map(|extension| dir.join(format!("{binary}{extension}")))
+        .collect()
+}
+
+fn windows_path_extensions() -> Vec<String> {
+    std::env::var_os("PATHEXT")
+        .map(|value| {
+            value
+                .to_string_lossy()
+                .split(';')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| {
+                    if value.starts_with('.') {
+                        value.to_string()
+                    } else {
+                        format!(".{value}")
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .filter(|items| !items.is_empty())
+        .unwrap_or_else(|| {
+            [".COM", ".EXE", ".BAT", ".CMD"]
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        })
+}
+
 pub(crate) fn binary_paths(dir: impl Into<PathBuf>, binary: &str) -> Vec<PathBuf> {
     binary_paths_for_platform(dir.into(), binary, HostPlatform::current())
 }
@@ -251,6 +682,7 @@ pub(crate) fn binary_paths(dir: impl Into<PathBuf>, binary: &str) -> Vec<PathBuf
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HostPlatform {
     Unix,
+    MacOS,
     Windows,
 }
 
@@ -258,6 +690,8 @@ impl HostPlatform {
     fn current() -> Self {
         if cfg!(windows) {
             Self::Windows
+        } else if cfg!(target_os = "macos") {
+            Self::MacOS
         } else {
             Self::Unix
         }
@@ -275,21 +709,8 @@ fn binary_paths_for_platform(dir: PathBuf, binary: &str, platform: HostPlatform)
     }
 }
 
-struct CliPathContext<'a> {
-    user_home: &'a Path,
-    include_current_user_env: bool,
-    platform: HostPlatform,
-    env: &'a CliPathEnv,
-}
-
 #[derive(Debug, Default)]
 struct CliPathEnv {
-    homebrew_prefix: Option<PathBuf>,
-    pnpm_home: Option<PathBuf>,
-    npm_config_prefix: Option<PathBuf>,
-    volta_home: Option<PathBuf>,
-    bun_install: Option<PathBuf>,
-    cargo_home: Option<PathBuf>,
     program_files: Option<PathBuf>,
     program_files_x86: Option<PathBuf>,
     program_data: Option<PathBuf>,
@@ -299,118 +720,12 @@ struct CliPathEnv {
 impl CliPathEnv {
     fn current() -> Self {
         Self {
-            homebrew_prefix: env_path("HOMEBREW_PREFIX"),
-            pnpm_home: env_path("PNPM_HOME"),
-            npm_config_prefix: env_path("NPM_CONFIG_PREFIX"),
-            volta_home: env_path("VOLTA_HOME"),
-            bun_install: env_path("BUN_INSTALL"),
-            cargo_home: env_path("CARGO_HOME"),
             program_files: env_path("ProgramFiles"),
             program_files_x86: env_path("ProgramFiles(x86)"),
             program_data: env_path("ProgramData"),
             windows_dir: env_path("WINDIR"),
         }
     }
-
-    fn current_user_binary_dirs(&self) -> Vec<PathBuf> {
-        let mut dirs = Vec::new();
-        if let Some(prefix) = &self.homebrew_prefix {
-            dirs.push(prefix.join("bin"));
-        }
-        if let Some(home) = &self.pnpm_home {
-            dirs.push(home.clone());
-        }
-        if let Some(prefix) = &self.npm_config_prefix {
-            dirs.push(prefix.clone());
-            dirs.push(prefix.join("bin"));
-        }
-        if let Some(home) = &self.volta_home {
-            dirs.push(home.join("bin"));
-        }
-        if let Some(home) = &self.bun_install {
-            dirs.push(home.join("bin"));
-        }
-        if let Some(home) = &self.cargo_home {
-            dirs.push(home.join("bin"));
-        }
-        dirs
-    }
-}
-
-fn common_cli_install_paths(binary: &str, context: &CliPathContext<'_>) -> Vec<PathBuf> {
-    let user_home = context.user_home;
-    let mut dirs = vec![
-        user_home.join(".local").join("bin"),
-        user_home.join("Library").join("pnpm"),
-        user_home.join(".local").join("share").join("pnpm"),
-        user_home.join(".bun").join("bin"),
-        user_home.join(".cargo").join("bin"),
-        user_home.join(".volta").join("bin"),
-        user_home.join(".npm-global").join("bin"),
-        user_home.join(".asdf").join("shims"),
-        user_home
-            .join(".local")
-            .join("share")
-            .join("mise")
-            .join("shims"),
-        user_home.join("AppData").join("Roaming").join("npm"),
-        user_home.join("AppData").join("Local").join("pnpm"),
-    ];
-    dirs.extend(version_manager_binary_dirs(user_home));
-    dirs.extend(global_binary_dirs(context.platform, context.env));
-    if context.include_current_user_env {
-        dirs.extend(context.env.current_user_binary_dirs());
-    }
-    dirs.sort();
-    dirs.dedup();
-    dirs.into_iter()
-        .flat_map(|dir| binary_paths_for_platform(dir, binary, context.platform))
-        .collect()
-}
-
-fn version_manager_binary_dirs(user_home: &Path) -> Vec<PathBuf> {
-    let layouts = [
-        (
-            user_home.join(".nvm").join("versions").join("node"),
-            vec!["bin"],
-        ),
-        (
-            user_home.join(".fnm").join("node-versions"),
-            vec!["installation", "bin"],
-        ),
-        (
-            user_home.join(".asdf").join("installs").join("nodejs"),
-            vec!["bin"],
-        ),
-        (
-            user_home
-                .join(".local")
-                .join("share")
-                .join("mise")
-                .join("installs")
-                .join("node"),
-            vec!["bin"],
-        ),
-    ];
-    let mut dirs = Vec::new();
-    for (versions_dir, suffix) in layouts {
-        for entry in fs::read_dir(versions_dir)
-            .into_iter()
-            .flatten()
-            .filter_map(Result::ok)
-        {
-            let version_dir = entry.path();
-            if !version_dir.is_dir() {
-                continue;
-            }
-            dirs.push(
-                suffix
-                    .iter()
-                    .fold(version_dir, |path, segment| path.join(segment)),
-            );
-        }
-    }
-    dirs
 }
 
 fn global_binary_dirs(platform: HostPlatform, env: &CliPathEnv) -> Vec<PathBuf> {
@@ -473,6 +788,21 @@ fn resolved_command_is_in_scope(
     global_binary_dirs(platform, env)
         .iter()
         .any(|dir| path_is_within(command_path, dir))
+}
+
+fn known_install_path_is_in_scope(
+    path: &Path,
+    probe: &InstallStatusProbe,
+    platform: HostPlatform,
+    env: &CliPathEnv,
+) -> bool {
+    let Some(target_home) = probe.target_user_home.as_deref() else {
+        return true;
+    };
+    path_is_within(path, target_home)
+        || global_binary_dirs(platform, env)
+            .iter()
+            .any(|dir| path_is_within(path, dir))
 }
 
 fn path_is_within(path: &Path, root: &Path) -> bool {
@@ -565,7 +895,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn codex_probe_accepts_apple_silicon_homebrew_path_without_path_lookup() {
+    fn command_probe_requires_path_resolution_even_for_common_install_dirs() {
         let probe = scoped_probe(
             "/Users/me",
             "/Users/me",
@@ -573,119 +903,12 @@ mod tests {
             only_homebrew_codex_path,
         );
 
-        assert!(command_exists_with_context(
+        assert!(!command_exists_with_context(
             "codex",
             &probe,
             HostPlatform::Unix,
             &CliPathEnv::default(),
         ));
-    }
-
-    #[test]
-    fn common_cli_paths_cover_global_and_user_package_managers() {
-        let env = CliPathEnv {
-            homebrew_prefix: Some(PathBuf::from("/custom/homebrew")),
-            pnpm_home: Some(PathBuf::from("/custom/pnpm")),
-            npm_config_prefix: Some(PathBuf::from("/custom/npm")),
-            volta_home: Some(PathBuf::from("/custom/volta")),
-            bun_install: Some(PathBuf::from("/custom/bun")),
-            cargo_home: Some(PathBuf::from("/custom/cargo")),
-            ..CliPathEnv::default()
-        };
-        let paths = common_cli_install_paths(
-            "codex",
-            &CliPathContext {
-                user_home: Path::new("/Users/me"),
-                include_current_user_env: true,
-                platform: HostPlatform::Unix,
-                env: &env,
-            },
-        );
-
-        for expected in [
-            "/opt/homebrew/bin/codex",
-            "/usr/local/bin/codex",
-            "/home/linuxbrew/.linuxbrew/bin/codex",
-            "/Users/me/Library/pnpm/codex",
-            "/Users/me/.local/share/pnpm/codex",
-            "/Users/me/.bun/bin/codex",
-            "/Users/me/.cargo/bin/codex",
-            "/Users/me/.volta/bin/codex",
-            "/custom/homebrew/bin/codex",
-            "/custom/pnpm/codex",
-            "/custom/npm/bin/codex",
-            "/custom/volta/bin/codex",
-            "/custom/bun/bin/codex",
-            "/custom/cargo/bin/codex",
-        ] {
-            assert!(paths.contains(&PathBuf::from(expected)), "{expected}");
-        }
-
-        let other_user_paths = common_cli_install_paths(
-            "codex",
-            &CliPathContext {
-                user_home: Path::new("/Users/other"),
-                include_current_user_env: false,
-                platform: HostPlatform::Unix,
-                env: &env,
-            },
-        );
-        assert!(!other_user_paths.contains(&PathBuf::from("/custom/pnpm/codex")));
-        assert!(!other_user_paths.contains(&PathBuf::from("/custom/volta/bin/codex")));
-    }
-
-    #[test]
-    fn common_cli_paths_cover_target_user_node_version_managers() {
-        let user_home = tempfile::tempdir().unwrap();
-        let binary_dirs = [
-            user_home
-                .path()
-                .join(".nvm")
-                .join("versions")
-                .join("node")
-                .join("v22.0.0")
-                .join("bin"),
-            user_home
-                .path()
-                .join(".fnm")
-                .join("node-versions")
-                .join("v22.0.0")
-                .join("installation")
-                .join("bin"),
-            user_home
-                .path()
-                .join(".asdf")
-                .join("installs")
-                .join("nodejs")
-                .join("22.0.0")
-                .join("bin"),
-            user_home
-                .path()
-                .join(".local")
-                .join("share")
-                .join("mise")
-                .join("installs")
-                .join("node")
-                .join("22.0.0")
-                .join("bin"),
-        ];
-        for dir in &binary_dirs {
-            std::fs::create_dir_all(dir).unwrap();
-        }
-
-        let env = CliPathEnv::default();
-        let paths = common_cli_install_paths(
-            "codex",
-            &CliPathContext {
-                user_home: user_home.path(),
-                include_current_user_env: false,
-                platform: HostPlatform::Unix,
-                env: &env,
-            },
-        );
-        for dir in binary_dirs {
-            assert!(paths.contains(&dir.join("codex")), "{}", dir.display());
-        }
     }
 
     #[test]
@@ -731,6 +954,42 @@ mod tests {
     }
 
     #[test]
+    fn known_install_paths_are_scoped_to_target_user_or_global_prefix() {
+        let probe = scoped_probe(
+            "/Users/fixture",
+            "/Users/fixture",
+            command_path_never_resolves,
+            only_current_user_codex_path,
+        );
+
+        assert!(!any_existing_file_with(
+            vec![PathBuf::from("/Users/current/.local/bin/codex")],
+            &probe,
+        ));
+        assert!(any_existing_file_with(
+            vec![PathBuf::from("/Users/fixture/.local/bin/codex")],
+            &scoped_probe(
+                "/Users/fixture",
+                "/Users/fixture",
+                command_path_never_resolves,
+                only_fixture_user_codex_path,
+            ),
+        ));
+        let global_probe = scoped_probe(
+            "/Users/fixture",
+            "/Users/fixture",
+            command_path_never_resolves,
+            only_homebrew_codex_path,
+        );
+        assert!(known_install_path_is_in_scope(
+            Path::new("/opt/homebrew/bin/codex"),
+            &global_probe,
+            HostPlatform::Unix,
+            &CliPathEnv::default(),
+        ));
+    }
+
+    #[test]
     fn user_home_resolution_handles_default_and_custom_agent_homes() {
         let current_home = Path::new("/Users/current");
 
@@ -766,6 +1025,142 @@ mod tests {
             ),
             current_home
         );
+    }
+
+    #[test]
+    fn windows_path_candidates_use_supplied_path_values() {
+        let candidates = path_command_candidates_from_values(
+            "codex",
+            vec!["/tools/bin".to_string()],
+            HostPlatform::Windows,
+        );
+        let candidates = candidates
+            .iter()
+            .map(|path| {
+                path.to_string_lossy()
+                    .replace('\\', "/")
+                    .to_ascii_lowercase()
+            })
+            .collect::<Vec<_>>();
+
+        assert!(
+            candidates
+                .iter()
+                .any(|path| path.ends_with("/tools/bin/codex.cmd"))
+        );
+        assert!(
+            candidates
+                .iter()
+                .any(|path| path.ends_with("/tools/bin/codex.exe"))
+        );
+    }
+
+    #[test]
+    fn windows_effective_path_merges_process_and_registry_paths() {
+        let values = effective_path_values_from(
+            Some(r"C:\Windows\System32".to_string()),
+            vec![
+                r"C:\Users\me\AppData\Roaming\npm".to_string(),
+                r"c:\windows\system32".to_string(),
+            ],
+            Vec::new(),
+            HostPlatform::Windows,
+        );
+
+        assert_eq!(
+            values,
+            vec![
+                r"C:\Windows\System32".to_string(),
+                r"C:\Users\me\AppData\Roaming\npm".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn unix_effective_path_merges_process_and_declared_paths() {
+        let values = effective_path_values_from(
+            Some("/usr/bin:/bin".to_string()),
+            vec!["/opt/homebrew/bin:/usr/local/bin".to_string()],
+            Vec::new(),
+            HostPlatform::Unix,
+        );
+
+        assert_eq!(
+            values,
+            vec![
+                "/usr/bin:/bin".to_string(),
+                "/opt/homebrew/bin:/usr/local/bin".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn effective_path_merges_shell_initialized_path_values() {
+        let values = effective_path_values_from(
+            Some("/usr/bin:/bin".to_string()),
+            vec!["/opt/homebrew/bin:/usr/local/bin".to_string()],
+            vec![
+                "/home/me/.local/bin:/usr/bin".to_string(),
+                "/usr/bin:/bin".to_string(),
+            ],
+            HostPlatform::Unix,
+        );
+
+        assert_eq!(
+            values,
+            vec![
+                "/usr/bin:/bin".to_string(),
+                "/opt/homebrew/bin:/usr/local/bin".to_string(),
+                "/home/me/.local/bin:/usr/bin".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn env_output_parser_reads_key_value_lines() {
+        let env = parse_env_output(
+            r#"
+IGNORED
+PATH=/home/me/.local/bin:/usr/bin
+SHELL=/bin/bash
+"#,
+        );
+
+        assert_eq!(
+            shell_env_value(&env, "path").as_deref(),
+            Some("/home/me/.local/bin:/usr/bin")
+        );
+        assert_eq!(shell_env_value(&env, "SHELL").as_deref(), Some("/bin/bash"));
+    }
+
+    #[test]
+    fn environment_assignment_parser_reads_quoted_path() {
+        let path = parse_environment_assignment(
+            r#"
+# comment
+LANG=en_US.UTF-8
+PATH="/usr/local/bin:/usr/bin:/bin"
+"#,
+            "PATH",
+        );
+
+        assert_eq!(path.as_deref(), Some("/usr/local/bin:/usr/bin:/bin"));
+    }
+
+    #[test]
+    fn windows_env_expansion_preserves_unknown_variables() {
+        let expanded = expand_windows_env_vars_with(
+            r"%USERPROFILE%\AppData\Roaming\npm;%UNKNOWN%\bin",
+            |name| {
+                if name.eq_ignore_ascii_case("USERPROFILE") {
+                    Some(r"C:\Users\me".to_string())
+                } else {
+                    None
+                }
+            },
+        );
+
+        assert_eq!(expanded, r"C:\Users\me\AppData\Roaming\npm;%UNKNOWN%\bin");
     }
 
     #[test]
@@ -962,6 +1357,10 @@ mod tests {
 
     fn only_target_user_codex_path(path: &Path) -> bool {
         path == Path::new("/Users/other/.volta/bin/codex")
+    }
+
+    fn only_fixture_user_codex_path(path: &Path) -> bool {
+        path == Path::new("/Users/fixture/.local/bin/codex")
     }
 
     fn only_homebrew_codex_path(path: &Path) -> bool {

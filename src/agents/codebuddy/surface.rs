@@ -66,10 +66,6 @@ pub(super) fn is_cn(agent_name: &str) -> bool {
     )
 }
 
-pub(super) fn cli_home_dir(_agent_name: &str) -> &'static str {
-    ".codebuddy"
-}
-
 pub(super) fn ide_app_name(agent_name: &str) -> &'static str {
     if is_cn(agent_name) {
         "CodeBuddy CN"

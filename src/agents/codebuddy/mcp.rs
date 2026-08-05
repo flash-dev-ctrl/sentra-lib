@@ -70,6 +70,7 @@ fn parse_servers(raw: Option<&Value>) -> Vec<McpData> {
                         .unwrap_or(false),
                 ),
                 project: None,
+                ..McpData::default()
             };
             sanitize_mcp_data(&mut data);
             data

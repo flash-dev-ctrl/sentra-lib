@@ -4,7 +4,7 @@ use crate::interfaces::{
     CheckInput, CheckResult, CheckStatus, Checker, ContentInput, FileCategory, Finding,
     RiskCategory, RiskSeverity,
 };
-use crate::risks::checkers::unified::{ok, skipped};
+use crate::risks::checkers::unified::ok;
 use crate::risks::types::HashRuleDef;
 use crate::utils::{Hashes, compute_content_hashes};
 
@@ -44,9 +44,7 @@ impl Checker for HashChecker {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = SentraResult<CheckResult>> + Send + 'a>>
     {
         Box::pin(async move {
-            let CheckInput::Content(content) = input else {
-                return Ok(skipped(self.id(), "not a content input"));
-            };
+            let CheckInput::Content(content) = input;
             let hashes = read_input_hashes(content);
             let values = [&hashes.md5, &hashes.sha1, &hashes.sha256];
 

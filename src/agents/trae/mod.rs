@@ -29,23 +29,6 @@ pub(crate) use install::{
     work_uninstall_plans_for_platform,
 };
 
-pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    let user_home = user_home.as_ref();
-    let ide_entries = [
-        crate::agents::entries::TRAE_IDE_AGENT_ENTRY.clone(),
-        crate::agents::entries::TRAE_CN_IDE_AGENT_ENTRY.clone(),
-    ];
-    let mut agents = crate::agents::discovery::discover_entry_agents(user_home, &ide_entries);
-    for entry in [
-        &crate::agents::entries::TRAE_WORK_AGENT_ENTRY,
-        &crate::agents::entries::TRAE_CN_WORK_AGENT_ENTRY,
-        &crate::agents::entries::TRAE_VSCODE_PLUGIN_AGENT_ENTRY,
-    ] {
-        push_detected_entry(&mut agents, user_home, entry);
-    }
-    agents
-}
-
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     if surface::is_work(agent_name) {
         work_meta::is_agent_installed(agent_name, agent_home)
@@ -126,44 +109,6 @@ pub(crate) fn asset_for_type(
             agent_home,
             process::matcher(agent_name),
         ))],
-    }
-}
-
-fn push_agent_if_missing(
-    agents: &mut Vec<crate::agents::Agent>,
-    entry: &crate::agents::entries::AgentEntry,
-    home: PathBuf,
-) {
-    if agents
-        .iter()
-        .any(|agent| agent.name() == entry.name && agent.home() == home.as_path())
-    {
-        return;
-    }
-    agents.push(crate::agents::Agent::new(entry, home));
-}
-
-fn push_detected_entry(
-    agents: &mut Vec<crate::agents::Agent>,
-    user_home: &Path,
-    entry: &crate::agents::entries::AgentEntry,
-) {
-    let mut detected_home = None;
-    for segments in entry.homes {
-        let home = segments
-            .iter()
-            .fold(user_home.to_path_buf(), |home, segment| home.join(segment));
-        let installed = is_agent_installed(entry.name, &home);
-        if home.is_dir() && installed {
-            push_agent_if_missing(agents, entry, home);
-            return;
-        }
-        if installed && detected_home.is_none() {
-            detected_home = Some(home);
-        }
-    }
-    if let Some(home) = detected_home {
-        push_agent_if_missing(agents, entry, home);
     }
 }
 
