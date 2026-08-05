@@ -127,7 +127,7 @@ pub(crate) fn discover_entry_agents_with_options(
     options: AgentDiscoveryOptions,
 ) -> Vec<Agent> {
     let mut results = Vec::new();
-    for entry in entries {
+    for (entry_index, entry) in entries.iter().enumerate() {
         let mut home_found = false;
         for segments in entry.homes {
             let home = entry_home(user_home, segments);
@@ -136,11 +136,16 @@ pub(crate) fn discover_entry_agents_with_options(
                 .unwrap_or(false);
             if home_exists {
                 home_found = true;
-                push_agent_if_missing(&mut results, entry, home);
+                if !home_is_owned_by_earlier_entry(user_home, entries, entry_index, &home)
+                    || should_probe_installed_entries(options)
+                        && (entry.is_installed)(entry.name, &home)
+                {
+                    push_agent_if_missing(&mut results, entry, home);
+                }
             }
         }
 
-        if !home_found && should_probe_installed_entries(user_home, options) {
+        if !home_found && should_probe_installed_entries(options) {
             for segments in entry.homes {
                 let home = entry_home(user_home, segments);
                 if (entry.is_installed)(entry.name, &home) {
@@ -157,9 +162,22 @@ pub(crate) fn discover_entry_agents_with_options(
     results
 }
 
-fn should_probe_installed_entries(user_home: &Path, options: AgentDiscoveryOptions) -> bool {
+fn should_probe_installed_entries(options: AgentDiscoveryOptions) -> bool {
     !options.skip_install_probe
-        && home::home_dir().is_some_and(|current_home| same_home(&current_home, user_home))
+}
+
+fn home_is_owned_by_earlier_entry(
+    user_home: &Path,
+    entries: &[AgentEntry],
+    entry_index: usize,
+    home: &Path,
+) -> bool {
+    entries[..entry_index].iter().any(|entry| {
+        entry
+            .homes
+            .iter()
+            .any(|segments| same_home(&entry_home(user_home, segments), home))
+    })
 }
 
 fn entry_home(user_home: &Path, segments: &[&str]) -> PathBuf {
@@ -385,12 +403,14 @@ mod tests {
     }
 
     #[test]
-    fn entry_discovery_skips_install_probe_for_external_home() {
+    fn entry_discovery_uses_install_probe_for_external_home() {
         let dir = tempfile::tempdir().unwrap();
         let entry = test_entry(crate::agents::entries::empty_process_data, always_installed);
         let agents = discover_entry_agents(dir.path(), std::slice::from_ref(&entry));
+        let expected_home = dir.path().join(".codex");
 
-        assert!(agents.is_empty());
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].home(), expected_home.as_path());
     }
 
     #[test]
