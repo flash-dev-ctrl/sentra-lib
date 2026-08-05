@@ -12,13 +12,6 @@ mod skill;
 
 pub(crate) use install::{install_plans_for_platform, uninstall_plans_for_platform};
 
-pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    crate::agents::discovery::discover_entry_agents(
-        user_home.as_ref(),
-        std::slice::from_ref(&crate::agents::entries::CODER_AGENT_ENTRY),
-    )
-}
-
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     meta::is_agent_installed(agent_name, agent_home)
 }

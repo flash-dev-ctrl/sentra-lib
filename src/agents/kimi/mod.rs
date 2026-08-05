@@ -21,40 +21,6 @@ pub(crate) use install::{install_plans_for_platform, uninstall_plan_for_platform
 
 pub(crate) const KIMI_CODE_IDE_EXTENSION_ID: &str = "moonshot-ai.kimi-code";
 
-pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    let user_home = user_home.as_ref();
-    let mut agents = crate::agents::discovery::discover_entry_agents(
-        user_home,
-        std::slice::from_ref(&crate::agents::entries::KIMI_CLI_AGENT_ENTRY),
-    );
-    agents.extend(crate::agents::discovery::discover_entry_agents(
-        user_home,
-        std::slice::from_ref(&crate::agents::entries::KIMI_APP_AGENT_ENTRY),
-    ));
-
-    let default_cli_home = user_home.join(".kimi-code");
-    if meta::is_agent_installed(
-        crate::agents::entries::KIMI_CLI_IDE_AGENT_ENTRY.name,
-        &default_cli_home,
-    ) {
-        let mut ide_homes = agents
-            .iter()
-            .filter(|agent| agent.name() == crate::agents::entries::KIMI_CLI_AGENT_ENTRY.name)
-            .map(|agent| agent.home().to_path_buf())
-            .collect::<Vec<_>>();
-        if ide_homes.is_empty() {
-            ide_homes.push(default_cli_home);
-        }
-        for home in ide_homes {
-            agents.push(crate::agents::Agent::new(
-                &crate::agents::entries::KIMI_CLI_IDE_AGENT_ENTRY,
-                home,
-            ));
-        }
-    }
-    agents
-}
-
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     meta::is_agent_installed(agent_name, agent_home)
 }

@@ -23,23 +23,6 @@ pub(crate) use install::{install_plans_for_platform, uninstall_plans_for_platfor
 
 pub(crate) const CLAUDE_CODE_IDE_EXTENSION_ID: &str = "anthropic.claude-code";
 
-pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    let user_home = user_home.as_ref();
-    let mut agents = crate::agents::discovery::discover_entry_agents(
-        user_home,
-        std::slice::from_ref(&crate::agents::entries::CLAUDE_CLI_AGENT_ENTRY),
-    );
-    agents.extend(crate::agents::discovery::discover_installed_entry_agents(
-        user_home,
-        &[&crate::agents::entries::CLAUDE_CLI_IDE_AGENT_ENTRY],
-    ));
-    agents.extend(crate::agents::discovery::discover_entry_agents(
-        user_home,
-        std::slice::from_ref(&crate::agents::entries::CLAUDE_APP_AGENT_ENTRY),
-    ));
-    agents
-}
-
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     if agent_name == crate::agents::entries::CLAUDE_APP_AGENT_ENTRY.name {
         app_meta::is_agent_installed(agent_name, agent_home)

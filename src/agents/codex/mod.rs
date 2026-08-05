@@ -16,22 +16,6 @@ pub(crate) use install::{install_plans_for_platform, uninstall_plan_for_platform
 
 pub(crate) const CODEX_IDE_EXTENSION_ID: &str = "openai.chatgpt";
 
-pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    let user_home = user_home.as_ref();
-    let mut agents = crate::agents::discovery::discover_entry_agents(
-        user_home,
-        std::slice::from_ref(&crate::agents::entries::CODEX_CLI_AGENT_ENTRY),
-    );
-    agents.extend(crate::agents::discovery::discover_installed_entry_agents(
-        user_home,
-        &[
-            &crate::agents::entries::CODEX_APP_AGENT_ENTRY,
-            &crate::agents::entries::CODEX_CLI_IDE_AGENT_ENTRY,
-        ],
-    ));
-    agents
-}
-
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     meta::is_agent_installed(agent_name, agent_home)
 }

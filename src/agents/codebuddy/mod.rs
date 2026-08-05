@@ -28,39 +28,6 @@ pub(crate) use work_install::{
     uninstall_plans_for_platform as work_uninstall_plans_for_platform,
 };
 
-pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    let user_home = user_home.as_ref();
-    let entries = crate::agents::entries::CODEBUDDY_AGENT_ENTRIES
-        .iter()
-        .filter(|entry| entry.name != crate::agents::entries::CODEBUDDY_CLI_IDE_AGENT_ENTRY.name)
-        .cloned()
-        .collect::<Vec<_>>();
-    let mut agents = crate::agents::discovery::discover_entry_agents(user_home, &entries);
-    let default_cli_home = user_home.join(surface::cli_home_dir(
-        crate::agents::entries::CODEBUDDY_CLI_AGENT_ENTRY.name,
-    ));
-    if meta::is_agent_installed(
-        crate::agents::entries::CODEBUDDY_CLI_IDE_AGENT_ENTRY.name,
-        &default_cli_home,
-    ) {
-        let mut plugin_homes = agents
-            .iter()
-            .filter(|agent| agent.name() == crate::agents::entries::CODEBUDDY_CLI_AGENT_ENTRY.name)
-            .map(|agent| agent.home().to_path_buf())
-            .collect::<Vec<_>>();
-        if plugin_homes.is_empty() {
-            plugin_homes.push(default_cli_home);
-        }
-        for home in plugin_homes {
-            agents.push(crate::agents::Agent::new(
-                &crate::agents::entries::CODEBUDDY_CLI_IDE_AGENT_ENTRY,
-                home,
-            ));
-        }
-    }
-    agents
-}
-
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     if surface::is_work(agent_name) {
         work_meta::is_agent_installed(agent_name, agent_home)

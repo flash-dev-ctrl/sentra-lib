@@ -3,9 +3,9 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::agents::{
     Agent,
-    entries::{AgentEntry, SystemAgentPath, builtin_agent_entries},
+    entries::{AgentEntry, SYSTEM_AGENT_PATHS, SystemAgentPath, builtin_agent_entries},
 };
-use crate::interfaces::ProcessData;
+use crate::interfaces::{AssetType, ProcessData};
 
 fn titleize_agent_name(name: &str) -> String {
     name.split('-')
@@ -34,80 +34,90 @@ pub(crate) fn get_agent_title(agent_name: &str) -> String {
 }
 
 pub fn discover_agents(user_home: impl AsRef<Path>) -> Vec<Agent> {
+    discover_agents_from_entries(user_home.as_ref(), |_| true)
+}
+
+pub fn discover_agents_matching(
+    user_home: impl AsRef<Path>,
+    mut matches: impl FnMut(&str) -> bool,
+) -> Vec<Agent> {
+    discover_agents_from_entries(user_home.as_ref(), |entry| matches(entry.name))
+}
+
+pub fn discover_agents_with_asset(
+    user_home: impl AsRef<Path>,
+    asset_type: AssetType,
+) -> Vec<Agent> {
     let user_home = user_home.as_ref();
-    let mut results = Vec::new();
-    results.extend(crate::agents::codex::discover_agents(user_home));
-    results.extend(crate::agents::claude::discover_agents(user_home));
-    results.extend(crate::agents::hermes::discover_agents(user_home));
-    results.extend(crate::agents::kimi::discover_agents(user_home));
-    results.extend(crate::agents::openclaw::discover_agents(user_home));
-    results.extend(crate::agents::opencode::discover_agents(user_home));
-    results.extend(crate::agents::pi::discover_agents(user_home));
-    results.extend(crate::agents::sentra::discover_agents(user_home));
-    results.extend(crate::agents::antigravity::discover_agents(user_home));
-    results.extend(crate::agents::codebuddy::discover_agents(user_home));
-    results.extend(crate::agents::coder::discover_agents(user_home));
-    results.extend(crate::agents::cursor::discover_agents(user_home));
-    results.extend(crate::agents::kiro::discover_agents(user_home));
-    results.extend(crate::agents::lingcode::discover_agents(user_home));
-    results.extend(crate::agents::marvis::discover_agents(user_home));
-    results.extend(crate::agents::qoder::discover_agents(user_home));
-    results.extend(crate::agents::trae::discover_agents(user_home));
-    results.extend(crate::agents::vscode::discover_agents(user_home));
-    results.extend(crate::agents::general::discover_agents(user_home));
+    if asset_type == AssetType::Provider {
+        return discover_provider_agents(user_home);
+    }
+    discover_agents(user_home)
+}
+
+fn discover_agents_from_entries(
+    user_home: &Path,
+    mut include_entry: impl FnMut(&AgentEntry) -> bool,
+) -> Vec<Agent> {
+    let user_home = user_home.as_ref();
+    let entries = builtin_agent_entries()
+        .into_iter()
+        .filter(|entry| include_entry(entry))
+        .collect::<Vec<_>>();
+    let mut results = discover_entry_agents(user_home, &entries);
+    let system_paths = SYSTEM_AGENT_PATHS
+        .iter()
+        .copied()
+        .filter(|path| include_entry(path.entry))
+        .collect::<Vec<_>>();
+    results.extend(discover_system_agents(&system_paths));
     results
+}
+
+fn entry_supports_asset(entry: &AgentEntry, asset_type: AssetType) -> bool {
+    !(entry.asset_for_type)(entry.name, Path::new(""), asset_type).is_empty()
+}
+
+fn discover_provider_agents(user_home: &Path) -> Vec<Agent> {
+    discover_agents_from_entries(user_home, |entry| {
+        entry_supports_asset(entry, AssetType::Provider)
+    })
 }
 
 pub(crate) fn discover_entry_agents(user_home: &Path, entries: &[AgentEntry]) -> Vec<Agent> {
     let mut results = Vec::new();
     for entry in entries {
-        let custom_homes = custom_homes_from_entry(user_home, entry);
-
-        let mut detected_install_home = None;
-        let mut static_home_found = false;
+        let mut home_found = false;
         for segments in entry.homes {
             let home = entry_home(user_home, segments);
             let home_exists = fs::metadata(&home)
                 .map(|meta| meta.is_dir())
                 .unwrap_or(false);
             if home_exists {
-                static_home_found = true;
+                home_found = true;
                 push_agent_if_missing(&mut results, entry, home);
-            } else if custom_homes.is_empty()
-                && !static_home_found
-                && detected_install_home.is_none()
-                && (entry.is_installed)(entry.name, &home)
-            {
-                detected_install_home = Some(home);
             }
         }
-        if !static_home_found && let Some(home) = detected_install_home {
-            push_agent_if_missing(&mut results, entry, home);
+
+        if !home_found && should_probe_installed_entries(user_home) {
+            for segments in entry.homes {
+                let home = entry_home(user_home, segments);
+                if (entry.is_installed)(entry.name, &home) {
+                    push_agent_if_missing(&mut results, entry, home);
+                    break;
+                }
+            }
         }
 
-        for home in custom_homes {
+        for home in custom_homes_from_entry(user_home, entry) {
             push_agent_if_missing(&mut results, entry, home);
         }
     }
     results
 }
 
-pub(crate) fn discover_installed_entry_agents(
-    user_home: &Path,
-    entries: &[&AgentEntry],
-) -> Vec<Agent> {
-    let mut results = Vec::new();
-    for entry in entries {
-        let entry = *entry;
-        for segments in entry.homes {
-            let home = entry_home(user_home, segments);
-            if (entry.is_installed)(entry.name, &home) {
-                push_agent_if_missing(&mut results, entry, home);
-                break;
-            }
-        }
-    }
-    results
+fn should_probe_installed_entries(user_home: &Path) -> bool {
+    home::home_dir().is_some_and(|current_home| same_home(&current_home, user_home))
 }
 
 fn entry_home(user_home: &Path, segments: &[&str]) -> PathBuf {
@@ -134,11 +144,12 @@ fn custom_homes_from_entry(user_home: &Path, entry: &AgentEntry) -> Vec<PathBuf>
             push_home_if_missing(&mut homes, home);
         }
     }
+    if !accept_external_homes {
+        return homes;
+    }
     for process in (entry.process_provider)() {
         for home in process_homes_from_env(user_home, entry, &process) {
-            if accept_external_homes || home_is_within(&home, user_home) {
-                push_home_if_missing(&mut homes, home);
-            }
+            push_home_if_missing(&mut homes, home);
         }
     }
     homes
@@ -278,55 +289,171 @@ mod tests {
     use crate::interfaces::{AssetType, ErasedAsset};
 
     static TEST_PROCESSES: Mutex<Vec<ProcessData>> = Mutex::new(Vec::new());
+    static TEST_INSTALLED_PROCESSES: Mutex<Vec<ProcessData>> = Mutex::new(Vec::new());
+    static TEST_PROCESS_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
-    fn process_env_homes_are_discovered_without_duplicate_static_home() {
-        let dir = tempfile::tempdir().unwrap();
-        let static_home = dir.path().join(".codex");
-        let custom_home = dir.path().join("custom-codex");
-        fs::create_dir_all(&static_home).unwrap();
-        fs::create_dir_all(&custom_home).unwrap();
+    fn process_env_homes_are_discovered_for_current_home() {
+        let _guard = TEST_PROCESS_ENV_LOCK.lock().unwrap();
+        let Some(current_home) = home::home_dir() else {
+            return;
+        };
+        let static_home = current_home.join(".codex");
+        let custom_home = current_home.join("custom-codex");
 
         set_test_processes(vec![
-            process_with_home("CODEX_HOME", &static_home),
-            process_with_home("codex_home", &static_home),
-            process_with_home("CODEX_HOME", &custom_home),
+            process_with_home("SENTRA_TEST_DISCOVERY_HOME", &static_home),
+            process_with_home("sentra_test_discovery_home", &static_home),
+            process_with_home("SENTRA_TEST_DISCOVERY_HOME", &custom_home),
         ]);
 
-        let entry = test_entry(test_process_data, never_installed);
+        let entry = test_entry_with_env_vars(
+            test_process_data,
+            never_installed,
+            &["SENTRA_TEST_DISCOVERY_HOME"],
+        );
+        let homes = custom_homes_from_entry(&current_home, &entry);
+        set_test_processes(Vec::new());
+
+        assert_eq!(homes.len(), 2);
+        assert!(homes.contains(&static_home));
+        assert!(homes.contains(&custom_home));
+    }
+
+    #[test]
+    fn process_env_homes_are_not_scanned_for_external_home() {
+        let _guard = TEST_PROCESS_ENV_LOCK.lock().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let custom_home = dir.path().join("custom-codex");
+
+        set_test_processes(vec![process_with_home(
+            "SENTRA_TEST_DISCOVERY_HOME",
+            &custom_home,
+        )]);
+
+        let entry = test_entry_with_env_vars(
+            test_process_data,
+            never_installed,
+            &["SENTRA_TEST_DISCOVERY_HOME"],
+        );
         let agents = discover_entry_agents(dir.path(), std::slice::from_ref(&entry));
         set_test_processes(Vec::new());
 
-        let codex_homes = agents
-            .iter()
-            .filter(|agent| agent.name() == "codex-cli")
-            .map(|agent| home_key(agent.home()))
-            .collect::<Vec<_>>();
+        assert!(agents.is_empty());
+    }
 
-        assert_eq!(codex_homes.len(), 2);
-        assert!(codex_homes.contains(&home_key(&static_home)));
-        assert!(codex_homes.contains(&home_key(&custom_home)));
+    #[test]
+    fn entry_discovery_skips_install_probe_for_external_home() {
+        let dir = tempfile::tempdir().unwrap();
+        let entry = test_entry(crate::agents::entries::empty_process_data, always_installed);
+        let agents = discover_entry_agents(dir.path(), std::slice::from_ref(&entry));
 
-        let missing_static_dir = tempfile::tempdir().unwrap();
-        let custom_home = missing_static_dir.path().join("custom-codex");
-        set_test_processes(vec![process_with_home("CODEX_HOME", &custom_home)]);
-        let entry = test_entry(test_process_data, always_installed);
-        let agents = discover_entry_agents(missing_static_dir.path(), std::slice::from_ref(&entry));
-        set_test_processes(Vec::new());
+        assert!(agents.is_empty());
+    }
+
+    #[test]
+    fn entry_discovery_uses_install_probe_when_home_is_missing() {
+        let Some(current_home) = home::home_dir() else {
+            return;
+        };
+        let entry = test_entry(crate::agents::entries::empty_process_data, always_installed);
+        let agents = discover_entry_agents(&current_home, std::slice::from_ref(&entry));
+        let expected_home = current_home.join(".codex");
+
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].home(), expected_home.as_path());
+    }
+
+    #[test]
+    fn entry_discovery_includes_process_env_homes_for_current_home() {
+        let Some(current_home) = home::home_dir() else {
+            return;
+        };
+        let custom_home = current_home.join("custom-process-home");
+
+        set_test_installed_processes(vec![process_with_home(
+            "SENTRA_TEST_DISCOVERY_HOME",
+            &custom_home,
+        )]);
+
+        let entry = AgentEntry {
+            name: "codex-cli",
+            title: Some("Codex"),
+            homes: &[&[".missing-installed-home"]],
+            asset_for_type: test_assets,
+            is_installed: installed_only_for_custom_home,
+            process_provider: test_installed_process_data,
+            process_home_env_vars: &["SENTRA_TEST_DISCOVERY_HOME"],
+        };
+        let agents = discover_entry_agents(&current_home, &[entry]);
+        set_test_installed_processes(Vec::new());
 
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].home(), custom_home.as_path());
     }
 
     #[test]
-    fn installed_detector_home_is_returned_when_home_is_missing() {
+    fn entry_discovery_supports_home_and_installed_fallback_entries() {
+        let Some(current_home) = home::home_dir() else {
+            return;
+        };
+
+        let home_entry = AgentEntry {
+            name: "sentra-test-home",
+            title: Some("Sentra Test Home"),
+            homes: &[&[]],
+            asset_for_type: test_assets,
+            is_installed: never_installed,
+            process_provider: crate::agents::entries::empty_process_data,
+            process_home_env_vars: &[],
+        };
+        let installed_entry = AgentEntry {
+            name: "sentra-test-installed",
+            title: Some("Sentra Test Installed"),
+            homes: &[&[".sentra-test-installed-entry"]],
+            asset_for_type: test_assets,
+            is_installed: always_installed,
+            process_provider: crate::agents::entries::empty_process_data,
+            process_home_env_vars: &[],
+        };
+
+        let agents = discover_entry_agents(&current_home, &[home_entry, installed_entry]);
+        let names = agents.iter().map(|agent| agent.name()).collect::<Vec<_>>();
+
+        assert!(names.contains(&"sentra-test-home"));
+        assert!(names.contains(&"sentra-test-installed"));
+    }
+
+    #[test]
+    fn matching_discovery_only_visits_matching_entries() {
         let dir = tempfile::tempdir().unwrap();
-        let entry = test_entry(crate::agents::entries::empty_process_data, always_installed);
-        let agents = discover_entry_agents(dir.path(), std::slice::from_ref(&entry));
-        let expected_home = dir.path().join(".codex");
+        let codex_home = dir.path().join(".codex");
+        let sentra_home = dir.path().join(".sentra");
+        fs::create_dir_all(&codex_home).unwrap();
+        fs::create_dir_all(&sentra_home).unwrap();
+
+        let agents = discover_agents_matching(dir.path(), |name| name == "codex-cli");
 
         assert_eq!(agents.len(), 1);
-        assert_eq!(agents[0].home(), expected_home.as_path());
+        assert_eq!(agents[0].name(), "codex-cli");
+        assert_eq!(agents[0].home(), codex_home.as_path());
+    }
+
+    #[test]
+    fn provider_asset_discovery_preserves_surface_specific_discovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let codex_home = dir.path().join(".codex");
+        let general_home = dir.path().join(".agents");
+        fs::create_dir_all(&codex_home).unwrap();
+        fs::create_dir_all(&general_home).unwrap();
+
+        let agents = discover_agents_with_asset(dir.path(), AssetType::Provider);
+        let names = agents.iter().map(|agent| agent.name()).collect::<Vec<_>>();
+
+        assert!(names.contains(&"codex-cli"));
+        assert!(names.contains(&"codex-app"));
+        assert!(names.contains(&"codex-cli-ide"));
+        assert!(!names.contains(&"agents"));
     }
 
     #[cfg(windows)]
@@ -342,6 +469,14 @@ mod tests {
         process_provider: crate::agents::entries::AgentProcessProvider,
         is_installed: crate::agents::entries::AgentInstallDetector,
     ) -> AgentEntry {
+        test_entry_with_env_vars(process_provider, is_installed, &["CODEX_HOME"])
+    }
+
+    fn test_entry_with_env_vars(
+        process_provider: crate::agents::entries::AgentProcessProvider,
+        is_installed: crate::agents::entries::AgentInstallDetector,
+        process_home_env_vars: &'static [&'static str],
+    ) -> AgentEntry {
         AgentEntry {
             name: "codex-cli",
             title: Some("Codex"),
@@ -349,7 +484,7 @@ mod tests {
             asset_for_type: test_assets,
             is_installed,
             process_provider,
-            process_home_env_vars: &["CODEX_HOME"],
+            process_home_env_vars,
         }
     }
 
@@ -365,8 +500,16 @@ mod tests {
         TEST_PROCESSES.lock().unwrap().clone()
     }
 
+    fn test_installed_process_data() -> Vec<ProcessData> {
+        TEST_INSTALLED_PROCESSES.lock().unwrap().clone()
+    }
+
     fn set_test_processes(processes: Vec<ProcessData>) {
         *TEST_PROCESSES.lock().unwrap() = processes;
+    }
+
+    fn set_test_installed_processes(processes: Vec<ProcessData>) {
+        *TEST_INSTALLED_PROCESSES.lock().unwrap() = processes;
     }
 
     fn process_with_home(env_key: &str, home: &Path) -> ProcessData {
@@ -385,6 +528,12 @@ mod tests {
 
     fn never_installed(_agent_name: &str, _agent_home: &Path) -> bool {
         false
+    }
+
+    fn installed_only_for_custom_home(_agent_name: &str, agent_home: &Path) -> bool {
+        agent_home
+            .file_name()
+            .is_some_and(|name| name == "custom-process-home")
     }
 
     fn always_installed(_agent_name: &str, _agent_home: &Path) -> bool {

@@ -230,14 +230,6 @@ pub(crate) const CODEBUDDY_CLI_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const CODEBUDDY_AGENT_ENTRIES: &[AgentEntry] = &[
-    CODEBUDDY_CLI_AGENT_ENTRY,
-    CODEBUDDY_IDE_AGENT_ENTRY,
-    CODEBUDDY_CN_IDE_AGENT_ENTRY,
-    CODEBUDDY_CLI_IDE_AGENT_ENTRY,
-    WORKBUDDY_AGENT_ENTRY,
-];
-
 pub(crate) const CODER_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "coder",
     title: Some("Coder"),
@@ -358,15 +350,6 @@ pub(crate) const QODER_CN_WORK_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_home_env_vars: &[],
 };
 
-pub(crate) const QODER_AGENT_ENTRIES: &[AgentEntry] = &[
-    QODER_CLI_AGENT_ENTRY,
-    QODER_IDE_AGENT_ENTRY,
-    QODER_WORK_AGENT_ENTRY,
-    QODER_CN_CLI_AGENT_ENTRY,
-    QODER_CN_IDE_AGENT_ENTRY,
-    QODER_CN_WORK_AGENT_ENTRY,
-];
-
 pub(crate) const TRAE_IDE_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "trae-ide",
     title: Some("Trae IDE"),
@@ -460,14 +443,6 @@ pub(crate) const TRAE_VSCODE_PLUGIN_AGENT_ENTRY: AgentEntry = AgentEntry {
     process_provider: crate::agents::trae::vscode_plugin_process_data,
     process_home_env_vars: &[],
 };
-
-pub(crate) const TRAE_AGENT_ENTRIES: &[AgentEntry] = &[
-    TRAE_IDE_AGENT_ENTRY,
-    TRAE_CN_IDE_AGENT_ENTRY,
-    TRAE_WORK_AGENT_ENTRY,
-    TRAE_CN_WORK_AGENT_ENTRY,
-    TRAE_VSCODE_PLUGIN_AGENT_ENTRY,
-];
 
 pub(crate) const VSCODE_AGENT_ENTRY: AgentEntry = AgentEntry {
     name: "vscode",
@@ -589,9 +564,14 @@ pub(crate) fn builtin_agent_entries() -> Vec<AgentEntry> {
         QODER_CN_CLI_AGENT_ENTRY.clone(),
         QODER_CN_IDE_AGENT_ENTRY.clone(),
         QODER_CN_WORK_AGENT_ENTRY.clone(),
+        TRAE_IDE_AGENT_ENTRY.clone(),
+        TRAE_CN_IDE_AGENT_ENTRY.clone(),
+        TRAE_WORK_AGENT_ENTRY.clone(),
+        TRAE_CN_WORK_AGENT_ENTRY.clone(),
+        TRAE_VSCODE_PLUGIN_AGENT_ENTRY.clone(),
+        VSCODE_AGENT_ENTRY.clone(),
+        WORKBUDDY_AGENT_ENTRY.clone(),
     ];
-    entries.extend(TRAE_AGENT_ENTRIES.iter().cloned());
-    entries.extend([VSCODE_AGENT_ENTRY.clone(), WORKBUDDY_AGENT_ENTRY.clone()]);
     entries.extend_from_slice(GENERAL_AGENT_ENTRIES);
     entries
 }

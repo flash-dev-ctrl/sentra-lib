@@ -8,13 +8,6 @@ mod meta;
 mod process;
 mod provider;
 
-pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    crate::agents::discovery::discover_entry_agents(
-        user_home.as_ref(),
-        std::slice::from_ref(&crate::agents::entries::MARVIS_AGENT_ENTRY),
-    )
-}
-
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     meta::is_agent_installed(agent_name, agent_home)
 }

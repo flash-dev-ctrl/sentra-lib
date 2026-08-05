@@ -25,13 +25,6 @@ pub(crate) use work_install::{
     uninstall_plans_for_platform as work_uninstall_plans_for_platform,
 };
 
-pub(crate) fn discover_agents(user_home: impl AsRef<Path>) -> Vec<crate::agents::Agent> {
-    crate::agents::discovery::discover_entry_agents(
-        user_home.as_ref(),
-        crate::agents::entries::QODER_AGENT_ENTRIES,
-    )
-}
-
 pub(crate) fn is_agent_installed(agent_name: &str, agent_home: &Path) -> bool {
     if surface::is_work(agent_name) {
         work_meta::is_agent_installed(agent_name, agent_home)

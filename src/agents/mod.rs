@@ -27,7 +27,7 @@ mod trae;
 mod vscode;
 
 pub use base::Agent;
-pub use discovery::discover_agents;
+pub use discovery::{discover_agents, discover_agents_matching, discover_agents_with_asset};
 
 pub(crate) fn workspace_agents_dir(user_home: &std::path::Path) -> Option<std::path::PathBuf> {
     let cwd = std::env::current_dir().ok()?;
