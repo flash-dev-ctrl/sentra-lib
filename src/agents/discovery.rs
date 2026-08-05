@@ -33,30 +33,59 @@ pub(crate) fn get_agent_title(agent_name: &str) -> String {
         .unwrap_or_else(|| titleize_agent_name(agent_name))
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AgentDiscoveryOptions {
+    pub skip_install_probe: bool,
+}
+
 pub fn discover_agents(user_home: impl AsRef<Path>) -> Vec<Agent> {
-    discover_agents_from_entries(user_home.as_ref(), |_| true)
+    discover_agents_with_options(user_home, AgentDiscoveryOptions::default())
+}
+
+pub fn discover_agents_with_options(
+    user_home: impl AsRef<Path>,
+    options: AgentDiscoveryOptions,
+) -> Vec<Agent> {
+    discover_agents_from_entries(user_home.as_ref(), options, |_| true)
 }
 
 pub fn discover_agents_matching(
     user_home: impl AsRef<Path>,
+    matches: impl FnMut(&str) -> bool,
+) -> Vec<Agent> {
+    discover_agents_matching_with_options(user_home, AgentDiscoveryOptions::default(), matches)
+}
+
+pub fn discover_agents_matching_with_options(
+    user_home: impl AsRef<Path>,
+    options: AgentDiscoveryOptions,
     mut matches: impl FnMut(&str) -> bool,
 ) -> Vec<Agent> {
-    discover_agents_from_entries(user_home.as_ref(), |entry| matches(entry.name))
+    discover_agents_from_entries(user_home.as_ref(), options, |entry| matches(entry.name))
 }
 
 pub fn discover_agents_with_asset(
     user_home: impl AsRef<Path>,
     asset_type: AssetType,
 ) -> Vec<Agent> {
+    discover_agents_with_asset_and_options(user_home, asset_type, AgentDiscoveryOptions::default())
+}
+
+pub fn discover_agents_with_asset_and_options(
+    user_home: impl AsRef<Path>,
+    asset_type: AssetType,
+    options: AgentDiscoveryOptions,
+) -> Vec<Agent> {
     let user_home = user_home.as_ref();
     if asset_type == AssetType::Provider {
-        return discover_provider_agents(user_home);
+        return discover_provider_agents(user_home, options);
     }
-    discover_agents(user_home)
+    discover_agents_with_options(user_home, options)
 }
 
 fn discover_agents_from_entries(
     user_home: &Path,
+    options: AgentDiscoveryOptions,
     mut include_entry: impl FnMut(&AgentEntry) -> bool,
 ) -> Vec<Agent> {
     let user_home = user_home.as_ref();
@@ -64,7 +93,11 @@ fn discover_agents_from_entries(
         .into_iter()
         .filter(|entry| include_entry(entry))
         .collect::<Vec<_>>();
-    let mut results = discover_entry_agents(user_home, &entries);
+    let mut results = if options == AgentDiscoveryOptions::default() {
+        discover_entry_agents(user_home, &entries)
+    } else {
+        discover_entry_agents_with_options(user_home, &entries, options)
+    };
     let system_paths = SYSTEM_AGENT_PATHS
         .iter()
         .copied()
@@ -78,15 +111,23 @@ fn entry_supports_asset(entry: &AgentEntry, asset_type: AssetType) -> bool {
     !(entry.asset_for_type)(entry.name, Path::new(""), asset_type).is_empty()
 }
 
-fn discover_provider_agents(user_home: &Path) -> Vec<Agent> {
-    discover_agents_from_entries(user_home, |entry| {
+fn discover_provider_agents(user_home: &Path, options: AgentDiscoveryOptions) -> Vec<Agent> {
+    discover_agents_from_entries(user_home, options, |entry| {
         entry_supports_asset(entry, AssetType::Provider)
     })
 }
 
 pub(crate) fn discover_entry_agents(user_home: &Path, entries: &[AgentEntry]) -> Vec<Agent> {
+    discover_entry_agents_with_options(user_home, entries, AgentDiscoveryOptions::default())
+}
+
+pub(crate) fn discover_entry_agents_with_options(
+    user_home: &Path,
+    entries: &[AgentEntry],
+    options: AgentDiscoveryOptions,
+) -> Vec<Agent> {
     let mut results = Vec::new();
-    for entry in entries {
+    for (entry_index, entry) in entries.iter().enumerate() {
         let mut home_found = false;
         for segments in entry.homes {
             let home = entry_home(user_home, segments);
@@ -95,11 +136,16 @@ pub(crate) fn discover_entry_agents(user_home: &Path, entries: &[AgentEntry]) ->
                 .unwrap_or(false);
             if home_exists {
                 home_found = true;
-                push_agent_if_missing(&mut results, entry, home);
+                if !home_is_owned_by_earlier_entry(user_home, entries, entry_index, entry, &home)
+                    || should_probe_installed_entries(options)
+                        && (entry.is_installed)(entry.name, &home)
+                {
+                    push_agent_if_missing(&mut results, entry, home);
+                }
             }
         }
 
-        if !home_found && should_probe_installed_entries(user_home) {
+        if !home_found && should_probe_installed_entries(options) {
             for segments in entry.homes {
                 let home = entry_home(user_home, segments);
                 if (entry.is_installed)(entry.name, &home) {
@@ -116,8 +162,24 @@ pub(crate) fn discover_entry_agents(user_home: &Path, entries: &[AgentEntry]) ->
     results
 }
 
-fn should_probe_installed_entries(user_home: &Path) -> bool {
-    home::home_dir().is_some_and(|current_home| same_home(&current_home, user_home))
+fn should_probe_installed_entries(options: AgentDiscoveryOptions) -> bool {
+    !options.skip_install_probe
+}
+
+fn home_is_owned_by_earlier_entry(
+    user_home: &Path,
+    entries: &[AgentEntry],
+    entry_index: usize,
+    current_entry: &AgentEntry,
+    home: &Path,
+) -> bool {
+    entries[..entry_index].iter().any(|entry| {
+        std::ptr::fn_addr_eq(entry.asset_for_type, current_entry.asset_for_type)
+            && entry
+                .homes
+                .iter()
+                .any(|segments| same_home(&entry_home(user_home, segments), home))
+    })
 }
 
 fn entry_home(user_home: &Path, segments: &[&str]) -> PathBuf {
@@ -343,12 +405,14 @@ mod tests {
     }
 
     #[test]
-    fn entry_discovery_skips_install_probe_for_external_home() {
+    fn entry_discovery_uses_install_probe_for_external_home() {
         let dir = tempfile::tempdir().unwrap();
         let entry = test_entry(crate::agents::entries::empty_process_data, always_installed);
         let agents = discover_entry_agents(dir.path(), std::slice::from_ref(&entry));
+        let expected_home = dir.path().join(".codex");
 
-        assert!(agents.is_empty());
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].home(), expected_home.as_path());
     }
 
     #[test]
@@ -362,6 +426,41 @@ mod tests {
 
         assert_eq!(agents.len(), 1);
         assert_eq!(agents[0].home(), expected_home.as_path());
+    }
+
+    #[test]
+    fn entry_discovery_can_skip_install_probe() {
+        let Some(current_home) = home::home_dir() else {
+            return;
+        };
+        let entry = test_entry(crate::agents::entries::empty_process_data, always_installed);
+        let agents = discover_entry_agents_with_options(
+            &current_home,
+            std::slice::from_ref(&entry),
+            AgentDiscoveryOptions {
+                skip_install_probe: true,
+            },
+        );
+
+        assert!(agents.is_empty());
+    }
+
+    #[test]
+    fn process_provider_is_not_called_without_process_home_env_vars() {
+        let _guard = TEST_PROCESS_ENV_LOCK.lock().unwrap();
+        let Some(current_home) = home::home_dir() else {
+            return;
+        };
+        set_test_processes(vec![process_with_home(
+            "SENTRA_TEST_DISCOVERY_HOME",
+            &current_home.join("custom-process-home"),
+        )]);
+        let entry = test_entry_with_env_vars(test_process_data, never_installed, &[]);
+
+        let homes = custom_homes_from_entry(&current_home, &entry);
+        set_test_processes(Vec::new());
+
+        assert!(homes.is_empty());
     }
 
     #[test]
@@ -451,8 +550,8 @@ mod tests {
         let names = agents.iter().map(|agent| agent.name()).collect::<Vec<_>>();
 
         assert!(names.contains(&"codex-cli"));
-        assert!(names.contains(&"codex-app"));
-        assert!(names.contains(&"codex-cli-ide"));
+        assert!(!names.contains(&"codex-app"));
+        assert!(!names.contains(&"codex-cli-ide"));
         assert!(!names.contains(&"agents"));
     }
 

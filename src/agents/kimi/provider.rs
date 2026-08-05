@@ -7,6 +7,9 @@ use crate::utils::protocol::{WireProtocol, build_model_probe_request};
 use crate::utils::{backup_file, mask_secret, read_text_file, write_text_file};
 use crate::{SentraError, SentraResult};
 
+const DEFAULT_MODEL_CONTEXT_SIZE: i64 = 150_000;
+const DEFAULT_MODEL_OUTPUT_SIZE: i64 = 8_192;
+
 #[derive(Debug, Clone)]
 pub(super) struct ProviderAsset {
     pub(crate) core: AssetCore,
@@ -46,7 +49,7 @@ impl_erased_asset!(
     AssetType::Provider,
     Vec<ProviderData>,
     ProviderData,
-    provider
+    provider_mut
 );
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {
@@ -153,6 +156,24 @@ fn set_provider_data(
             toml::Value::String(provider_id.clone()),
         );
         entry.insert("model".to_string(), toml::Value::String(model_id));
+        if !entry.contains_key("display_name") {
+            entry.insert(
+                "display_name".to_string(),
+                toml::Value::String(model.name.clone().unwrap_or_else(|| model.id.clone())),
+            );
+        }
+        if !entry.contains_key("max_context_size") {
+            entry.insert(
+                "max_context_size".to_string(),
+                toml::Value::Integer(DEFAULT_MODEL_CONTEXT_SIZE),
+            );
+        }
+        if !entry.contains_key("max_output_size") {
+            entry.insert(
+                "max_output_size".to_string(),
+                toml::Value::Integer(DEFAULT_MODEL_OUTPUT_SIZE),
+            );
+        }
         models.insert(alias, toml::Value::Table(entry));
     }
 

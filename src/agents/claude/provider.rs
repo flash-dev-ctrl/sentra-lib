@@ -41,7 +41,7 @@ impl_erased_asset!(
     AssetType::Provider,
     Vec<ProviderData>,
     ProviderData,
-    provider
+    provider_mut
 );
 
 impl Asset<Vec<ProviderData>, ProviderData> for ProviderAsset {

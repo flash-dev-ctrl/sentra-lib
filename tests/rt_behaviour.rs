@@ -2156,6 +2156,18 @@ fn kimi_cli_provider_set_data_writes_config_toml() {
         config["models"]["kimi-code/kimi-k2-0711-preview"]["model"].as_str(),
         Some("kimi-k2-0711-preview")
     );
+    assert_eq!(
+        config["models"]["kimi-code/kimi-k2-0711-preview"]["display_name"].as_str(),
+        Some("Kimi K2")
+    );
+    assert_eq!(
+        config["models"]["kimi-code/kimi-k2-0711-preview"]["max_context_size"].as_integer(),
+        Some(150_000)
+    );
+    assert_eq!(
+        config["models"]["kimi-code/kimi-k2-0711-preview"]["max_output_size"].as_integer(),
+        Some(8_192)
+    );
 }
 
 #[test]

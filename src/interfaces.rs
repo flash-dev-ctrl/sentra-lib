@@ -641,6 +641,9 @@ pub trait ErasedAsset {
     fn provider_requests(&self, _model: &str) -> Vec<ProviderProbeRequest> {
         Vec::new()
     }
+    fn supports_provider_write(&self) -> bool {
+        false
+    }
     fn set_provider_data(&self, _value: ProviderData) -> SentraResult<AssetMutationResult> {
         Ok(AssetMutationResult::unchanged(
             AssetMutationErrorCode::Unsupported,
