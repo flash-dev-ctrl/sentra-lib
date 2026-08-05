@@ -93,7 +93,11 @@ fn discover_agents_from_entries(
         .into_iter()
         .filter(|entry| include_entry(entry))
         .collect::<Vec<_>>();
-    let mut results = discover_entry_agents_with_options(user_home, &entries, options);
+    let mut results = if options == AgentDiscoveryOptions::default() {
+        discover_entry_agents(user_home, &entries)
+    } else {
+        discover_entry_agents_with_options(user_home, &entries, options)
+    };
     let system_paths = SYSTEM_AGENT_PATHS
         .iter()
         .copied()
@@ -113,7 +117,6 @@ fn discover_provider_agents(user_home: &Path, options: AgentDiscoveryOptions) ->
     })
 }
 
-#[cfg(test)]
 pub(crate) fn discover_entry_agents(user_home: &Path, entries: &[AgentEntry]) -> Vec<Agent> {
     discover_entry_agents_with_options(user_home, entries, AgentDiscoveryOptions::default())
 }
