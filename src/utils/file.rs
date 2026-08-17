@@ -27,10 +27,18 @@ pub fn read_text_file(path: impl AsRef<Path>) -> SentraResult<Option<String>> {
 }
 
 pub fn read_json_file(path: impl AsRef<Path>) -> SentraResult<Option<serde_json::Value>> {
+    let path = path.as_ref();
     let Some(content) = read_text_file(path)? else {
         return Ok(None);
     };
-    serde_json::from_str(&content).map(Some).map_err(Into::into)
+    serde_json::from_str(&content)
+        .map(Some)
+        .map_err(|err| {
+            SentraError::Message(format!(
+                "failed to parse JSON file {}: {err}",
+                path.display()
+            ))
+        })
 }
 
 pub(crate) fn read_jsonc_file(path: impl AsRef<Path>) -> SentraResult<Option<serde_json::Value>> {

@@ -118,11 +118,7 @@ pub(crate) fn any_existing_file_with(paths: Vec<PathBuf>, probe: &InstallStatusP
 }
 
 pub(crate) fn any_existing_dir_with(paths: Vec<PathBuf>, probe: &InstallStatusProbe) -> bool {
-    let env = CliPathEnv::current();
-    let platform = HostPlatform::current();
-    paths.iter().any(|path| {
-        known_install_path_is_in_scope(path, probe, platform, &env) && (probe.path_is_dir)(path)
-    })
+    paths.iter().any(|path| (probe.path_is_dir)(path))
 }
 
 pub(crate) fn windows_product_installed(display_names: &[&str], publishers: &[&str]) -> bool {
@@ -990,6 +986,22 @@ mod tests {
     }
 
     #[test]
+    fn directory_probe_accepts_supplied_paths_without_scope_filtering() {
+        let probe = InstallStatusProbe {
+            command_exists: command_never_exists,
+            command_path: command_path_never_resolves,
+            path_is_file: path_never_exists,
+            path_is_dir: only_supplied_dir_exists,
+            windows_product_installed: |_, _| false,
+            target_user_home: Some(PathBuf::from("/Users/fixture")),
+            current_user_home: Some(PathBuf::from("/Users/fixture")),
+        };
+        let supplied_dir = PathBuf::from("/Users/current/Applications/Codex.app");
+
+        assert!(any_existing_dir_with(vec![supplied_dir], &probe));
+    }
+
+    #[test]
     fn user_home_resolution_handles_default_and_custom_agent_homes() {
         let current_home = Path::new("/Users/current");
 
@@ -1365,6 +1377,10 @@ PATH="/usr/local/bin:/usr/bin:/bin"
 
     fn only_homebrew_codex_path(path: &Path) -> bool {
         path == Path::new("/opt/homebrew/bin/codex")
+    }
+
+    fn only_supplied_dir_exists(path: &Path) -> bool {
+        path == Path::new("/Users/current/Applications/Codex.app")
     }
 
     fn path_never_exists(_: &Path) -> bool {
