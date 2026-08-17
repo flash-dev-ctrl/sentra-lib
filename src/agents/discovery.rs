@@ -77,10 +77,9 @@ pub fn discover_agents_with_asset_and_options(
     options: AgentDiscoveryOptions,
 ) -> Vec<Agent> {
     let user_home = user_home.as_ref();
-    if asset_type == AssetType::Provider {
-        return discover_provider_agents(user_home, options);
-    }
-    discover_agents_with_options(user_home, options)
+    discover_agents_from_entries(user_home, options, |entry| {
+        entry_supports_asset(entry, asset_type)
+    })
 }
 
 fn discover_agents_from_entries(
@@ -109,12 +108,6 @@ fn discover_agents_from_entries(
 
 fn entry_supports_asset(entry: &AgentEntry, asset_type: AssetType) -> bool {
     !(entry.asset_for_type)(entry.name, Path::new(""), asset_type).is_empty()
-}
-
-fn discover_provider_agents(user_home: &Path, options: AgentDiscoveryOptions) -> Vec<Agent> {
-    discover_agents_from_entries(user_home, options, |entry| {
-        entry_supports_asset(entry, AssetType::Provider)
-    })
 }
 
 pub(crate) fn discover_entry_agents(user_home: &Path, entries: &[AgentEntry]) -> Vec<Agent> {
@@ -553,6 +546,24 @@ mod tests {
         assert!(!names.contains(&"codex-app"));
         assert!(!names.contains(&"codex-cli-ide"));
         assert!(!names.contains(&"agents"));
+    }
+
+    #[test]
+    fn skill_asset_discovery_only_returns_skill_capable_agents() {
+        let dir = tempfile::tempdir().unwrap();
+        let codex_home = dir.path().join(".codex");
+        let general_home = dir.path().join(".agents");
+        let marvis_home = dir.path().join(".marvis");
+        fs::create_dir_all(&codex_home).unwrap();
+        fs::create_dir_all(&general_home).unwrap();
+        fs::create_dir_all(&marvis_home).unwrap();
+
+        let agents = discover_agents_with_asset(dir.path(), AssetType::Skill);
+        let names = agents.iter().map(|agent| agent.name()).collect::<Vec<_>>();
+
+        assert!(names.contains(&"codex-cli"));
+        assert!(names.contains(&"agents"));
+        assert!(!names.contains(&"marvis"));
     }
 
     #[cfg(windows)]

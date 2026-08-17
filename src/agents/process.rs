@@ -9,7 +9,7 @@ use crate::agents::object::{AssetCore, impl_erased_asset};
 use crate::interfaces::{Asset, AssetType, ProcessData};
 use crate::utils::sanitize_command_args;
 use crate::utils::sanitize_env_value;
-use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 pub(crate) type ProcessMatcher = fn(&ProcessInfo<'_>) -> bool;
 
@@ -60,8 +60,33 @@ pub(crate) fn process_data(matcher: ProcessMatcher) -> Vec<ProcessData> {
         })
         .map(|process| process.data.clone())
         .collect::<Vec<_>>();
+    fill_process_environments(&mut results);
     results.sort_by_key(|process| process.pid);
     results
+}
+
+fn fill_process_environments(processes: &mut [ProcessData]) {
+    if processes.is_empty() {
+        return;
+    }
+    let pids = processes
+        .iter()
+        .map(|process| Pid::from_u32(process.pid))
+        .collect::<Vec<_>>();
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&pids),
+        true,
+        ProcessRefreshKind::nothing()
+            .with_environ(UpdateKind::Always)
+            .without_tasks(),
+    );
+    for process in processes {
+        let pid = Pid::from_u32(process.pid);
+        if let Some(updated) = system.processes().get(&pid) {
+            process.env = sanitized_env(updated.environ());
+        }
+    }
 }
 
 const PROCESS_SNAPSHOT_TTL: Duration = Duration::from_secs(2);
@@ -117,7 +142,6 @@ fn collect_process_snapshot() -> Vec<ProcessSnapshot> {
         ProcessRefreshKind::nothing()
             .with_cmd(UpdateKind::Always)
             .with_exe(UpdateKind::Always)
-            .with_environ(UpdateKind::Always)
             .without_tasks(),
     );
 
